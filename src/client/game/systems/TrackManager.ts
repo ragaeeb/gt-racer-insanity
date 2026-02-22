@@ -16,6 +16,7 @@ export class TrackManager {
     private random: () => number = Math.random;
     private readonly activeObstacles: THREE.Mesh[] = [];
     private trackId = 'sunset-loop';
+    private totalLaps = 1;
 
     private roadMat = new THREE.MeshStandardMaterial({
         color: 0x4f5f6d,
@@ -124,12 +125,24 @@ export class TrackManager {
 
     private buildFiniteTrack = () => {
         const trackManifest = getTrackManifestById(this.trackId);
+        this.totalLaps = trackManifest.totalLaps;
         let zCursor = 0;
         this.segments = trackManifest.segments.map((segment, index) => {
             const builtSegment = this.createSegment(segment.lengthMeters, zCursor, index === 0);
             zCursor += segment.lengthMeters;
             return builtSegment;
         });
+
+        const lastSegment = this.segments[this.segments.length - 1];
+        if (lastSegment) {
+            const endBarrierGeo = new THREE.BoxGeometry(this.trackWidth, 4, 1.5);
+            const endBarrier = new THREE.Mesh(endBarrierGeo, this.wallMat);
+            endBarrier.position.set(0, 2, (lastSegment.zEnd - lastSegment.zStart) / 2 - 0.75);
+            endBarrier.castShadow = true;
+            endBarrier.receiveShadow = true;
+            lastSegment.mesh.add(endBarrier);
+            lastSegment.obstacles.push(endBarrier);
+        }
     };
 
     public setSeed = (seed: number) => {
@@ -149,6 +162,14 @@ export class TrackManager {
 
     public getTrackLengthMeters = () => {
         return getTrackManifestById(this.trackId).lengthMeters;
+    };
+
+    public getTotalLaps = () => {
+        return this.totalLaps;
+    };
+
+    public getRaceDistanceMeters = () => {
+        return this.getTrackLengthMeters() * this.totalLaps;
     };
 
     public getTrackId = () => {

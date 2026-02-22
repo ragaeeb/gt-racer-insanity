@@ -15,7 +15,7 @@ import {
 import { reconcileMotionState } from '@/client/game/systems/reconciliationSystem';
 import { playerIdToHue } from '@/shared/game/playerColor';
 import { playerIdToVehicleIndex } from '@/shared/game/playerVehicle';
-import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
+import { PROTOCOL_V1, PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 import type { ConnectionStatus, PlayerState, SnapshotPlayerState } from '@/shared/network/types';
 import { NetworkManager } from '@/client/network/NetworkManager';
 import { Car, type CarAssets } from '@/client/game/entities/Car';
@@ -50,6 +50,7 @@ type GTDebugState = {
 
 const NETWORK_TICK_RATE_SECONDS = 1 / 20;
 const TRACK_BOUNDARY_X = 38;
+const MINIMUM_CAR_SEPARATION = 3.2;
 const ACTIVE_SCENE_ENVIRONMENT = getSceneEnvironmentProfile(DEFAULT_SCENE_ENVIRONMENT_ID);
 const GAMEPLAY_V2_ENABLED = clientConfig.gameplayV2 || clientConfig.protocolV2Required;
 
@@ -125,6 +126,7 @@ export const RaceWorld = ({
     const lookAheadRef = useRef(new THREE.Vector3(0, 0, 10));
     const rotatedLookAheadRef = useRef(new THREE.Vector3());
     const worldUpRef = useRef(new THREE.Vector3(0, 1, 0));
+    const previousFramePositionRef = useRef(new THREE.Vector3());
 
     useEffect(() => {
         const debugWindow = window as Window & {
@@ -183,7 +185,10 @@ export const RaceWorld = ({
     }, [camera]);
 
     useEffect(() => {
-        const networkManager = new NetworkManager(playerName, roomId);
+        const networkManager = new NetworkManager(playerName, roomId, {
+            gameplayV2: GAMEPLAY_V2_ENABLED,
+            protocolVersion: GAMEPLAY_V2_ENABLED ? PROTOCOL_V2 : PROTOCOL_V1,
+        });
         networkManagerRef.current = networkManager;
 
         const unsubscribeConnectionStatus = networkManager.onConnectionStatus((status) => {
@@ -266,6 +271,7 @@ export const RaceWorld = ({
                     localCarRef.current.rotationY = player.rotationY;
                     localCarRef.current.targetPosition.set(player.x, player.y, player.z);
                     localCarRef.current.targetRotationY = player.rotationY;
+                    previousFramePositionRef.current.copy(localCarRef.current.position);
                     continue;
                 }
 
@@ -279,6 +285,7 @@ export const RaceWorld = ({
             onScoreChange(0);
             onGameOverChange(false);
             isRunningRef.current = true;
+            useHudStore.getState().setSpeedKph(0);
         });
 
         networkManager.onPlayerJoined((player) => {
@@ -334,7 +341,6 @@ export const RaceWorld = ({
                 const racePosition = snapshot.raceState.playerOrder.indexOf(localSnapshotPlayer.id);
                 useHudStore.getState().setLap(localSnapshotPlayer.progress.lap + 1);
                 useHudStore.getState().setPosition(racePosition >= 0 ? racePosition + 1 : 1);
-                useHudStore.getState().setSpeedKph(Math.max(0, localSnapshotPlayer.speed * 3.6));
                 useHudStore
                     .getState()
                     .setActiveEffectIds(localSnapshotPlayer.activeEffects.map((effect) => effect.effectType));
@@ -389,6 +395,8 @@ export const RaceWorld = ({
         onScoreChange(0);
         onGameOverChange(false);
         isRunningRef.current = true;
+        previousFramePositionRef.current.copy(localCar.position);
+        useHudStore.getState().setSpeedKph(0);
     }, [onGameOverChange, onScoreChange, resetNonce]);
 
     const setGameOver = () => {
@@ -408,6 +416,28 @@ export const RaceWorld = ({
 
         localCar.update(dt);
         opponentsRef.current.forEach((opponentCar) => opponentCar.update(dt));
+
+        for (const opponentCar of opponentsRef.current.values()) {
+            const deltaX = localCar.position.x - opponentCar.position.x;
+            const deltaZ = localCar.position.z - opponentCar.position.z;
+            const distance = Math.hypot(deltaX, deltaZ);
+            if (distance >= MINIMUM_CAR_SEPARATION) continue;
+
+            if (distance > 0.0001) {
+                const pushDistance = (MINIMUM_CAR_SEPARATION - distance) * 0.5;
+                localCar.position.x += (deltaX / distance) * pushDistance;
+                localCar.position.z += (deltaZ / distance) * pushDistance;
+            } else {
+                localCar.position.z -= MINIMUM_CAR_SEPARATION * 0.5;
+            }
+
+            localCar.mesh.position.copy(localCar.position);
+        }
+
+        const frameDistance = previousFramePositionRef.current.distanceTo(localCar.position);
+        previousFramePositionRef.current.copy(localCar.position);
+        const measuredSpeedKph = dt > 0 ? (frameDistance / dt) * 3.6 : 0;
+        useHudStore.getState().setSpeedKph(Math.max(0, measuredSpeedKph));
 
         if (GAMEPLAY_V2_ENABLED) {
             const nowMs = Date.now();
@@ -542,6 +572,11 @@ export const RaceWorld = ({
         }
 
         if (localCar.position.x < -TRACK_BOUNDARY_X || localCar.position.x > TRACK_BOUNDARY_X) {
+            setGameOver();
+            return;
+        }
+
+        if (localCar.position.z >= trackManager.getRaceDistanceMeters()) {
             setGameOver();
             return;
         }

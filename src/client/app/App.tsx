@@ -429,7 +429,6 @@ export const App = () => {
     return (
         <div className="h-full w-full">
             <div id="game-ui">
-                <img alt="GT Racer Insanity logo" id="game-logo" src="/branding/icon.svg" />
                 <div id="score">Score: {score}</div>
                 <div id="speed">Speed: {Math.round(speedKph)} km/h</div>
                 <div id="lap-position">

@@ -14,7 +14,7 @@ import type {
 } from '@/shared/network/types';
 import { clientConfig } from '@/client/app/config';
 import { sanitizeClientInputFrame } from '@/shared/network/inputFrame';
-import { LATEST_PROTOCOL_VERSION } from '@/shared/network/protocolVersion';
+import { PROTOCOL_V1, PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
 type NetworkManagerOptions = {
     gameplayV2?: boolean;
@@ -66,7 +66,9 @@ export class NetworkManager {
         this.roomId = roomId;
         this.playerName = playerName;
         this.gameplayV2 = options.gameplayV2 ?? clientConfig.gameplayV2;
-        this.protocolVersion = options.protocolVersion ?? LATEST_PROTOCOL_VERSION;
+        this.protocolVersion =
+            options.protocolVersion ??
+            (this.gameplayV2 || clientConfig.protocolV2Required ? PROTOCOL_V2 : PROTOCOL_V1);
         this.selectedVehicleId = options.selectedVehicleId ?? 'sport';
         this.selectedColorId = options.selectedColorId ?? 'red';
 
