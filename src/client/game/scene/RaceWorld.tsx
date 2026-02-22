@@ -2,12 +2,24 @@ import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { clientConfig } from '@/client/app/config';
 import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
+import { useHudStore } from '@/client/game/state/hudStore';
+import { useRuntimeStore } from '@/client/game/state/runtimeStore';
+import {
+    createInterpolationBuffer,
+    pushInterpolationSample,
+    sampleInterpolationBuffer,
+    type InterpolationBuffer,
+} from '@/client/game/systems/interpolationSystem';
+import { reconcileMotionState } from '@/client/game/systems/reconciliationSystem';
 import { playerIdToHue } from '@/shared/game/playerColor';
 import { playerIdToVehicleIndex } from '@/shared/game/playerVehicle';
-import type { ConnectionStatus, PlayerState } from '@/shared/network/types';
+import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
+import type { ConnectionStatus, PlayerState, SnapshotPlayerState } from '@/shared/network/types';
 import { NetworkManager } from '@/client/network/NetworkManager';
 import { Car, type CarAssets } from '@/client/game/entities/Car';
+import { RacePhysicsWorld } from '@/client/game/scene/RacePhysicsWorld';
 import { SceneEnvironment } from '@/client/game/scene/environment/SceneEnvironment';
 import {
     DEFAULT_SCENE_ENVIRONMENT_ID,
@@ -29,6 +41,8 @@ type RaceWorldProps = {
 type GTDebugState = {
     isRunning: boolean;
     localCarZ: number | null;
+    localCarX: number | null;
+    opponentCount: number;
     connectionStatus: ConnectionStatus;
     roomId: string | null;
     score: number;
@@ -37,6 +51,14 @@ type GTDebugState = {
 const NETWORK_TICK_RATE_SECONDS = 1 / 20;
 const TRACK_BOUNDARY_X = 38;
 const ACTIVE_SCENE_ENVIRONMENT = getSceneEnvironmentProfile(DEFAULT_SCENE_ENVIRONMENT_ID);
+const GAMEPLAY_V2_ENABLED = clientConfig.gameplayV2 || clientConfig.protocolV2Required;
+
+type OpponentInterpolationState = {
+    rotationY: number;
+    x: number;
+    y: number;
+    z: number;
+};
 
 export const RaceWorld = ({
     cruiseControlEnabled,
@@ -55,8 +77,12 @@ export const RaceWorld = ({
 
     const networkManagerRef = useRef<NetworkManager | null>(null);
     const trackManagerRef = useRef<TrackManager | null>(null);
+    const currentTrackLengthRef = useRef(900);
     const localCarRef = useRef<Car | null>(null);
     const opponentsRef = useRef<Map<string, Car>>(new Map());
+    const opponentInterpolationBuffersRef = useRef<Map<string, InterpolationBuffer<OpponentInterpolationState>>>(new Map());
+    const localInputSequenceRef = useRef(0);
+    const latestLocalSnapshotRef = useRef<SnapshotPlayerState | null>(null);
 
     const audioListenerRef = useRef<THREE.AudioListener | null>(null);
     const carModelGltfs = useLoader(
@@ -111,7 +137,9 @@ export const RaceWorld = ({
             getState: () => ({
                 isRunning: isRunningRef.current,
                 connectionStatus: connectionStatusRef.current,
+                localCarX: localCarRef.current?.position.x ?? null,
                 localCarZ: localCarRef.current?.position.z ?? null,
+                opponentCount: opponentsRef.current.size,
                 roomId: networkManagerRef.current?.roomId ?? null,
                 score: scoreRef.current,
             }),
@@ -160,6 +188,7 @@ export const RaceWorld = ({
 
         const unsubscribeConnectionStatus = networkManager.onConnectionStatus((status) => {
             connectionStatusRef.current = status;
+            useRuntimeStore.getState().setConnectionStatus(status);
             onConnectionStatusChange(status);
         });
 
@@ -198,6 +227,7 @@ export const RaceWorld = ({
             opponentCar.targetRotationY = player.rotationY;
 
             opponentsRef.current.set(player.id, opponentCar);
+            opponentInterpolationBuffersRef.current.set(player.id, createInterpolationBuffer<OpponentInterpolationState>());
         };
 
         const removeOpponent = (playerId: string) => {
@@ -206,15 +236,18 @@ export const RaceWorld = ({
 
             opponentCar.dispose();
             opponentsRef.current.delete(playerId);
+            opponentInterpolationBuffersRef.current.delete(playerId);
         };
 
-        networkManager.onRoomJoined((seed, players) => {
+        networkManager.onRoomJoined((seed, players, roomJoinedPayload) => {
             trackManagerRef.current?.dispose();
             trackManagerRef.current = new TrackManager(scene, seed);
+            currentTrackLengthRef.current = trackManagerRef.current.getTrackLengthMeters();
 
             clearCars();
 
-            const socketId = networkManager.getSocketId();
+            const socketId = roomJoinedPayload.localPlayerId ?? networkManager.getSocketId();
+            useRuntimeStore.getState().setLocalPlayerId(socketId);
             for (const player of players) {
                 if (player.id === socketId) {
                     const modelIndex = playerIdToVehicleIndex(player.id, carModelVariants.length);
@@ -231,6 +264,8 @@ export const RaceWorld = ({
                     );
                     localCarRef.current.position.set(player.x, player.y, player.z);
                     localCarRef.current.rotationY = player.rotationY;
+                    localCarRef.current.targetPosition.set(player.x, player.y, player.z);
+                    localCarRef.current.targetRotationY = player.rotationY;
                     continue;
                 }
 
@@ -238,6 +273,8 @@ export const RaceWorld = ({
             }
 
             scoreRef.current = 0;
+            localInputSequenceRef.current = 0;
+            latestLocalSnapshotRef.current = null;
             networkUpdateTimerRef.current = 0;
             onScoreChange(0);
             onGameOverChange(false);
@@ -261,6 +298,49 @@ export const RaceWorld = ({
             opponentCar.targetRotationY = player.rotationY;
         });
 
+        networkManager.onServerSnapshot((snapshot) => {
+            useRuntimeStore.getState().applySnapshot(snapshot);
+            const localPlayerId = useRuntimeStore.getState().localPlayerId;
+            if (!localPlayerId) return;
+
+            const localSnapshotPlayer = snapshot.players.find((player) => player.id === localPlayerId) ?? null;
+            latestLocalSnapshotRef.current = localSnapshotPlayer;
+
+            for (const snapshotPlayer of snapshot.players) {
+                if (snapshotPlayer.id === localPlayerId) {
+                    continue;
+                }
+
+                if (!opponentsRef.current.has(snapshotPlayer.id)) {
+                    createOpponent(snapshotPlayer);
+                }
+
+                const interpolationBuffer = opponentInterpolationBuffersRef.current.get(snapshotPlayer.id);
+                if (!interpolationBuffer) continue;
+
+                pushInterpolationSample(interpolationBuffer, {
+                    sequence: snapshot.seq,
+                    state: {
+                        rotationY: snapshotPlayer.rotationY,
+                        x: snapshotPlayer.x,
+                        y: snapshotPlayer.y,
+                        z: snapshotPlayer.z,
+                    },
+                    timeMs: snapshot.serverTimeMs,
+                });
+            }
+
+            if (localSnapshotPlayer) {
+                const racePosition = snapshot.raceState.playerOrder.indexOf(localSnapshotPlayer.id);
+                useHudStore.getState().setLap(localSnapshotPlayer.progress.lap + 1);
+                useHudStore.getState().setPosition(racePosition >= 0 ? racePosition + 1 : 1);
+                useHudStore.getState().setSpeedKph(Math.max(0, localSnapshotPlayer.speed * 3.6));
+                useHudStore
+                    .getState()
+                    .setActiveEffectIds(localSnapshotPlayer.activeEffects.map((effect) => effect.effectType));
+            }
+        });
+
         return () => {
             isRunningRef.current = false;
             trackManagerRef.current?.dispose();
@@ -269,6 +349,8 @@ export const RaceWorld = ({
             unsubscribeConnectionStatus();
             connectionStatusRef.current = 'disconnected';
             onConnectionStatusChange('disconnected');
+            useRuntimeStore.getState().setConnectionStatus('disconnected');
+            useRuntimeStore.getState().setLocalPlayerId(null);
             networkManager.disconnect();
             networkManagerRef.current = null;
         };
@@ -294,10 +376,15 @@ export const RaceWorld = ({
 
         localCar.reset();
         trackManager.reset();
+        currentTrackLengthRef.current = trackManager.getTrackLengthMeters();
 
-        networkManagerRef.current?.emitState(0, 0, 0, 0);
+        if (!GAMEPLAY_V2_ENABLED) {
+            networkManagerRef.current?.emitState(0, 0, 0, 0);
+        }
 
         scoreRef.current = 0;
+        localInputSequenceRef.current = 0;
+        latestLocalSnapshotRef.current = null;
         networkUpdateTimerRef.current = 0;
         onScoreChange(0);
         onGameOverChange(false);
@@ -322,14 +409,96 @@ export const RaceWorld = ({
         localCar.update(dt);
         opponentsRef.current.forEach((opponentCar) => opponentCar.update(dt));
 
+        if (GAMEPLAY_V2_ENABLED) {
+            const nowMs = Date.now();
+            for (const [playerId, opponentCar] of opponentsRef.current) {
+                const interpolationBuffer = opponentInterpolationBuffersRef.current.get(playerId);
+                if (!interpolationBuffer) continue;
+
+                const interpolatedState = sampleInterpolationBuffer(
+                    interpolationBuffer,
+                    nowMs - clientConfig.interpolationDelayMs,
+                    (from, to, alpha) => ({
+                        rotationY: from.rotationY + (to.rotationY - from.rotationY) * alpha,
+                        x: from.x + (to.x - from.x) * alpha,
+                        y: from.y + (to.y - from.y) * alpha,
+                        z: from.z + (to.z - from.z) * alpha,
+                    })
+                );
+
+                if (!interpolatedState) continue;
+
+                opponentCar.targetPosition.set(interpolatedState.x, interpolatedState.y, interpolatedState.z);
+                opponentCar.targetRotationY = interpolatedState.rotationY;
+            }
+
+            const localSnapshot = latestLocalSnapshotRef.current;
+            if (localSnapshot) {
+                const reconciliation = reconcileMotionState(
+                    {
+                        positionX: localCar.position.x,
+                        positionZ: localCar.position.z,
+                        rotationY: localCar.rotationY,
+                        speed: 0,
+                    },
+                    {
+                        positionX: localSnapshot.x,
+                        positionZ: localSnapshot.z,
+                        rotationY: localSnapshot.rotationY,
+                        speed: localSnapshot.speed,
+                    },
+                    {
+                        positionThreshold: clientConfig.reconciliationPositionThreshold,
+                        yawThresholdRadians: clientConfig.reconciliationYawThresholdRadians,
+                    }
+                );
+
+                if (reconciliation.wasCorrected) {
+                    localCar.position.x = reconciliation.correctedState.positionX;
+                    localCar.position.z = reconciliation.correctedState.positionZ;
+                    localCar.rotationY = reconciliation.correctedState.rotationY;
+                    localCar.mesh.position.copy(localCar.position);
+                    localCar.mesh.rotation.y = localCar.rotationY;
+                }
+            }
+        }
+
         networkUpdateTimerRef.current += dt;
         if (networkUpdateTimerRef.current >= NETWORK_TICK_RATE_SECONDS) {
-            networkManager.emitState(
-                localCar.position.x,
-                localCar.position.y,
-                localCar.position.z,
-                localCar.rotationY
-            );
+            if (GAMEPLAY_V2_ENABLED) {
+                const isUpPressed =
+                    inputManager.isKeyPressed('KeyW') || inputManager.isKeyPressed('ArrowUp');
+                const isDownPressed =
+                    inputManager.isKeyPressed('KeyS') || inputManager.isKeyPressed('ArrowDown');
+                const isLeftPressed =
+                    inputManager.isKeyPressed('KeyA') || inputManager.isKeyPressed('ArrowLeft');
+                const isRightPressed =
+                    inputManager.isKeyPressed('KeyD') || inputManager.isKeyPressed('ArrowRight');
+
+                localInputSequenceRef.current += 1;
+                networkManager.emitInputFrame({
+                    ackSnapshotSeq: useRuntimeStore.getState().lastAckedSnapshotSeq,
+                    controls: {
+                        boost: inputManager.isKeyPressed('Space'),
+                        brake: isDownPressed,
+                        handbrake: inputManager.isPrecisionOverrideActive(),
+                        steering: (isRightPressed ? 1 : 0) + (isLeftPressed ? -1 : 0),
+                        throttle: (isUpPressed ? 1 : 0) + (isDownPressed ? -1 : 0),
+                    },
+                    cruiseControlEnabled: inputManager.isCruiseControlEnabled(),
+                    precisionOverrideActive: inputManager.isPrecisionOverrideActive(),
+                    protocolVersion: PROTOCOL_V2,
+                    seq: localInputSequenceRef.current,
+                    timestampMs: Date.now(),
+                });
+            } else {
+                networkManager.emitState(
+                    localCar.position.x,
+                    localCar.position.y,
+                    localCar.position.z,
+                    localCar.rotationY
+                );
+            }
             networkUpdateTimerRef.current = 0;
         }
 
@@ -377,7 +546,9 @@ export const RaceWorld = ({
             return;
         }
 
-        const score = Math.floor(localCar.position.z);
+        const score = GAMEPLAY_V2_ENABLED
+            ? Math.floor(latestLocalSnapshotRef.current?.progress.distanceMeters ?? localCar.position.z)
+            : Math.floor(localCar.position.z);
         if (score > scoreRef.current) {
             scoreRef.current = score;
             onScoreChange(score);
@@ -387,6 +558,12 @@ export const RaceWorld = ({
     return (
         <>
             <SceneEnvironment profileId={ACTIVE_SCENE_ENVIRONMENT.id} sunLightRef={dirLightRef} />
+            {GAMEPLAY_V2_ENABLED ? (
+                <RacePhysicsWorld
+                    trackLength={currentTrackLengthRef.current}
+                    trackWidth={TRACK_BOUNDARY_X * 2}
+                />
+            ) : null}
         </>
     );
 };

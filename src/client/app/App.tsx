@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber';
 import { Suspense, lazy, useEffect, useMemo, useState, type FormEvent } from 'react';
 import * as THREE from 'three';
 import { clientConfig } from '@/client/app/config';
+import { useHudStore } from '@/client/game/state/hudStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ConnectionStatus } from '@/shared/network/types';
@@ -246,6 +247,9 @@ export const App = () => {
     const [cruiseControlEnabled, setCruiseControlEnabled] = useState(true);
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
     const appVersion = __APP_VERSION__;
+    const speedKph = useHudStore((state) => state.speedKph);
+    const lap = useHudStore((state) => state.lap);
+    const position = useHudStore((state) => state.position);
     const roomIdFromUrl = useMemo(() => new URLSearchParams(routeSearch).get('room') ?? '', [routeSearch]);
 
     const setLocationState = () => {
@@ -427,6 +431,10 @@ export const App = () => {
             <div id="game-ui">
                 <img alt="GT Racer Insanity logo" id="game-logo" src="/branding/icon.svg" />
                 <div id="score">Score: {score}</div>
+                <div id="speed">Speed: {Math.round(speedKph)} km/h</div>
+                <div id="lap-position">
+                    Lap {lap} | P{position}
+                </div>
                 <div data-status={connectionStatus} id="connection-status">
                     {connectionStatus}
                 </div>

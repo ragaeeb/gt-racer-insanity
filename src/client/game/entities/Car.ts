@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { stepCarMotion } from '@/shared/game/carPhysics';
 import { InputManager } from '@/client/game/systems/InputManager';
+import { CarController } from '@/client/game/entities/CarController';
+import { CarVisual } from '@/client/game/entities/CarVisual';
 
 export type CarAssets = {
     engine?: AudioBuffer;
@@ -18,13 +19,9 @@ export class Car {
     public targetPosition: THREE.Vector3 = new THREE.Vector3();
     public targetRotationY: number = 0;
 
-    private speed: number = 0;
-    private readonly maxSpeed: number = 40;
-    private cruiseLatchActive = false;
-
     public isLocalPlayer: boolean = true;
-    private isBrakingInputActive = false;
-    private isAcceleratingInputActive = false;
+    private readonly controller = new CarController();
+    private readonly visual = new CarVisual();
 
     // Audio
     private engineSound?: THREE.PositionalAudio;
@@ -277,12 +274,12 @@ export class Car {
 
         // Estimate current true speed for remote and local
         // For local it's exact, for remote we can approximate based on distance to target
-        let currentSpeed = Math.abs(this.speed);
+        let currentSpeed = Math.abs(this.controller.getSpeed());
         if (!this.isLocalPlayer) {
             currentSpeed = this.position.distanceTo(this.targetPosition) * 10;
         }
 
-        const normalizedSpeed = Math.min(1.0, currentSpeed / this.maxSpeed);
+        const normalizedSpeed = Math.min(1.0, currentSpeed / this.controller.getMaxSpeed());
         const speedDelta = currentSpeed - this.previousAudioSpeed;
         const accelerationFactor = THREE.MathUtils.clamp(speedDelta / 8, 0, 1);
         const decelerationFactor = THREE.MathUtils.clamp(-speedDelta / 8, 0, 1);
@@ -290,7 +287,7 @@ export class Car {
         const idleVolume = Math.max(0, 0.7 - normalizedSpeed * 0.9);
         const drivingVolume = THREE.MathUtils.smoothstep(normalizedSpeed, 0.08, 0.95) * 0.8;
         const throttleWeight = this.isLocalPlayer
-            ? (this.isAcceleratingInputActive ? 1 : 0)
+            ? (this.controller.isAccelerating() ? 1 : 0)
             : (speedDelta > 0.2 ? 1 : 0);
         const accelVolume = THREE.MathUtils.clamp(
             normalizedSpeed * 0.3 + throttleWeight * 0.5 + accelerationFactor * 0.5,
@@ -306,7 +303,7 @@ export class Car {
         this.accelSound.setPlaybackRate(0.8 + normalizedSpeed * 0.6);
 
         const shouldTriggerBrake = this.isLocalPlayer
-            ? this.isBrakingInputActive && currentSpeed > 1.5
+            ? this.controller.isBraking() && currentSpeed > 1.5
             : decelerationFactor > 0.25 && currentSpeed > 3;
         const nowMs = performance.now();
         if (shouldTriggerBrake && nowMs - this.lastBrakeTriggerAtMs > 450) {
@@ -323,91 +320,38 @@ export class Car {
     }
 
     private handleNetworkInterpolation() {
-        // dt is available for future velocity-based lerping, for now just constant factor
-        this.position.lerp(this.targetPosition, 0.2);
+        const nextState = this.controller.updateRemote(
+            { position: this.position, rotationY: this.rotationY },
+            this.targetPosition,
+            this.targetRotationY
+        );
 
-        // Simple angle lerp
-        const diff = this.targetRotationY - this.rotationY;
-        // Handle wrap around
-        const normalizedDiff = Math.atan2(Math.sin(diff), Math.cos(diff));
-        this.rotationY += normalizedDiff * 0.2;
-
-        this.mesh.position.copy(this.position);
-        this.mesh.rotation.y = this.rotationY;
+        this.position.copy(nextState.position);
+        this.rotationY = nextState.rotationY;
+        this.visual.applyTransform(this.mesh, this.position, this.rotationY);
     }
 
     private handleLocalMovement(dt: number) {
         if (!this.inputManager) return;
 
-        const isUpPressed =
-            this.inputManager.isKeyPressed('KeyW') || this.inputManager.isKeyPressed('ArrowUp');
-        const isDownPressed =
-            this.inputManager.isKeyPressed('KeyS') || this.inputManager.isKeyPressed('ArrowDown');
-        const isLeftPressed =
-            this.inputManager.isKeyPressed('KeyA') || this.inputManager.isKeyPressed('ArrowLeft');
-        const isRightPressed =
-            this.inputManager.isKeyPressed('KeyD') || this.inputManager.isKeyPressed('ArrowRight');
-        const isCruiseEnabled = this.inputManager.isCruiseControlEnabled();
-        const isPrecisionOverrideActive = this.inputManager.isPrecisionOverrideActive();
-        const topSpeedLatchThreshold = this.maxSpeed * 0.98;
-        this.isBrakingInputActive = isDownPressed;
-        this.isAcceleratingInputActive = isUpPressed;
-
-        if (!isCruiseEnabled || isPrecisionOverrideActive) {
-            this.cruiseLatchActive = false;
-        }
-
-        if (isDownPressed) {
-            this.cruiseLatchActive = false;
-        }
-
-        if (isUpPressed && this.speed >= topSpeedLatchThreshold) {
-            this.cruiseLatchActive = true;
-        }
-
-        const shouldAutoCruise =
-            isCruiseEnabled &&
-            !isPrecisionOverrideActive &&
-            this.cruiseLatchActive &&
-            !isDownPressed;
-
-        const movement = stepCarMotion(
-            {
-                speed: this.speed,
-                rotationY: this.rotationY,
-                positionX: this.position.x,
-                positionZ: this.position.z,
-            },
-            {
-                isUp: isUpPressed || shouldAutoCruise,
-                isDown: isDownPressed,
-                isLeft: isLeftPressed,
-                isRight: isRightPressed,
-            },
+        const nextState = this.controller.updateLocal(
+            { position: this.position, rotationY: this.rotationY },
+            this.inputManager,
             dt
         );
 
-        this.speed = movement.speed;
-        this.rotationY = movement.rotationY;
-        this.position.x = movement.positionX;
-        this.position.z = movement.positionZ;
-
-        // Update Mesh Position & Rotation
-        this.mesh.position.copy(this.position);
-        this.mesh.rotation.y = this.rotationY;
+        this.position.copy(nextState.position);
+        this.rotationY = nextState.rotationY;
+        this.visual.applyTransform(this.mesh, this.position, this.rotationY);
     }
 
     public reset() {
         this.position.set(0, 0, 0);
-        this.speed = 0;
         this.rotationY = 0;
-        this.cruiseLatchActive = false;
+        this.controller.reset();
         this.previousAudioSpeed = 0;
         this.lastBrakeTriggerAtMs = 0;
-        this.isBrakingInputActive = false;
-        this.isAcceleratingInputActive = false;
-        this.mesh.position.copy(this.position);
-        this.mesh.rotation.y = this.rotationY;
+        this.visual.applyTransform(this.mesh, this.position, this.rotationY);
 
         if (this.engineSound && !this.engineSound.isPlaying) this.engineSound.play();
         if (this.accelSound && !this.accelSound.isPlaying) this.accelSound.play();

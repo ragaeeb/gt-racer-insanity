@@ -1,26 +1,45 @@
-import type { PlayerState, PlayerStateUpdate } from '@/shared/network/types';
+import type { JoinRoomPayload, PlayerState, PlayerStateUpdate, ServerSnapshotPayload } from '@/shared/network/types';
+import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 import { serverConfig } from '@/server/config';
+import { RoomSimulation } from '@/server/sim/roomSimulation';
 
 export type Room = {
     id: string;
     lastUpdateAtByPlayer: Map<string, number>;
+    playerSelections: Map<string, { colorId: string; vehicleId: string }>;
     seed: number;
     players: Map<string, PlayerState>;
+    simulation: RoomSimulation | null;
 };
 
 type RandomSeedGenerator = () => number;
 type RandomSpawnGenerator = () => number;
 
 type JoinRoomResult = {
-    room: Room;
-    player: PlayerState;
     created: boolean;
+    player: PlayerState;
+    room: Room;
 };
 
 type AuthorityGuardrails = {
     maxMovementSpeedPerSecond: number;
     maxPositionDeltaPerTick: number;
     maxRotationDeltaPerTick: number;
+};
+
+type RoomStoreRuntimeOptions = {
+    defaultTrackId: string;
+    protocolV2Required: boolean;
+    simulationTickHz: number;
+    totalLaps: number;
+    useServerSimulation: boolean;
+};
+
+type JoinRoomOptions = Pick<JoinRoomPayload, 'protocolVersion' | 'selectedColorId' | 'selectedVehicleId'>;
+
+export type RoomSnapshotEnvelope = {
+    roomId: string;
+    snapshot: ServerSnapshotPayload;
 };
 
 const clamp = (value: number, min: number, max: number) => {
@@ -41,6 +60,7 @@ const sanitizePlayerName = (playerName: string) => {
 
 export class RoomStore {
     private rooms = new Map<string, Room>();
+    private readonly runtimeOptions: RoomStoreRuntimeOptions;
 
     constructor(
         private readonly seedGenerator: RandomSeedGenerator = () => Math.floor(Math.random() * 0xffffffff),
@@ -49,34 +69,112 @@ export class RoomStore {
             maxMovementSpeedPerSecond: serverConfig.maxMovementSpeedPerSecond,
             maxPositionDeltaPerTick: serverConfig.maxPositionDeltaPerTick,
             maxRotationDeltaPerTick: serverConfig.maxRotationDeltaPerTick,
-        }
-    ) {}
+        },
+        runtimeOptions: Partial<RoomStoreRuntimeOptions> = {}
+    ) {
+        this.runtimeOptions = {
+            defaultTrackId: runtimeOptions.defaultTrackId ?? serverConfig.defaultTrackId,
+            protocolV2Required: runtimeOptions.protocolV2Required ?? serverConfig.protocolV2Required,
+            simulationTickHz: runtimeOptions.simulationTickHz ?? serverConfig.simulationTickHz,
+            totalLaps: runtimeOptions.totalLaps ?? serverConfig.defaultTotalLaps,
+            useServerSimulation: runtimeOptions.useServerSimulation ?? serverConfig.serverSimV2,
+        };
+    }
 
-    public joinRoom = (roomId: string, playerId: string, playerName: string): JoinRoomResult => {
+    private shouldUseSimulation = (joinOptions: JoinRoomOptions) => {
+        return (
+            this.runtimeOptions.useServerSimulation ||
+            this.runtimeOptions.protocolV2Required ||
+            joinOptions.protocolVersion === PROTOCOL_V2
+        );
+    };
+
+    private createRoomSimulation = (roomId: string, seed: number) => {
+        return new RoomSimulation({
+            roomId,
+            seed,
+            tickHz: this.runtimeOptions.simulationTickHz,
+            totalLaps: this.runtimeOptions.totalLaps,
+            trackId: this.runtimeOptions.defaultTrackId,
+        });
+    };
+
+    private ensureSimulation = (room: Room, joinOptions: JoinRoomOptions) => {
+        if (room.simulation || !this.shouldUseSimulation(joinOptions)) {
+            return;
+        }
+
+        room.simulation = this.createRoomSimulation(room.id, room.seed);
+
+        for (const existingPlayer of room.players.values()) {
+            const selection = room.playerSelections.get(existingPlayer.id) ?? { colorId: 'red', vehicleId: 'sport' };
+            const simPlayer = room.simulation.joinPlayer(
+                existingPlayer.id,
+                existingPlayer.name,
+                selection.vehicleId,
+                selection.colorId
+            );
+            existingPlayer.x = simPlayer.motion.positionX;
+            existingPlayer.y = 0;
+            existingPlayer.z = simPlayer.motion.positionZ;
+            existingPlayer.rotationY = simPlayer.motion.rotationY;
+        }
+    };
+
+    public joinRoom = (
+        roomId: string,
+        playerId: string,
+        playerName: string,
+        joinOptions: JoinRoomOptions = {}
+    ): JoinRoomResult => {
         let room = this.rooms.get(roomId);
         const created = !room;
 
         if (!room) {
+            const seed = this.seedGenerator();
             room = {
                 id: roomId,
                 lastUpdateAtByPlayer: new Map(),
+                playerSelections: new Map(),
                 players: new Map(),
-                seed: this.seedGenerator(),
+                seed,
+                simulation: this.shouldUseSimulation(joinOptions) ? this.createRoomSimulation(roomId, seed) : null,
             };
             this.rooms.set(roomId, room);
+        } else {
+            this.ensureSimulation(room, joinOptions);
         }
 
-        const player: PlayerState = {
+        room.playerSelections.set(playerId, {
+            colorId: joinOptions.selectedColorId ?? 'red',
+            vehicleId: joinOptions.selectedVehicleId ?? 'sport',
+        });
+
+        const sanitizedName = sanitizePlayerName(playerName);
+        const player = {
             id: playerId,
-            name: sanitizePlayerName(playerName),
+            name: sanitizedName,
+            rotationY: 0,
             x: this.spawnGenerator(),
             y: 0,
             z: 0,
-            rotationY: 0,
-        };
+        } satisfies PlayerState;
 
         room.players.set(playerId, player);
         room.lastUpdateAtByPlayer.set(playerId, Date.now());
+
+        if (room.simulation) {
+            const simPlayer = room.simulation.joinPlayer(
+                playerId,
+                sanitizedName,
+                joinOptions.selectedVehicleId ?? 'sport',
+                joinOptions.selectedColorId ?? 'red'
+            );
+            player.x = simPlayer.motion.positionX;
+            player.y = 0;
+            player.z = simPlayer.motion.positionZ;
+            player.rotationY = simPlayer.motion.rotationY;
+        }
 
         return { created, player, room };
     };
@@ -89,6 +187,14 @@ export class RoomStore {
     ): PlayerState | null => {
         const room = this.rooms.get(roomId);
         if (!room) return null;
+
+        if (room.simulation) {
+            const simulationPlayer = room.simulation.toLegacyPlayerState(playerId);
+            if (simulationPlayer) {
+                room.players.set(playerId, simulationPlayer);
+            }
+            return simulationPlayer;
+        }
 
         const storedPlayer = room.players.get(playerId);
         if (!storedPlayer) return null;
@@ -139,6 +245,8 @@ export class RoomStore {
 
         const removed = room.players.delete(playerId);
         room.lastUpdateAtByPlayer.delete(playerId);
+        room.playerSelections.delete(playerId);
+        room.simulation?.removePlayer(playerId);
         if (!removed) {
             return { removed: false, roomDeleted: false };
         }
@@ -157,5 +265,42 @@ export class RoomStore {
 
     public getRoomCount = () => {
         return this.rooms.size;
+    };
+
+    public queueInputFrame = (roomId: string, playerId: string, frame: Parameters<RoomSimulation['queueInputFrame']>[1]) => {
+        const room = this.rooms.get(roomId);
+        if (!room?.simulation) {
+            return false;
+        }
+
+        room.simulation.queueInputFrame(playerId, frame);
+        return true;
+    };
+
+    public stepSimulations = (nowMs = Date.now()) => {
+        for (const room of this.rooms.values()) {
+            if (!room.simulation) continue;
+            room.simulation.step(nowMs);
+
+            for (const playerId of room.players.keys()) {
+                const playerState = room.simulation.toLegacyPlayerState(playerId);
+                if (!playerState) continue;
+                room.players.set(playerId, playerState);
+            }
+        }
+    };
+
+    public buildSimulationSnapshots = (nowMs = Date.now()): RoomSnapshotEnvelope[] => {
+        const snapshots: RoomSnapshotEnvelope[] = [];
+
+        for (const room of this.rooms.values()) {
+            if (!room.simulation || room.players.size === 0) continue;
+            snapshots.push({
+                roomId: room.id,
+                snapshot: room.simulation.buildSnapshot(nowMs),
+            });
+        }
+
+        return snapshots;
     };
 }
