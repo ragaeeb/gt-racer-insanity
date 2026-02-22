@@ -72,6 +72,29 @@ canvas {
     color: #ff8bb0;
 }
 
+#control-mode-toggle {
+    align-items: center;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 8px;
+    color: #f4f6ff;
+    display: inline-flex;
+    font-family: monospace;
+    font-size: 0.85rem;
+    gap: 8px;
+    left: 20px;
+    letter-spacing: 0.04em;
+    padding: 6px 10px;
+    pointer-events: auto;
+    position: absolute;
+    top: 122px;
+    user-select: none;
+}
+
+#control-mode-toggle input {
+    margin: 0;
+}
+
 #game-logo {
     filter: drop-shadow(0 0 8px rgba(0, 255, 204, 0.35));
     height: 48px;

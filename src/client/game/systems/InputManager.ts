@@ -1,5 +1,6 @@
 export class InputManager {
     public keys: Record<string, boolean> = {};
+    private cruiseControlEnabled = true;
 
     constructor() {
         window.addEventListener('keydown', this.onKeyDown);
@@ -16,6 +17,18 @@ export class InputManager {
 
     public isKeyPressed = (code: string): boolean => {
         return !!this.keys[code];
+    };
+
+    public setCruiseControlEnabled = (enabled: boolean) => {
+        this.cruiseControlEnabled = enabled;
+    };
+
+    public isCruiseControlEnabled = () => {
+        return this.cruiseControlEnabled;
+    };
+
+    public isPrecisionOverrideActive = () => {
+        return this.isKeyPressed('ShiftLeft') || this.isKeyPressed('ShiftRight');
     };
 
     public dispose = () => {

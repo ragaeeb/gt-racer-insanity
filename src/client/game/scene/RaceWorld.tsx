@@ -2,14 +2,20 @@ import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { playerIdToHue } from '../../../shared/game/playerColor';
-import type { ConnectionStatus, PlayerState } from '../../../shared/network/types';
-import { NetworkManager } from '../../network/NetworkManager';
-import { Car, type CarAssets } from '../entities/Car';
-import { InputManager } from '../systems/InputManager';
-import { TrackManager } from '../systems/TrackManager';
+import { playerIdToHue } from '@/shared/game/playerColor';
+import type { ConnectionStatus, PlayerState } from '@/shared/network/types';
+import { NetworkManager } from '@/client/network/NetworkManager';
+import { Car, type CarAssets } from '@/client/game/entities/Car';
+import { SceneEnvironment } from '@/client/game/scene/environment/SceneEnvironment';
+import {
+    DEFAULT_SCENE_ENVIRONMENT_ID,
+    getSceneEnvironmentProfile,
+} from '@/client/game/scene/environment/sceneEnvironmentProfiles';
+import { InputManager } from '@/client/game/systems/InputManager';
+import { TrackManager } from '@/client/game/systems/TrackManager';
 
 type RaceWorldProps = {
+    cruiseControlEnabled: boolean;
     onConnectionStatusChange: (status: ConnectionStatus) => void;
     resetNonce: number;
     onScoreChange: (score: number) => void;
@@ -26,8 +32,10 @@ type GTDebugState = {
 
 const NETWORK_TICK_RATE_SECONDS = 1 / 20;
 const TRACK_BOUNDARY_X = 38;
+const ACTIVE_SCENE_ENVIRONMENT = getSceneEnvironmentProfile(DEFAULT_SCENE_ENVIRONMENT_ID);
 
 export const RaceWorld = ({
+    cruiseControlEnabled,
     onConnectionStatusChange,
     resetNonce,
     onScoreChange,
@@ -63,6 +71,8 @@ export const RaceWorld = ({
     const networkUpdateTimerRef = useRef(0);
 
     const carBoundingBoxRef = useRef(new THREE.Box3());
+    const carCollisionCenterRef = useRef(new THREE.Vector3());
+    const carCollisionSizeRef = useRef(new THREE.Vector3(2.4, 1.8, 4.8));
     const obstacleBoundingBoxRef = useRef(new THREE.Box3());
 
     const cameraOffsetRef = useRef(new THREE.Vector3());
@@ -95,9 +105,8 @@ export const RaceWorld = ({
     }, []);
 
     useEffect(() => {
-        scene.background = new THREE.Color(0x111111);
-        scene.fog = new THREE.Fog(0x111111, 20, 200);
-    }, [scene]);
+        inputManager.setCruiseControlEnabled(cruiseControlEnabled);
+    }, [cruiseControlEnabled, inputManager]);
 
     useEffect(() => {
         return () => {
@@ -290,8 +299,9 @@ export const RaceWorld = ({
 
         const dirLight = dirLightRef.current;
         if (dirLight) {
-            dirLight.position.x = localCar.position.x + 20;
-            dirLight.position.z = localCar.position.z + 20;
+            dirLight.position.x = localCar.position.x + ACTIVE_SCENE_ENVIRONMENT.sunLight.followOffset[0];
+            dirLight.position.y = localCar.position.y + ACTIVE_SCENE_ENVIRONMENT.sunLight.followOffset[1];
+            dirLight.position.z = localCar.position.z + ACTIVE_SCENE_ENVIRONMENT.sunLight.followOffset[2];
             dirLight.target = localCar.mesh;
         }
 
@@ -306,8 +316,17 @@ export const RaceWorld = ({
         lookTargetRef.current.add(rotatedLookAheadRef.current);
         camera.lookAt(lookTargetRef.current);
 
-        carBoundingBoxRef.current.setFromObject(localCar.mesh);
+        carCollisionCenterRef.current.set(
+            localCar.position.x,
+            localCar.position.y + carCollisionSizeRef.current.y * 0.5,
+            localCar.position.z
+        );
+        carBoundingBoxRef.current.setFromCenterAndSize(
+            carCollisionCenterRef.current,
+            carCollisionSizeRef.current
+        );
         for (const obstacle of trackManager.getActiveObstacles()) {
+            obstacle.updateWorldMatrix(true, false);
             obstacleBoundingBoxRef.current.setFromObject(obstacle);
             if (carBoundingBoxRef.current.intersectsBox(obstacleBoundingBoxRef.current)) {
                 setGameOver();
@@ -329,20 +348,7 @@ export const RaceWorld = ({
 
     return (
         <>
-            <ambientLight intensity={0.5} />
-            <directionalLight
-                ref={dirLightRef}
-                castShadow
-                color={0x00ffcc}
-                intensity={1.5}
-                position={[20, 40, 20]}
-                shadow-mapSize-height={2048}
-                shadow-mapSize-width={2048}
-                shadow-camera-bottom={-100}
-                shadow-camera-left={-100}
-                shadow-camera-right={100}
-                shadow-camera-top={100}
-            />
+            <SceneEnvironment profileId={ACTIVE_SCENE_ENVIRONMENT.id} sunLightRef={dirLightRef} />
         </>
     );
 };

@@ -4,6 +4,12 @@
         "useDefineForClassFields": true,
         "module": "ESNext",
         "jsx": "react-jsx",
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "src/*"
+            ]
+        },
         "lib": [
             "ESNext",
             "DOM",

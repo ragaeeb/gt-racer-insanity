@@ -1,5 +1,5 @@
-import type { PlayerState, PlayerStateUpdate } from '../shared/network/types';
-import { serverConfig } from './config';
+import type { PlayerState, PlayerStateUpdate } from '@/shared/network/types';
+import { serverConfig } from '@/server/config';
 
 export type Room = {
     id: string;

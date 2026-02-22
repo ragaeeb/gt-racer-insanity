@@ -1,8 +1,8 @@
 import { Server as Engine } from '@socket.io/bun-engine';
 import { Server } from 'socket.io';
-import type { PlayerStateUpdate, UpdateStatePayload } from '../shared/network/types';
-import { serverConfig } from './config';
-import { RoomStore } from './roomStore';
+import type { PlayerStateUpdate, UpdateStatePayload } from '@/shared/network/types';
+import { serverConfig } from '@/server/config';
+import { RoomStore } from '@/server/roomStore';
 
 const roomStore = new RoomStore();
 

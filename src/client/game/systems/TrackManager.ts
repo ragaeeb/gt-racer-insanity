@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { seededRandom } from '../../../shared/utils/prng';
+import { seededRandom } from '@/shared/utils/prng';
 
 type TrackSegment = {
     mesh: THREE.Group;

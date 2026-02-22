@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { type Browser, type ConsoleMessage, chromium, type Page } from 'playwright';
 
-const CLIENT_URL = 'http://127.0.0.1:4173';
-const SERVER_HEALTH_URL = 'http://127.0.0.1:3001/health';
+const CLIENT_PORT = 4173;
+const SERVER_PORT = 3001;
+const CLIENT_URL = `http://127.0.0.1:${CLIENT_PORT}`;
+const SERVER_HEALTH_URL = `http://127.0.0.1:${SERVER_PORT}/health`;
 const STARTUP_TIMEOUT_MS = 90_000;
 const shouldRunE2E = Bun.env.RUN_E2E === 'true' || process.env.RUN_E2E === 'true';
 const e2eDescribe = shouldRunE2E ? describe : describe.skip;
@@ -54,13 +56,69 @@ const assertProcessRunning = (processHandle: Bun.Subprocess | null, label: strin
     }
 };
 
+const listListeningPidsForPort = (port: number) => {
+    const result = Bun.spawnSync(['lsof', '-nP', '-t', `-iTCP:${port}`, '-sTCP:LISTEN'], {
+        stderr: 'ignore',
+        stdout: 'pipe',
+    });
+
+    if (result.exitCode !== 0) {
+        return [] as number[];
+    }
+
+    return result.stdout
+        .toString()
+        .split('\n')
+        .map((line) => Number(line.trim()))
+        .filter((pid) => Number.isInteger(pid) && pid > 0);
+};
+
+const killPidIfAlive = (pid: number, signal: 'TERM' | 'KILL') => {
+    Bun.spawnSync(['kill', `-${signal}`, String(pid)], {
+        stderr: 'ignore',
+        stdout: 'ignore',
+    });
+};
+
+const terminateProcessTree = (pid: number, signal: 'TERM' | 'KILL') => {
+    Bun.spawnSync(['pkill', `-${signal}`, '-P', String(pid)], {
+        stderr: 'ignore',
+        stdout: 'ignore',
+    });
+    killPidIfAlive(pid, signal);
+};
+
+const cleanupListeningPort = async (port: number) => {
+    const initialPids = listListeningPidsForPort(port);
+    for (const pid of initialPids) {
+        terminateProcessTree(pid, 'TERM');
+    }
+
+    if (initialPids.length > 0) {
+        await Bun.sleep(250);
+    }
+
+    const remainingPids = listListeningPidsForPort(port);
+    for (const pid of remainingPids) {
+        terminateProcessTree(pid, 'KILL');
+    }
+};
+
 const stopProcess = async (processHandle: Bun.Subprocess | null) => {
     if (!processHandle) {
         return;
     }
 
-    if (processHandle.exitCode === null) {
-        processHandle.kill();
+    const pid = processHandle.pid;
+
+    if (processHandle.exitCode === null && pid) {
+        terminateProcessTree(pid, 'TERM');
+    }
+
+    await Promise.race([processHandle.exited, Bun.sleep(2_000)]);
+
+    if (processHandle.exitCode === null && pid) {
+        terminateProcessTree(pid, 'KILL');
     }
 
     await processHandle.exited;
@@ -81,7 +139,7 @@ e2eDescribe('e2e smoke', () => {
             '--host',
             '127.0.0.1',
             '--port',
-            '4173',
+            String(CLIENT_PORT),
             '--strictPort',
         ]);
 
@@ -106,8 +164,12 @@ e2eDescribe('e2e smoke', () => {
 
     afterAll(async () => {
         await browser?.close();
-        await stopProcess(clientProcess);
-        await stopProcess(serverProcess);
+        await Promise.all([
+            stopProcess(clientProcess),
+            stopProcess(serverProcess),
+        ]);
+        await cleanupListeningPort(CLIENT_PORT);
+        await cleanupListeningPort(SERVER_PORT);
     }, { timeout: 30_000 });
 
     it(
@@ -171,6 +233,12 @@ e2eDescribe('e2e smoke', () => {
 
             const initialState = await waitForCarSpawn();
             const initialCarZ = initialState.localCarZ ?? 0;
+            const initialGameOverClassName = await page.getAttribute('#game-over', 'class');
+            expect(initialGameOverClassName?.includes('hidden')).toBe(true);
+
+            await page.waitForTimeout(1200);
+            const idleGameOverClassName = await page.getAttribute('#game-over', 'class');
+            expect(idleGameOverClassName?.includes('hidden')).toBe(true);
 
             await page.evaluate(() => {
                 window.dispatchEvent(

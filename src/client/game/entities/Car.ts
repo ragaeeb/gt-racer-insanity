@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { stepCarMotion } from '../../../shared/game/carPhysics';
-import { InputManager } from '../systems/InputManager';
+import { stepCarMotion } from '@/shared/game/carPhysics';
+import { InputManager } from '@/client/game/systems/InputManager';
 
 export type CarAssets = {
     engine?: AudioBuffer;
@@ -19,6 +19,7 @@ export class Car {
 
     private speed: number = 0;
     private readonly maxSpeed: number = 40;
+    private cruiseLatchActive = false;
 
     public isLocalPlayer: boolean = true;
 
@@ -240,6 +241,36 @@ export class Car {
     private handleLocalMovement(dt: number) {
         if (!this.inputManager) return;
 
+        const isUpPressed =
+            this.inputManager.isKeyPressed('KeyW') || this.inputManager.isKeyPressed('ArrowUp');
+        const isDownPressed =
+            this.inputManager.isKeyPressed('KeyS') || this.inputManager.isKeyPressed('ArrowDown');
+        const isLeftPressed =
+            this.inputManager.isKeyPressed('KeyA') || this.inputManager.isKeyPressed('ArrowLeft');
+        const isRightPressed =
+            this.inputManager.isKeyPressed('KeyD') || this.inputManager.isKeyPressed('ArrowRight');
+        const isCruiseEnabled = this.inputManager.isCruiseControlEnabled();
+        const isPrecisionOverrideActive = this.inputManager.isPrecisionOverrideActive();
+        const topSpeedLatchThreshold = this.maxSpeed * 0.98;
+
+        if (!isCruiseEnabled || isPrecisionOverrideActive) {
+            this.cruiseLatchActive = false;
+        }
+
+        if (isDownPressed) {
+            this.cruiseLatchActive = false;
+        }
+
+        if (isUpPressed && this.speed >= topSpeedLatchThreshold) {
+            this.cruiseLatchActive = true;
+        }
+
+        const shouldAutoCruise =
+            isCruiseEnabled &&
+            !isPrecisionOverrideActive &&
+            this.cruiseLatchActive &&
+            !isDownPressed;
+
         const movement = stepCarMotion(
             {
                 speed: this.speed,
@@ -248,10 +279,10 @@ export class Car {
                 positionZ: this.position.z,
             },
             {
-                isUp: this.inputManager.isKeyPressed('KeyW') || this.inputManager.isKeyPressed('ArrowUp'),
-                isDown: this.inputManager.isKeyPressed('KeyS') || this.inputManager.isKeyPressed('ArrowDown'),
-                isLeft: this.inputManager.isKeyPressed('KeyA') || this.inputManager.isKeyPressed('ArrowLeft'),
-                isRight: this.inputManager.isKeyPressed('KeyD') || this.inputManager.isKeyPressed('ArrowRight'),
+                isUp: isUpPressed || shouldAutoCruise,
+                isDown: isDownPressed,
+                isLeft: isLeftPressed,
+                isRight: isRightPressed,
             },
             dt
         );
@@ -270,6 +301,7 @@ export class Car {
         this.position.set(0, 0, 0);
         this.speed = 0;
         this.rotationY = 0;
+        this.cruiseLatchActive = false;
         this.mesh.position.copy(this.position);
         this.mesh.rotation.y = this.rotationY;
 

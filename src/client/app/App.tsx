@@ -1,10 +1,10 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense, lazy, useState } from 'react';
 import * as THREE from 'three';
-import type { ConnectionStatus } from '../../shared/network/types';
+import type { ConnectionStatus } from '@/shared/network/types';
 
 const RaceWorld = lazy(async () => {
-    const module = await import('../game/scene/RaceWorld');
+    const module = await import('@/client/game/scene/RaceWorld');
     return { default: module.RaceWorld };
 });
 
@@ -12,6 +12,7 @@ export const App = () => {
     const [score, setScore] = useState(0);
     const [gameOver, setGameOver] = useState(false);
     const [resetNonce, setResetNonce] = useState(0);
+    const [cruiseControlEnabled, setCruiseControlEnabled] = useState(true);
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
     const appVersion = __APP_VERSION__;
 
@@ -28,6 +29,14 @@ export const App = () => {
                 <div data-status={connectionStatus} id="connection-status">
                     {connectionStatus}
                 </div>
+                <label id="control-mode-toggle">
+                    <input
+                        checked={cruiseControlEnabled}
+                        onChange={(event) => setCruiseControlEnabled(event.target.checked)}
+                        type="checkbox"
+                    />
+                    Cruise
+                </label>
                 <div id="app-version">v{appVersion}</div>
                 <div id="game-over" className={gameOver ? '' : 'hidden'}>
                     <h1>GAME OVER</h1>
@@ -49,6 +58,7 @@ export const App = () => {
             >
                 <Suspense fallback={null}>
                     <RaceWorld
+                        cruiseControlEnabled={cruiseControlEnabled}
                         onConnectionStatusChange={setConnectionStatus}
                         onGameOverChange={setGameOver}
                         onScoreChange={setScore}

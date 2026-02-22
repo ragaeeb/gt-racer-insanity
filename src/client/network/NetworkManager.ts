@@ -4,8 +4,8 @@ import type {
     PlayerState,
     RoomJoinedPayload,
     UpdateStatePayload,
-} from '../../shared/network/types';
-import { clientConfig } from '../app/config';
+} from '@/shared/network/types';
+import { clientConfig } from '@/client/app/config';
 
 export type OnRoomJoinedCallback = (seed: number, players: PlayerState[]) => void;
 export type OnPlayerJoinedCallback = (player: PlayerState) => void;
