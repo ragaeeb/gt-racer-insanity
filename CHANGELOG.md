@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.3.0...v1.4.0) (2026-02-22)
+
+
+### Features
+
+* **name:** Collect player name ([028e97a](https://github.com/ragaeeb/gt-racer-insanity/commit/028e97ab8fc36e693d7e0efadc6b920c9da57a60))
+
 # [1.3.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.2.0...v1.3.0) (2026-02-22)
 
 
