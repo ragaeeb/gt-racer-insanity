@@ -1,7 +1,7 @@
 {
     "name": "gt-racer-insanity",
     "private": true,
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Multiplayer arcade racing game powered by Bun, React Three Fiber, and Socket.IO.",
     "author": "Ragaeeb Haq (https://github.com/ragaeeb)",
     "license": "MIT",
