@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.5.0...v1.6.0) (2026-02-22)
+
+
+### Features
+
+* **landing:** Refresh landing page ([4ae7740](https://github.com/ragaeeb/gt-racer-insanity/commit/4ae7740df2d40bc116f91a95ea327385a08ef444))
+
 # [1.5.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.4.0...v1.5.0) (2026-02-22)
 
 
