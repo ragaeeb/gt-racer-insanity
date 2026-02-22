@@ -44,6 +44,16 @@ const startProcess = (command: string[]) => {
     });
 };
 
+const assertProcessRunning = (processHandle: Bun.Subprocess | null, label: string) => {
+    if (!processHandle) {
+        throw new Error(`${label} process was not started`);
+    }
+
+    if (processHandle.exitCode !== null) {
+        throw new Error(`${label} process exited early with code ${processHandle.exitCode}`);
+    }
+};
+
 const stopProcess = async (processHandle: Bun.Subprocess | null) => {
     if (!processHandle) {
         return;
@@ -62,18 +72,22 @@ e2eDescribe('e2e smoke', () => {
     let clientProcess: Bun.Subprocess | null = null;
 
     beforeAll(async () => {
-        const buildResult = Bun.spawnSync(['bun', 'run', 'build'], {
-            cwd: process.cwd(),
-            stdout: 'inherit',
-            stderr: 'inherit',
-        });
-
-        if (buildResult.exitCode !== 0) {
-            throw new Error('Failed to build client before E2E run');
-        }
-
         serverProcess = startProcess(['bun', 'src/server/index.ts']);
-        clientProcess = startProcess(['bun', 'run', 'preview', '--', '--host', '127.0.0.1', '--port', '4173']);
+        clientProcess = startProcess([
+            'bun',
+            'run',
+            'preview',
+            '--',
+            '--host',
+            '127.0.0.1',
+            '--port',
+            '4173',
+            '--strictPort',
+        ]);
+
+        await Bun.sleep(250);
+        assertProcessRunning(serverProcess, 'Server');
+        assertProcessRunning(clientProcess, 'Client preview');
 
         await waitForHttpOk(SERVER_HEALTH_URL, STARTUP_TIMEOUT_MS);
         await waitForHttpOk(CLIENT_URL, STARTUP_TIMEOUT_MS);
@@ -88,13 +102,13 @@ e2eDescribe('e2e smoke', () => {
                 '--enable-unsafe-swiftshader',
             ],
         });
-    });
+    }, { timeout: STARTUP_TIMEOUT_MS });
 
     afterAll(async () => {
         await browser?.close();
         await stopProcess(clientProcess);
         await stopProcess(serverProcess);
-    });
+    }, { timeout: 30_000 });
 
     it(
         'should load the game, move the local car, and avoid runtime errors',
