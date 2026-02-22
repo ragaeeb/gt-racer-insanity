@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.4.0...v1.5.0) (2026-02-22)
+
+
+### Features
+
+* **lobby:** Add basic lobby and landing page ([b3dd6a1](https://github.com/ragaeeb/gt-racer-insanity/commit/b3dd6a18b0ae277f5c2213050f54e282028ffcb4))
+
 # [1.4.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.3.0...v1.4.0) (2026-02-22)
 
 
