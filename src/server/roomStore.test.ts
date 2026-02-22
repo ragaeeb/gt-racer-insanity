@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { RoomStore } from '@/server/roomStore';
+import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
 const sequence = (values: number[]) => {
     let index = 0;
@@ -185,5 +186,53 @@ describe('RoomStore', () => {
         );
 
         expect(updated?.x).toBeCloseTo(1, 6);
+    });
+
+    it('should enqueue v2 input frames and emit simulation snapshots when simulation is enabled', () => {
+        const store = new RoomStore(
+            () => 1,
+            () => 0,
+            {
+                maxMovementSpeedPerSecond: 1000,
+                maxPositionDeltaPerTick: 100,
+                maxRotationDeltaPerTick: 2,
+            },
+            {
+                simulationTickHz: 60,
+                useServerSimulation: true,
+            }
+        );
+
+        const joined = store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            protocolVersion: PROTOCOL_V2,
+            selectedColorId: 'red',
+            selectedVehicleId: 'sport',
+        });
+
+        expect(joined.room.simulation).not.toBeNull();
+
+        const enqueued = store.queueInputFrame('ROOM1', 'player-1', {
+            ackSnapshotSeq: null,
+            controls: {
+                boost: false,
+                brake: false,
+                handbrake: false,
+                steering: 0,
+                throttle: 1,
+            },
+            cruiseControlEnabled: false,
+            precisionOverrideActive: false,
+            protocolVersion: PROTOCOL_V2,
+            roomId: 'ROOM1',
+            seq: 1,
+            timestampMs: 1_000,
+        });
+
+        expect(enqueued).toEqual(true);
+
+        store.stepSimulations(1_016);
+        const snapshots = store.buildSimulationSnapshots(1_016);
+        expect(snapshots).toHaveLength(1);
+        expect(snapshots[0]?.snapshot.players[0]?.lastProcessedInputSeq).toEqual(1);
     });
 });

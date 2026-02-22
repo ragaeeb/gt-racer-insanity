@@ -1,22 +1,39 @@
+import type { ClientInputFrame, InputFramePayload, InputFrameControlState } from '@/shared/network/inputFrame';
+import type {
+    CheckpointState,
+    PlayerRaceProgress,
+    RaceState,
+    ServerSnapshotPayload,
+    SnapshotPlayerState,
+    StatusEffectInstance,
+} from '@/shared/network/snapshot';
+import type { ProtocolVersion } from '@/shared/network/protocolVersion';
+
 export type PlayerState = {
     id: string;
     name: string;
+    rotationY: number;
     x: number;
     y: number;
     z: number;
-    rotationY: number;
 };
 
 export type PlayerStateUpdate = Pick<PlayerState, 'x' | 'y' | 'z' | 'rotationY'>;
 
 export type JoinRoomPayload = {
     playerName: string;
+    protocolVersion?: ProtocolVersion;
     roomId: string;
+    selectedColorId?: string;
+    selectedVehicleId?: string;
 };
 
 export type RoomJoinedPayload = {
-    seed: number;
+    localPlayerId?: string;
     players: PlayerState[];
+    protocolVersion?: ProtocolVersion;
+    seed: number;
+    snapshot?: ServerSnapshotPayload;
 };
 
 export type UpdateStatePayload = {
@@ -24,4 +41,43 @@ export type UpdateStatePayload = {
     state: PlayerStateUpdate;
 };
 
+export type AbilityActivatePayload = {
+    abilityId: string;
+    roomId: string;
+    seq: number;
+    targetPlayerId: string | null;
+};
+
+export type RaceEventKind =
+    | 'countdown_started'
+    | 'race_started'
+    | 'lap_completed'
+    | 'player_finished'
+    | 'race_finished';
+
+export type RaceEventPayload = {
+    kind: RaceEventKind;
+    playerId: string | null;
+    roomId: string;
+    serverTimeMs: number;
+};
+
+export type ServerSnapshotEventPayload = {
+    roomId: string;
+    snapshot: ServerSnapshotPayload;
+};
+
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
+
+export type {
+    CheckpointState,
+    ClientInputFrame,
+    InputFrameControlState,
+    InputFramePayload,
+    PlayerRaceProgress,
+    ProtocolVersion,
+    RaceState,
+    ServerSnapshotPayload,
+    SnapshotPlayerState,
+    StatusEffectInstance,
+};

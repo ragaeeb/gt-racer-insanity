@@ -31,7 +31,7 @@
         "server": "bun --watch src/server/index.ts",
         "test": "bun test",
         "test:watch": "bun test --watch",
-        "e2e": "bun run build && RUN_E2E=true bun test testing/e2e.test.ts",
+        "e2e": "bun run build && RUN_E2E=true bun test testing",
         "test:e2e": "bun run e2e",
         "test:e2e:install": "playwright install chromium",
         "check": "bun run test && bun run build",
@@ -51,14 +51,20 @@
         "@types/react-dom": "^19.2.3",
         "@types/three": "^0.183.1",
         "@vitejs/plugin-react": "^5.1.4",
+        "fast-check": "^4.5.3",
+        "leva": "^0.10.1",
         "playwright": "^1.58.2",
+        "r3f-perf": "^7.2.3",
         "semantic-release": "^25.0.3",
         "tailwindcss": "^4.2.0",
         "typescript": "^5.9.3",
         "vite": "^7.3.1"
     },
     "dependencies": {
+        "@react-three/drei": "^10.7.7",
         "@react-three/fiber": "^9.5.0",
+        "@react-three/postprocessing": "^3.0.4",
+        "@react-three/rapier": "^2.2.0",
         "@socket.io/bun-engine": "^0.1.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -67,6 +73,8 @@
         "socket.io": "^4.8.3",
         "socket.io-client": "^4.8.3",
         "tailwind-merge": "^3.5.0",
-        "three": "^0.183.1"
+        "three": "^0.183.1",
+        "three-mesh-bvh": "^0.9.8",
+        "zustand": "^5.0.11"
     }
 }

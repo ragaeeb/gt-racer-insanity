@@ -16,20 +16,25 @@
 
 ![GT Racer Insanity logo](public/branding/icon.png)
 
-Multiplayer racing game prototype evolving into a full game with car selection, showroom scenes, multiple tracks, and realtime multiplayer racing.
+Multiplayer racing game evolving from prototype architecture to a production-style multiplayer stack with authoritative simulation scaffolding, finite tracks, and data-driven gameplay manifests.
 
 ## Latest Features
-- Multiplayer rooms with server-authoritative position/rotation guardrails.
+- Protocol V2 scaffolding with input frames and server snapshots (`input_frame`, `server_snapshot`), feature-flagged alongside legacy sync.
+- Server simulation loop scaffolding (fixed tick + snapshot broadcast) with shared race progress types.
+- Finite track manifest system with lap/checkpoint progression helpers and explicit track-end barrier.
+- Expanded shared data manifests and validators for vehicles, abilities, effects, hazards, powerups, and tracks.
 - Player name prompt on join, with in-world name tags above every car.
 - Multi-car catalog rotation by player ID (not only color differences).
 - Sunny day environment profile system (`sceneEnvironmentProfiles`) for easier level/theme swaps.
-- Cruise control with precision override support for top-speed playability.
+- HUD now includes speed, lap, and position overlays.
 - Layered car audio: idle engine, acceleration, driving loop, and brake one-shot.
-- Opt-in E2E smoke tests (`RUN_E2E=true`) with CI workflow coverage.
+- E2E coverage includes smoke plus multiplayer non-overlap scenario (`RUN_E2E=true`).
 
 ## Tech Stack
 - `bun` runtime and package manager
-- `React + Vite + @react-three/fiber + three` for the client
+- `React + Vite + @react-three/fiber + three` for the client runtime
+- `@react-three/rapier` added for physics migration path (scaffolding present)
+- `zustand` for runtime/HUD state
 - `Socket.IO + @socket.io/bun-engine` for realtime server communication
 - `Tailwind CSS` + shadcn-style component patterns for app UI
 - `TypeScript` with `ESNext` target
@@ -54,17 +59,20 @@ Server health:
 - `bun run test` -> run all tests (`e2e` suite is skipped unless `RUN_E2E=true`)
 - `bun run test:watch` -> run tests in watch mode
 - `bun run test:e2e:install` -> install Chromium for Playwright smoke tests
-- `bun run e2e` -> run browser smoke test (load/connect/move/no crash)
+- `bun run e2e` -> run all browser tests in `testing/` (smoke + multiplayer collision)
 - `bun run build` -> typecheck and production build
 - `bun run check` -> run tests then build
 
 ## Architecture
-- `src/client/app`: React shell, Tailwind styles, HUD, modal flows (player-name prompt), and startup gating.
-- `src/client/game`: R3F/Three runtime for car entities, track systems, scene environment, and camera/game loop.
-- `src/client/network`: Socket.IO client transport and connection lifecycle.
-- `src/server`: Bun Socket.IO server with room lifecycle and authority clamps in `roomStore`.
-- `src/shared`: Protocol/domain types and deterministic gameplay logic shared by client/server.
-- `testing`: opt-in browser E2E smoke tests, intentionally gated from default `bun test`.
+- `src/client/app`: app shell, routes, HUD overlays, lobby/startup flows.
+- `src/client/game`: R3F runtime, entity controllers, finite track renderer, scene systems, camera loop.
+- `src/client/game/state`: Zustand stores for runtime and HUD state.
+- `src/client/game/systems`: interpolation/reconciliation/prediction helpers and gameplay adapters.
+- `src/client/network`: Socket.IO transport with V1/V2 compatibility paths.
+- `src/server`: Socket.IO server, room lifecycle, V2 simulation tick/snapshot plumbing.
+- `src/server/sim`: authoritative simulation modules (`inputQueue`, `roomSimulation`, snapshot builder, effect/ability systems).
+- `src/shared`: protocol contracts, manifests, deterministic logic and validators used by client/server.
+- `testing`: opt-in browser E2E suites, gated from default `bun test`.
 
 ## Project Structure
 ```text
@@ -85,16 +93,24 @@ public/
 
 ## Testing Strategy
 Logic that can be deterministic is extracted into shared/server modules and covered by `bun:test`:
-- car motion physics
+- car motion physics + race progression helpers
 - seeded PRNG
 - player color hashing
 - player vehicle selection hashing
-- room state lifecycle
+- room state lifecycle + simulation queue/tick behavior
+- protocol V2 payload validators
+- manifest schema validation
 
-E2E smoke tests:
-- live in `testing/e2e.test.ts`
+E2E tests:
+- live in `testing/e2e.test.ts` and `testing/e2e-multiplayer-collision.test.ts`
 - run only when `RUN_E2E=true`
 - validate load/connect/spawn/move/no-runtime-errors
+- validate multiplayer visibility + non-overlap separation behavior
+
+## Current Status / Known Gaps
+- True physics bumping (mass/impulse car-vs-car collision) is not complete yet; current implementation prevents overlap but is not full rigid-body bump combat.
+- V2 netcode is scaffolded and partially integrated; legacy path still exists for compatibility.
+- Finite track rendering and race-distance termination are present; full production race UX/polish is still in progress.
 
 ## Car Models
 - Multiplayer cars now cycle by player ID across multiple models.

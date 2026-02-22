@@ -43,6 +43,28 @@ canvas {
     top: 20px;
 }
 
+#speed {
+    color: #f4f6ff;
+    font-family: monospace;
+    font-size: 1.1rem;
+    left: 20px;
+    letter-spacing: 0.04em;
+    position: absolute;
+    text-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+    top: 20px;
+}
+
+#lap-position {
+    color: #f4f6ff;
+    font-family: monospace;
+    font-size: 1rem;
+    left: 20px;
+    letter-spacing: 0.04em;
+    position: absolute;
+    text-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+    top: 44px;
+}
+
 #connection-status {
     background: rgba(0, 0, 0, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.3);
@@ -55,7 +77,7 @@ canvas {
     padding: 6px 10px;
     position: absolute;
     text-transform: uppercase;
-    top: 80px;
+    top: 74px;
 }
 
 #connection-status[data-status='connected'] {
@@ -89,21 +111,12 @@ canvas {
     padding: 6px 10px;
     pointer-events: auto;
     position: absolute;
-    top: 122px;
+    top: 116px;
     user-select: none;
 }
 
 #control-mode-toggle input {
     margin: 0;
-}
-
-#game-logo {
-    filter: drop-shadow(0 0 8px rgba(0, 255, 204, 0.35));
-    height: 48px;
-    left: 20px;
-    position: absolute;
-    top: 20px;
-    width: 48px;
 }
 
 #app-version {
@@ -134,7 +147,7 @@ canvas {
     padding: 6px 10px;
     position: absolute;
     text-overflow: ellipsis;
-    top: 164px;
+    top: 158px;
     white-space: nowrap;
 }
 

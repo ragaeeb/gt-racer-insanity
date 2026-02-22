@@ -1,6 +1,14 @@
 import { Server as Engine } from '@socket.io/bun-engine';
 import { Server } from 'socket.io';
-import type { JoinRoomPayload, PlayerStateUpdate, UpdateStatePayload } from '@/shared/network/types';
+import { isInputFramePayload } from '@/shared/network/inputFrame';
+import { coerceProtocolVersion, PROTOCOL_V2 } from '@/shared/network/protocolVersion';
+import type {
+    AbilityActivatePayload,
+    JoinRoomPayload,
+    ProtocolVersion,
+    PlayerStateUpdate,
+    UpdateStatePayload,
+} from '@/shared/network/types';
 import { serverConfig } from '@/server/config';
 import { RoomStore } from '@/server/roomStore';
 
@@ -41,7 +49,29 @@ const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
     if (!value || typeof value !== 'object') return false;
 
     const payload = value as Record<string, unknown>;
-    return isString(payload.roomId) && isString(payload.playerName);
+    const protocolVersion = payload.protocolVersion;
+    const selectedColorId = payload.selectedColorId;
+    const selectedVehicleId = payload.selectedVehicleId;
+
+    return (
+        isString(payload.roomId) &&
+        isString(payload.playerName) &&
+        (protocolVersion === undefined || isString(protocolVersion)) &&
+        (selectedColorId === undefined || isString(selectedColorId)) &&
+        (selectedVehicleId === undefined || isString(selectedVehicleId))
+    );
+};
+
+const isAbilityActivatePayload = (value: unknown): value is AbilityActivatePayload => {
+    if (!value || typeof value !== 'object') return false;
+    const payload = value as Record<string, unknown>;
+
+    return (
+        isString(payload.roomId) &&
+        isString(payload.abilityId) &&
+        isFiniteNumber(payload.seq) &&
+        (payload.targetPlayerId === null || isString(payload.targetPlayerId))
+    );
 };
 
 const corsOrigin =
@@ -80,41 +110,96 @@ const engine = new Engine({
 
 io.bind(engine);
 
+const simulationIntervalMs = 1000 / Math.max(serverConfig.simulationTickHz, 1);
+const snapshotIntervalMs = 1000 / Math.max(serverConfig.snapshotTickHz, 1);
+
+setInterval(() => {
+    roomStore.stepSimulations(Date.now());
+}, simulationIntervalMs);
+
+setInterval(() => {
+    const snapshots = roomStore.buildSimulationSnapshots(Date.now());
+    for (const { roomId, snapshot } of snapshots) {
+        io.to(roomId).volatile.emit('server_snapshot', {
+            roomId,
+            snapshot,
+        });
+    }
+}, snapshotIntervalMs);
+
 io.on('connection', (socket) => {
     console.log(`[+] Player connected: ${socket.id}`);
     let lastUpdateStateAtMs = 0;
-    const minimumTickIntervalMs = 1000 / Math.max(serverConfig.maxInboundTickRateHz, 1);
+    let lastInputFrameAtMs = 0;
+    const minimumLegacyTickIntervalMs = 1000 / Math.max(serverConfig.maxInboundTickRateHz, 1);
+    const minimumInputTickIntervalMs = 1000 / Math.max(serverConfig.maxInputRateHz, 1);
 
     socket.on('join_room', (rawJoinRoom: unknown) => {
         let roomId = '';
         let playerName = 'Player';
+        let protocolVersion: ProtocolVersion = PROTOCOL_V2;
+        let selectedVehicleId: string | undefined;
+        let selectedColorId: string | undefined;
 
         if (isString(rawJoinRoom)) {
             roomId = rawJoinRoom.trim();
+            protocolVersion = PROTOCOL_V2;
         } else if (isJoinRoomPayload(rawJoinRoom)) {
             if (getPayloadBytes(rawJoinRoom) > serverConfig.maxJoinRoomPayloadBytes) return;
             roomId = rawJoinRoom.roomId.trim();
             playerName = rawJoinRoom.playerName;
+            protocolVersion = coerceProtocolVersion(rawJoinRoom.protocolVersion);
+            selectedVehicleId = rawJoinRoom.selectedVehicleId;
+            selectedColorId = rawJoinRoom.selectedColorId;
         } else {
             return;
         }
 
         if (roomId.length === 0 || roomId.length > 16) return;
+        if (serverConfig.protocolV2Required && protocolVersion !== PROTOCOL_V2) return;
 
         socket.join(roomId);
 
-        const { created, player, room } = roomStore.joinRoom(roomId, socket.id, playerName);
+        const { created, player, room } = roomStore.joinRoom(roomId, socket.id, playerName, {
+            protocolVersion,
+            selectedColorId,
+            selectedVehicleId,
+        });
         if (created) {
             console.log(`[Room ${roomId}] Created with seed ${room.seed}`);
         }
 
         socket.emit('room_joined', {
+            localPlayerId: socket.id,
             players: Array.from(room.players.values()),
+            protocolVersion,
             seed: room.seed,
+            snapshot: room.simulation ? room.simulation.buildSnapshot(Date.now()) : undefined,
         });
 
         socket.to(roomId).emit('player_joined', player);
         console.log(`[Room ${roomId}] Player ${socket.id} joined.`);
+    });
+
+    socket.on('input_frame', (data: unknown) => {
+        if (!isInputFramePayload(data)) return;
+        if (getPayloadBytes(data) > serverConfig.maxInputFramePayloadBytes) return;
+
+        const nowMs = Date.now();
+        if (nowMs - lastInputFrameAtMs < minimumInputTickIntervalMs) return;
+        lastInputFrameAtMs = nowMs;
+
+        roomStore.queueInputFrame(data.roomId, socket.id, data.frame);
+    });
+
+    socket.on('ability_activate', (data: unknown) => {
+        if (!isAbilityActivatePayload(data)) return;
+        io.to(data.roomId).emit('race_event', {
+            kind: 'race_started',
+            playerId: data.targetPlayerId,
+            roomId: data.roomId,
+            serverTimeMs: Date.now(),
+        });
     });
 
     socket.on('update_state', (data: unknown) => {
@@ -122,7 +207,7 @@ io.on('connection', (socket) => {
         if (getPayloadBytes(data) > serverConfig.maxUpdateStatePayloadBytes) return;
 
         const nowMs = Date.now();
-        if (nowMs - lastUpdateStateAtMs < minimumTickIntervalMs) return;
+        if (nowMs - lastUpdateStateAtMs < minimumLegacyTickIntervalMs) return;
         lastUpdateStateAtMs = nowMs;
 
         const storedPlayer = roomStore.updatePlayerState(data.roomId, socket.id, data.state, nowMs);
@@ -188,6 +273,7 @@ Bun.serve({
                 {
                     ok: true,
                     rooms: roomStore.getRoomCount(),
+                    serverSimV2: serverConfig.serverSimV2,
                 },
                 {
                     headers: new Headers(corsHeaders),
