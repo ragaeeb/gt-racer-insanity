@@ -24,6 +24,7 @@ export const CAR_MODEL_CATALOG: CarModelDefinition[] = [
         author: 'Quaternius',
         license: 'CC0 1.0',
         modelPath: '/models/cars/car-sport.glb',
+        modelYawOffsetRadians: Math.PI,
         sourceUrl: 'https://poly.pizza/m/OyqKvX9xNh',
     },
     {
@@ -41,6 +42,7 @@ export const CAR_MODEL_CATALOG: CarModelDefinition[] = [
         author: 'Quaternius',
         license: 'CC0 1.0',
         modelPath: '/models/cars/car-suv.glb',
+        modelYawOffsetRadians: Math.PI,
         sourceUrl: 'https://poly.pizza/m/xsMtZhBkxL',
     },
     {

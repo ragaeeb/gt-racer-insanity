@@ -5,6 +5,8 @@ import { InputManager } from '@/client/game/systems/InputManager';
 export type CarAssets = {
     engine?: AudioBuffer;
     accelerate?: AudioBuffer;
+    driving?: AudioBuffer;
+    brake?: AudioBuffer;
 };
 
 export class Car {
@@ -21,10 +23,16 @@ export class Car {
     private cruiseLatchActive = false;
 
     public isLocalPlayer: boolean = true;
+    private isBrakingInputActive = false;
+    private isAcceleratingInputActive = false;
 
     // Audio
     private engineSound?: THREE.PositionalAudio;
     private accelSound?: THREE.PositionalAudio;
+    private drivingSound?: THREE.PositionalAudio;
+    private brakeSound?: THREE.PositionalAudio;
+    private previousAudioSpeed = 0;
+    private lastBrakeTriggerAtMs = 0;
 
     private hasLoadedGLTF: boolean = false;
     private fallbackMeshes: THREE.Object3D[] = [];
@@ -70,6 +78,27 @@ export class Car {
             this.accelSound.setVolume(0.0);
             this.mesh.add(this.accelSound);
             this.accelSound.play();
+        }
+
+        if (this.assets.driving && !this.drivingSound) {
+            console.log('Initializing driving sound for car');
+            this.drivingSound = new THREE.PositionalAudio(this.listener);
+            this.drivingSound.setBuffer(this.assets.driving);
+            this.drivingSound.setRefDistance(10);
+            this.drivingSound.setLoop(true);
+            this.drivingSound.setVolume(0.0);
+            this.mesh.add(this.drivingSound);
+            this.drivingSound.play();
+        }
+
+        if (this.assets.brake && !this.brakeSound) {
+            console.log('Initializing brake sound for car');
+            this.brakeSound = new THREE.PositionalAudio(this.listener);
+            this.brakeSound.setBuffer(this.assets.brake);
+            this.brakeSound.setRefDistance(10);
+            this.brakeSound.setLoop(false);
+            this.brakeSound.setVolume(0.0);
+            this.mesh.add(this.brakeSound);
         }
     }
 
@@ -199,11 +228,11 @@ export class Car {
 
     private updateAudio() {
         // Try lazy initializing if audio buffers loaded after car was created
-        if (!this.engineSound || !this.accelSound) {
+        if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) {
             this.setupAudio();
         }
 
-        if (!this.engineSound || !this.accelSound) return;
+        if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) return;
 
         // Estimate current true speed for remote and local
         // For local it's exact, for remote we can approximate based on distance to target
@@ -213,16 +242,43 @@ export class Car {
         }
 
         const normalizedSpeed = Math.min(1.0, currentSpeed / this.maxSpeed);
+        const speedDelta = currentSpeed - this.previousAudioSpeed;
+        const accelerationFactor = THREE.MathUtils.clamp(speedDelta / 8, 0, 1);
+        const decelerationFactor = THREE.MathUtils.clamp(-speedDelta / 8, 0, 1);
 
-        // Mix idle engine and acceleration sound
-        const idleVolume = Math.max(0, 1.0 - (normalizedSpeed * 2)); // Fades out as speed increases
-        const accelVolume = Math.min(1.0, normalizedSpeed * 1.5); // Fades in 
+        const idleVolume = Math.max(0, 0.7 - normalizedSpeed * 0.9);
+        const drivingVolume = THREE.MathUtils.smoothstep(normalizedSpeed, 0.08, 0.95) * 0.8;
+        const throttleWeight = this.isLocalPlayer
+            ? (this.isAcceleratingInputActive ? 1 : 0)
+            : (speedDelta > 0.2 ? 1 : 0);
+        const accelVolume = THREE.MathUtils.clamp(
+            normalizedSpeed * 0.3 + throttleWeight * 0.5 + accelerationFactor * 0.5,
+            0,
+            1
+        );
 
         this.engineSound.setVolume(idleVolume);
+        this.drivingSound.setVolume(drivingVolume);
         this.accelSound.setVolume(accelVolume);
-
-        // Pitch bend accelerate sound slightly
+        this.engineSound.setPlaybackRate(0.9 + normalizedSpeed * 0.2);
+        this.drivingSound.setPlaybackRate(0.85 + normalizedSpeed * 0.4);
         this.accelSound.setPlaybackRate(0.8 + normalizedSpeed * 0.6);
+
+        const shouldTriggerBrake = this.isLocalPlayer
+            ? this.isBrakingInputActive && currentSpeed > 1.5
+            : decelerationFactor > 0.25 && currentSpeed > 3;
+        const nowMs = performance.now();
+        if (shouldTriggerBrake && nowMs - this.lastBrakeTriggerAtMs > 450) {
+            if (this.brakeSound.isPlaying) {
+                this.brakeSound.stop();
+            }
+            this.brakeSound.setVolume(THREE.MathUtils.clamp(0.65 + normalizedSpeed * 0.45, 0.65, 1.0));
+            this.brakeSound.setPlaybackRate(THREE.MathUtils.clamp(0.95 + normalizedSpeed * 0.35, 0.95, 1.25));
+            this.brakeSound.play();
+            this.lastBrakeTriggerAtMs = nowMs;
+        }
+
+        this.previousAudioSpeed = currentSpeed;
     }
 
     private handleNetworkInterpolation() {
@@ -253,6 +309,8 @@ export class Car {
         const isCruiseEnabled = this.inputManager.isCruiseControlEnabled();
         const isPrecisionOverrideActive = this.inputManager.isPrecisionOverrideActive();
         const topSpeedLatchThreshold = this.maxSpeed * 0.98;
+        this.isBrakingInputActive = isDownPressed;
+        this.isAcceleratingInputActive = isUpPressed;
 
         if (!isCruiseEnabled || isPrecisionOverrideActive) {
             this.cruiseLatchActive = false;
@@ -303,11 +361,16 @@ export class Car {
         this.speed = 0;
         this.rotationY = 0;
         this.cruiseLatchActive = false;
+        this.previousAudioSpeed = 0;
+        this.lastBrakeTriggerAtMs = 0;
+        this.isBrakingInputActive = false;
+        this.isAcceleratingInputActive = false;
         this.mesh.position.copy(this.position);
         this.mesh.rotation.y = this.rotationY;
 
         if (this.engineSound && !this.engineSound.isPlaying) this.engineSound.play();
         if (this.accelSound && !this.accelSound.isPlaying) this.accelSound.play();
+        if (this.drivingSound && !this.drivingSound.isPlaying) this.drivingSound.play();
     }
 
     public dispose() {
@@ -327,6 +390,24 @@ export class Car {
             this.mesh.remove(this.accelSound);
             this.accelSound.disconnect();
             this.accelSound = undefined;
+        }
+
+        if (this.drivingSound) {
+            if (this.drivingSound.isPlaying) {
+                this.drivingSound.stop();
+            }
+            this.mesh.remove(this.drivingSound);
+            this.drivingSound.disconnect();
+            this.drivingSound = undefined;
+        }
+
+        if (this.brakeSound) {
+            if (this.brakeSound.isPlaying) {
+                this.brakeSound.stop();
+            }
+            this.mesh.remove(this.brakeSound);
+            this.brakeSound.disconnect();
+            this.brakeSound = undefined;
         }
 
         this.disposeFallbackVisuals();

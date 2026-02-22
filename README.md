@@ -78,6 +78,10 @@ Logic that can be deterministic is extracted into shared/server modules and cove
   - [SUV](https://poly.pizza/m/xsMtZhBkxL)
   - [Police Car](https://poly.pizza/m/BwwnUrWGmV)
 
+## Audio Assets
+- Driving loop (`/public/driving-loop.wav`): [Racing Car Engine Sound Loops](https://opengameart.org/content/racing-car-engine-sound-loops), license `CC0`.
+- Brake sound (`/public/brake.mp3`): [10_hand brake.wav](https://freesound.org/s/498218/), license `CC0`.
+
 ## Versioning
 Semantic versioning is automated by GitHub Actions:
 - commit using Conventional Commits (`feat:`, `fix:`, `feat!:` / `BREAKING CHANGE:`)

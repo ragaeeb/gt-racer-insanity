@@ -61,6 +61,8 @@ export const RaceWorld = ({
     ) as GLTF[];
     const engineAudioBuffer = useLoader(THREE.AudioLoader, '/engine.mp3');
     const accelerateAudioBuffer = useLoader(THREE.AudioLoader, '/accelerate.mp3');
+    const drivingAudioBuffer = useLoader(THREE.AudioLoader, '/driving-loop.wav');
+    const brakeAudioBuffer = useLoader(THREE.AudioLoader, '/brake.mp3');
     const carModelVariants = useMemo(() => {
         return carModelGltfs.map((carModelGltf, index) => ({
             scene: carModelGltf.scene,
@@ -70,9 +72,11 @@ export const RaceWorld = ({
     const carAssets = useMemo<CarAssets>(
         () => ({
             accelerate: accelerateAudioBuffer,
+            brake: brakeAudioBuffer,
+            driving: drivingAudioBuffer,
             engine: engineAudioBuffer,
         }),
-        [accelerateAudioBuffer, engineAudioBuffer]
+        [accelerateAudioBuffer, brakeAudioBuffer, drivingAudioBuffer, engineAudioBuffer]
     );
 
     const isRunningRef = useRef(false);
