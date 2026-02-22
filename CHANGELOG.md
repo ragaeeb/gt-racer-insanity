@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.0.0...v1.0.1) (2026-02-22)
+
+
+### Bug Fixes
+
+* **best:** Fix best practices for R3f and 3js standards ([27dd6ec](https://github.com/ragaeeb/gt-racer-insanity/commit/27dd6ec302177d0966b6f2bdba122ef54383e5a2))
+
 # 1.0.0 (2026-02-22)
 
 
