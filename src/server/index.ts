@@ -51,6 +51,18 @@ const corsOrigin =
           ? []
           : '*';
 
+const resolveCorsAllowOrigin = (requestOrigin: string | null) => {
+    if (corsOrigin === '*') {
+        return '*';
+    }
+
+    if (!requestOrigin) {
+        return null;
+    }
+
+    return corsOrigin.includes(requestOrigin) ? requestOrigin : null;
+};
+
 const io = new Server({
     cors: {
         origin: corsOrigin,
@@ -147,6 +159,24 @@ Bun.serve({
     port: PORT,
     idleTimeout: 30,
     fetch: (request, server) => {
+        const requestOrigin = request.headers.get('origin');
+        const allowOrigin = resolveCorsAllowOrigin(requestOrigin);
+        const corsHeaders = new Headers();
+        if (allowOrigin) {
+            corsHeaders.set('Access-Control-Allow-Origin', allowOrigin);
+        }
+
+        if (request.method === 'OPTIONS') {
+            const optionsHeaders = new Headers(corsHeaders);
+            optionsHeaders.set('Access-Control-Allow-Headers', 'Content-Type');
+            optionsHeaders.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+
+            return new Response(null, {
+                headers: optionsHeaders,
+                status: 204,
+            });
+        }
+
         const { pathname } = new URL(request.url);
 
         if (pathname === '/socket.io' || pathname === '/socket.io/' || pathname.startsWith('/socket.io/')) {
@@ -154,13 +184,20 @@ Bun.serve({
         }
 
         if (pathname === '/health') {
-            return Response.json({
-                ok: true,
-                rooms: roomStore.getRoomCount(),
-            });
+            return Response.json(
+                {
+                    ok: true,
+                    rooms: roomStore.getRoomCount(),
+                },
+                {
+                    headers: new Headers(corsHeaders),
+                }
+            );
         }
 
-        return new Response('Socket.IO Bun server is running');
+        return new Response('Socket.IO Bun server is running', {
+            headers: new Headers(corsHeaders),
+        });
     },
     websocket: bunEngineHandler.websocket,
 });

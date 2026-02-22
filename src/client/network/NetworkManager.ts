@@ -22,16 +22,8 @@ export class NetworkManager {
     public roomId: string;
     public readonly playerName: string;
 
-    constructor(playerName: string) {
-        // Find room ID in URL, or generate one and update URL
-        const urlParams = new URLSearchParams(window.location.search);
-        let room = urlParams.get('room');
-
-        if (!room) {
-            room = Math.random().toString(36).substring(2, 8).toUpperCase();
-            window.history.replaceState({}, '', `?room=${room}`);
-        }
-        this.roomId = room;
+    constructor(playerName: string, roomId: string) {
+        this.roomId = roomId;
         this.playerName = playerName;
 
         this.minEmitIntervalMs = 1000 / clientConfig.outboundTickRateHz;

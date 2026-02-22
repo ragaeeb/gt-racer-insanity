@@ -194,18 +194,17 @@ e2eDescribe('e2e smoke', () => {
             });
 
             const roomId = `E2E${Date.now()}`;
-            await page.goto(`${CLIENT_URL}/?room=${roomId}`, {
+            await page.goto(`${CLIENT_URL}/lobby?room=${roomId}`, {
                 timeout: STARTUP_TIMEOUT_MS,
                 waitUntil: 'domcontentloaded',
             });
             await page.bringToFront();
             await page.focus('body');
 
-            const playerNameInput = page.locator('#player-name-input');
-            if (await playerNameInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
-                await playerNameInput.fill('E2E Driver');
-                await page.click('#player-name-confirm');
-            }
+            await page.waitForSelector('#player-name-input', { timeout: STARTUP_TIMEOUT_MS });
+            await page.fill('#player-name-input', 'E2E Driver');
+            await page.click('#player-name-confirm');
+            await page.waitForURL(new RegExp(`/race\\?room=${roomId}$`), { timeout: STARTUP_TIMEOUT_MS });
 
             await page.waitForSelector('canvas', { timeout: STARTUP_TIMEOUT_MS });
             await page.waitForSelector('#score', { timeout: STARTUP_TIMEOUT_MS });

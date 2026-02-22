@@ -23,6 +23,7 @@ type RaceWorldProps = {
     onScoreChange: (score: number) => void;
     onGameOverChange: (isGameOver: boolean) => void;
     playerName: string;
+    roomId: string;
 };
 
 type GTDebugState = {
@@ -44,6 +45,7 @@ export const RaceWorld = ({
     onScoreChange,
     onGameOverChange,
     playerName,
+    roomId,
 }: RaceWorldProps) => {
     const { scene, camera } = useThree();
 
@@ -153,7 +155,7 @@ export const RaceWorld = ({
     }, [camera]);
 
     useEffect(() => {
-        const networkManager = new NetworkManager(playerName);
+        const networkManager = new NetworkManager(playerName, roomId);
         networkManagerRef.current = networkManager;
 
         const unsubscribeConnectionStatus = networkManager.onConnectionStatus((status) => {
@@ -279,6 +281,7 @@ export const RaceWorld = ({
         onScoreChange,
         scene,
         playerName,
+        roomId,
     ]);
 
     useEffect(() => {
