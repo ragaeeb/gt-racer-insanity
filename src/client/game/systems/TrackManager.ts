@@ -18,10 +18,14 @@ export class TrackManager {
     private readonly activeObstacles: THREE.Mesh[] = [];
 
     // Materials
-    private roadMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
-    private lineMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1.0 });
-    private wallMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, emissive: 0x003322 });
-    private obstacleMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0x550011 });
+    private roadMat = new THREE.MeshStandardMaterial({
+        color: 0x4f5f6d,
+        metalness: 0.04,
+        roughness: 0.78,
+    });
+    private lineMat = new THREE.MeshStandardMaterial({ color: 0xf9f4dc, roughness: 0.92 });
+    private wallMat = new THREE.MeshStandardMaterial({ color: 0x0dc2d4, emissive: 0x084a51 });
+    private obstacleMat = new THREE.MeshStandardMaterial({ color: 0xff6f5d, emissive: 0x5a1f16 });
 
     constructor(private scene: THREE.Scene, seed: number) {
         this.setSeed(seed);

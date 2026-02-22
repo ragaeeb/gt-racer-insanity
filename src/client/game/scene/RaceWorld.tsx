@@ -1,8 +1,10 @@
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
 import { playerIdToHue } from '@/shared/game/playerColor';
+import { playerIdToVehicleIndex } from '@/shared/game/playerVehicle';
 import type { ConnectionStatus, PlayerState } from '@/shared/network/types';
 import { NetworkManager } from '@/client/network/NetworkManager';
 import { Car, type CarAssets } from '@/client/game/entities/Car';
@@ -53,16 +55,24 @@ export const RaceWorld = ({
     const opponentsRef = useRef<Map<string, Car>>(new Map());
 
     const audioListenerRef = useRef<THREE.AudioListener | null>(null);
-    const carModelGltf = useLoader(GLTFLoader, '/car.glb');
+    const carModelGltfs = useLoader(
+        GLTFLoader,
+        CAR_MODEL_CATALOG.map((carModel) => carModel.modelPath)
+    ) as GLTF[];
     const engineAudioBuffer = useLoader(THREE.AudioLoader, '/engine.mp3');
     const accelerateAudioBuffer = useLoader(THREE.AudioLoader, '/accelerate.mp3');
+    const carModelVariants = useMemo(() => {
+        return carModelGltfs.map((carModelGltf, index) => ({
+            scene: carModelGltf.scene,
+            yawOffsetRadians: CAR_MODEL_CATALOG[index]?.modelYawOffsetRadians ?? 0,
+        }));
+    }, [carModelGltfs]);
     const carAssets = useMemo<CarAssets>(
         () => ({
             accelerate: accelerateAudioBuffer,
-            carModel: carModelGltf.scene,
             engine: engineAudioBuffer,
         }),
-        [accelerateAudioBuffer, carModelGltf, engineAudioBuffer]
+        [accelerateAudioBuffer, engineAudioBuffer]
     );
 
     const isRunningRef = useRef(false);
@@ -159,13 +169,17 @@ export const RaceWorld = ({
 
         const createOpponent = (player: PlayerState) => {
             if (opponentsRef.current.has(player.id)) return;
+            const modelIndex = playerIdToVehicleIndex(player.id, carModelVariants.length);
+            const modelVariant = carModelVariants[modelIndex];
 
             const opponentCar = new Car(
                 scene,
                 null,
                 playerIdToHue(player.id),
                 audioListenerRef.current ?? undefined,
-                carAssets
+                carAssets,
+                modelVariant.scene,
+                modelVariant.yawOffsetRadians
             );
 
             opponentCar.isLocalPlayer = false;
@@ -194,12 +208,16 @@ export const RaceWorld = ({
             const socketId = networkManager.getSocketId();
             for (const player of players) {
                 if (player.id === socketId) {
+                    const modelIndex = playerIdToVehicleIndex(player.id, carModelVariants.length);
+                    const modelVariant = carModelVariants[modelIndex];
                     localCarRef.current = new Car(
                         scene,
                         inputManager,
                         playerIdToHue(player.id),
                         audioListenerRef.current ?? undefined,
-                        carAssets
+                        carAssets,
+                        modelVariant.scene,
+                        modelVariant.yawOffsetRadians
                     );
                     localCarRef.current.position.set(player.x, player.y, player.z);
                     localCarRef.current.rotationY = player.rotationY;
@@ -244,7 +262,15 @@ export const RaceWorld = ({
             networkManager.disconnect();
             networkManagerRef.current = null;
         };
-    }, [carAssets, inputManager, onConnectionStatusChange, onGameOverChange, onScoreChange, scene]);
+    }, [
+        carAssets,
+        carModelVariants,
+        inputManager,
+        onConnectionStatusChange,
+        onGameOverChange,
+        onScoreChange,
+        scene,
+    ]);
 
     useEffect(() => {
         if (resetNonce === 0) return;

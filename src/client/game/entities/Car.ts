@@ -5,7 +5,6 @@ import { InputManager } from '@/client/game/systems/InputManager';
 export type CarAssets = {
     engine?: AudioBuffer;
     accelerate?: AudioBuffer;
-    carModel?: THREE.Group;
 };
 
 export class Car {
@@ -37,7 +36,9 @@ export class Car {
         private inputManager: InputManager | null,
         colorHue?: number,
         private listener?: THREE.AudioListener,
-        private assets?: CarAssets
+        private assets?: CarAssets,
+        private carModelTemplate?: THREE.Group,
+        private carModelYawOffsetRadians = 0
     ) {
         this.position = new THREE.Vector3(0, 0, 0);
         this.mesh = new THREE.Group();
@@ -120,12 +121,12 @@ export class Car {
     }
 
     private setupGLTFVisuals() {
-        if (!this.assets || !this.assets.carModel || this.hasLoadedGLTF) return;
+        if (!this.carModelTemplate || this.hasLoadedGLTF) return;
 
         this.disposeFallbackVisuals();
 
         // Clone the original loaded GLTF scene
-        const model = this.assets.carModel.clone();
+        const model = this.carModelTemplate.clone();
 
         const wrapper = new THREE.Group();
 
@@ -145,10 +146,10 @@ export class Car {
         // 3. Set orientation. If it's sideways, align it.
         // Usually if size.x > size.z, the car is lying along the X-axis which means it needs a 90 deg rotation.
         if (size.x > size.z) {
-            wrapper.rotation.y = -Math.PI / 2;
+            wrapper.rotation.y = -Math.PI / 2 + this.carModelYawOffsetRadians;
         } else {
             // If size.z > size.x, it's along Z, we might just need to flip it if it faces backwards.
-            wrapper.rotation.y = Math.PI;
+            wrapper.rotation.y = Math.PI + this.carModelYawOffsetRadians;
         }
 
         wrapper.traverse((child) => {

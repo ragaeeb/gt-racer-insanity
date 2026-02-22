@@ -69,6 +69,15 @@ Logic that can be deterministic is extracted into shared/server modules and cove
 - player color hashing
 - room state lifecycle
 
+## Car Models
+- Multiplayer cars now cycle by player ID across multiple models.
+- Models are sourced from Poly Pizza (Quaternius pack), all `CC0 1.0`:
+  - [Car](https://poly.pizza/m/Cz6yDaUcM9)
+  - [Sports Car](https://poly.pizza/m/OyqKvX9xNh)
+  - [Pickup Truck](https://poly.pizza/m/qn4grQgHm8)
+  - [SUV](https://poly.pizza/m/xsMtZhBkxL)
+  - [Police Car](https://poly.pizza/m/BwwnUrWGmV)
+
 ## Versioning
 Semantic versioning is automated by GitHub Actions:
 - commit using Conventional Commits (`feat:`, `fix:`, `feat!:` / `BREAKING CHANGE:`)
