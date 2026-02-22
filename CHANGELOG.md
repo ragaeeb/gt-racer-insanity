@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.2.0...v1.3.0) (2026-02-22)
+
+
+### Features
+
+* **brake:** Add braking sound ([4c011f6](https://github.com/ragaeeb/gt-racer-insanity/commit/4c011f6b355d4c0d8fa95393caa9b541bc266e42))
+
 # [1.2.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.1.0...v1.2.0) (2026-02-22)
 
 
