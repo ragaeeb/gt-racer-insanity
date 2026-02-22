@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.0.1...v1.1.0) (2026-02-22)
+
+
+### Features
+
+* **scene:** Add bright scene, cruise control ([7c2aaff](https://github.com/ragaeeb/gt-racer-insanity/commit/7c2aaff512ebc414a25f64d621e5565acd907aba))
+
 ## [1.0.1](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.0.0...v1.0.1) (2026-02-22)
 
 
