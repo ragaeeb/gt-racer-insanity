@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.6.0...v1.7.0) (2026-02-22)
+
+
+### Features
+
+* **v1.6:** New architecture ([#15](https://github.com/ragaeeb/gt-racer-insanity/issues/15)) ([532e04c](https://github.com/ragaeeb/gt-racer-insanity/commit/532e04ce96f7ba1ffa5b210cc80f8e4a24424879))
+
 # [1.6.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.5.0...v1.6.0) (2026-02-22)
 
 
