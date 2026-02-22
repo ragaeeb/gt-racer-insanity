@@ -1,12 +1,18 @@
 export type PlayerState = {
     id: string;
+    name: string;
     x: number;
     y: number;
     z: number;
     rotationY: number;
 };
 
-export type PlayerStateUpdate = Omit<PlayerState, 'id'>;
+export type PlayerStateUpdate = Pick<PlayerState, 'x' | 'y' | 'z' | 'rotationY'>;
+
+export type JoinRoomPayload = {
+    playerName: string;
+    roomId: string;
+};
 
 export type RoomJoinedPayload = {
     seed: number;

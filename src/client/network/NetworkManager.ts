@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import type {
     ConnectionStatus,
+    JoinRoomPayload,
     PlayerState,
     RoomJoinedPayload,
     UpdateStatePayload,
@@ -19,8 +20,9 @@ export class NetworkManager {
     private readonly minEmitIntervalMs: number;
     private lastStateEmitAt = 0;
     public roomId: string;
+    public readonly playerName: string;
 
-    constructor() {
+    constructor(playerName: string) {
         // Find room ID in URL, or generate one and update URL
         const urlParams = new URLSearchParams(window.location.search);
         let room = urlParams.get('room');
@@ -30,6 +32,7 @@ export class NetworkManager {
             window.history.replaceState({}, '', `?room=${room}`);
         }
         this.roomId = room;
+        this.playerName = playerName;
 
         this.minEmitIntervalMs = 1000 / clientConfig.outboundTickRateHz;
 
@@ -41,7 +44,11 @@ export class NetworkManager {
         this.socket.on('connect', () => {
             this.emitConnectionStatus('connected');
             console.log(`Connected to server as ${this.socket.id}`);
-            this.socket.emit('join_room', this.roomId);
+            const payload: JoinRoomPayload = {
+                playerName: this.playerName,
+                roomId: this.roomId,
+            };
+            this.socket.emit('join_room', payload);
         });
 
         this.socket.on('disconnect', () => {

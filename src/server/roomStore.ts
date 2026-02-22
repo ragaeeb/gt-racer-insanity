@@ -31,6 +31,14 @@ const normalizeAngleDelta = (current: number, target: number) => {
     return Math.atan2(Math.sin(target - current), Math.cos(target - current));
 };
 
+const sanitizePlayerName = (playerName: string) => {
+    const trimmed = playerName.trim();
+    if (trimmed.length === 0) {
+        return 'Player';
+    }
+    return trimmed.slice(0, 24);
+};
+
 export class RoomStore {
     private rooms = new Map<string, Room>();
 
@@ -44,7 +52,7 @@ export class RoomStore {
         }
     ) {}
 
-    public joinRoom = (roomId: string, playerId: string): JoinRoomResult => {
+    public joinRoom = (roomId: string, playerId: string, playerName: string): JoinRoomResult => {
         let room = this.rooms.get(roomId);
         const created = !room;
 
@@ -60,6 +68,7 @@ export class RoomStore {
 
         const player: PlayerState = {
             id: playerId,
+            name: sanitizePlayerName(playerName),
             x: this.spawnGenerator(),
             y: 0,
             z: 0,

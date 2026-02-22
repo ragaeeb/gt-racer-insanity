@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 html,
 body,
 #app {
@@ -116,6 +118,24 @@ canvas {
     letter-spacing: 0.04em;
     padding: 6px 10px;
     position: absolute;
+}
+
+#player-name-badge {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(77, 226, 255, 0.45);
+    border-radius: 8px;
+    color: #9dfde9;
+    font-family: monospace;
+    font-size: 0.85rem;
+    left: 20px;
+    letter-spacing: 0.04em;
+    max-width: 240px;
+    overflow: hidden;
+    padding: 6px 10px;
+    position: absolute;
+    text-overflow: ellipsis;
+    top: 164px;
+    white-space: nowrap;
 }
 
 #game-over {

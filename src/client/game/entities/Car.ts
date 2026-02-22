@@ -38,6 +38,9 @@ export class Car {
     private fallbackMeshes: THREE.Object3D[] = [];
     private readonly clonedMaterials = new Set<THREE.Material>();
     private readonly carColor = new THREE.Color(0xff0055);
+    private nameTagSprite?: THREE.Sprite;
+    private nameTagTexture?: THREE.CanvasTexture;
+    private nameTagMaterial?: THREE.SpriteMaterial;
 
     constructor(
         private scene: THREE.Scene,
@@ -46,13 +49,51 @@ export class Car {
         private listener?: THREE.AudioListener,
         private assets?: CarAssets,
         private carModelTemplate?: THREE.Group,
-        private carModelYawOffsetRadians = 0
+        private carModelYawOffsetRadians = 0,
+        private playerName = 'Player'
     ) {
         this.position = new THREE.Vector3(0, 0, 0);
         this.mesh = new THREE.Group();
         this.createVisuals(colorHue);
+        this.createNameTag();
         this.setupAudio();
         this.scene.add(this.mesh);
+    }
+
+    private createNameTag() {
+        const nameTextureCanvas = document.createElement('canvas');
+        nameTextureCanvas.width = 512;
+        nameTextureCanvas.height = 128;
+        const context = nameTextureCanvas.getContext('2d');
+        if (!context) return;
+
+        context.clearRect(0, 0, nameTextureCanvas.width, nameTextureCanvas.height);
+        context.fillStyle = 'rgba(10, 20, 30, 0.75)';
+        context.fillRect(0, 12, nameTextureCanvas.width, 104);
+
+        context.font = "600 58px 'Trebuchet MS', sans-serif";
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillStyle = '#f5fbff';
+        context.fillText(this.playerName.slice(0, 18), nameTextureCanvas.width / 2, nameTextureCanvas.height / 2 + 4);
+
+        const texture = new THREE.CanvasTexture(nameTextureCanvas);
+        texture.needsUpdate = true;
+
+        const material = new THREE.SpriteMaterial({
+            depthTest: false,
+            map: texture,
+            transparent: true,
+        });
+
+        const sprite = new THREE.Sprite(material);
+        sprite.position.set(0, 3.6, 0);
+        sprite.scale.set(5.2, 1.3, 1);
+        this.mesh.add(sprite);
+
+        this.nameTagSprite = sprite;
+        this.nameTagTexture = texture;
+        this.nameTagMaterial = material;
     }
 
     private setupAudio() {
@@ -409,6 +450,15 @@ export class Car {
             this.brakeSound.disconnect();
             this.brakeSound = undefined;
         }
+
+        if (this.nameTagSprite) {
+            this.mesh.remove(this.nameTagSprite);
+            this.nameTagSprite = undefined;
+        }
+        this.nameTagTexture?.dispose();
+        this.nameTagTexture = undefined;
+        this.nameTagMaterial?.dispose();
+        this.nameTagMaterial = undefined;
 
         this.disposeFallbackVisuals();
 

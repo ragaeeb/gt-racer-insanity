@@ -13,7 +13,7 @@ const sequence = (values: number[]) => {
 describe('RoomStore', () => {
     it('should create a room and join the first player', () => {
         const store = new RoomStore(() => 101, () => 2.5);
-        const result = store.joinRoom('ABCD', 'player-1');
+        const result = store.joinRoom('ABCD', 'player-1', 'Alice');
 
         expect(result.created).toEqual(true);
         expect(result.room.seed).toEqual(101);
@@ -24,12 +24,20 @@ describe('RoomStore', () => {
     it('should keep the same room seed when other players join', () => {
         const store = new RoomStore(() => 777, sequence([1, -1]));
 
-        const first = store.joinRoom('ROOM1', 'player-1');
-        const second = store.joinRoom('ROOM1', 'player-2');
+        const first = store.joinRoom('ROOM1', 'player-1', 'Alice');
+        const second = store.joinRoom('ROOM1', 'player-2', 'Bob');
 
         expect(first.room.seed).toEqual(777);
         expect(second.room.seed).toEqual(777);
         expect(second.room.players.size).toEqual(2);
+    });
+
+    it('should sanitize blank player names to a default', () => {
+        const store = new RoomStore(() => 1, () => 0);
+
+        const result = store.joinRoom('ROOM1', 'player-1', '   ');
+
+        expect(result.player.name).toEqual('Player');
     });
 
     it('should update an existing player state', () => {
@@ -42,7 +50,7 @@ describe('RoomStore', () => {
                 maxRotationDeltaPerTick: 10,
             }
         );
-        store.joinRoom('ROOM1', 'player-1');
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
 
         const updated = store.updatePlayerState('ROOM1', 'player-1', {
             x: 10,
@@ -53,6 +61,7 @@ describe('RoomStore', () => {
 
         expect(updated).toEqual({
             id: 'player-1',
+            name: 'Alice',
             x: 10,
             y: 0,
             z: 20,
@@ -62,7 +71,7 @@ describe('RoomStore', () => {
 
     it('should remove the room when the last player leaves', () => {
         const store = new RoomStore(() => 9, () => 0);
-        store.joinRoom('ROOM1', 'player-1');
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
 
         const result = store.removePlayerFromRoom('ROOM1', 'player-1');
 
@@ -73,8 +82,8 @@ describe('RoomStore', () => {
 
     it('should keep the room when at least one player remains', () => {
         const store = new RoomStore(() => 9, () => 0);
-        store.joinRoom('ROOM1', 'player-1');
-        store.joinRoom('ROOM1', 'player-2');
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
+        store.joinRoom('ROOM1', 'player-2', 'Bob');
 
         const result = store.removePlayerFromRoom('ROOM1', 'player-1');
 
@@ -94,7 +103,7 @@ describe('RoomStore', () => {
                 maxRotationDeltaPerTick: 2,
             }
         );
-        store.joinRoom('ROOM1', 'player-1');
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
 
         const updated = store.updatePlayerState(
             'ROOM1',
@@ -122,7 +131,7 @@ describe('RoomStore', () => {
                 maxRotationDeltaPerTick: 0.25,
             }
         );
-        store.joinRoom('ROOM1', 'player-1');
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
 
         const updated = store.updatePlayerState(
             'ROOM1',
@@ -149,7 +158,7 @@ describe('RoomStore', () => {
                 maxRotationDeltaPerTick: 2,
             }
         );
-        store.joinRoom('ROOM1', 'player-1');
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
 
         store.updatePlayerState(
             'ROOM1',

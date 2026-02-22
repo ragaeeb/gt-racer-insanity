@@ -18,10 +18,20 @@
 
 Multiplayer racing game prototype evolving into a full game with car selection, showroom scenes, multiple tracks, and realtime multiplayer racing.
 
+## Latest Features
+- Multiplayer rooms with server-authoritative position/rotation guardrails.
+- Player name prompt on join, with in-world name tags above every car.
+- Multi-car catalog rotation by player ID (not only color differences).
+- Sunny day environment profile system (`sceneEnvironmentProfiles`) for easier level/theme swaps.
+- Cruise control with precision override support for top-speed playability.
+- Layered car audio: idle engine, acceleration, driving loop, and brake one-shot.
+- Opt-in E2E smoke tests (`RUN_E2E=true`) with CI workflow coverage.
+
 ## Tech Stack
 - `bun` runtime and package manager
 - `React + Vite + @react-three/fiber + three` for the client
 - `Socket.IO + @socket.io/bun-engine` for realtime server communication
+- `Tailwind CSS` + shadcn-style component patterns for app UI
 - `TypeScript` with `ESNext` target
 - `bun:test` for unit tests
 
@@ -48,6 +58,14 @@ Server health:
 - `bun run build` -> typecheck and production build
 - `bun run check` -> run tests then build
 
+## Architecture
+- `src/client/app`: React shell, Tailwind styles, HUD, modal flows (player-name prompt), and startup gating.
+- `src/client/game`: R3F/Three runtime for car entities, track systems, scene environment, and camera/game loop.
+- `src/client/network`: Socket.IO client transport and connection lifecycle.
+- `src/server`: Bun Socket.IO server with room lifecycle and authority clamps in `roomStore`.
+- `src/shared`: Protocol/domain types and deterministic gameplay logic shared by client/server.
+- `testing`: opt-in browser E2E smoke tests, intentionally gated from default `bun test`.
+
 ## Project Structure
 ```text
 src/
@@ -55,11 +73,14 @@ src/
     app/
     game/
     network/
+  components/
+  lib/
   server/
   shared/
 testing/
 public/
   branding/
+  models/
 ```
 
 ## Testing Strategy
@@ -67,7 +88,13 @@ Logic that can be deterministic is extracted into shared/server modules and cove
 - car motion physics
 - seeded PRNG
 - player color hashing
+- player vehicle selection hashing
 - room state lifecycle
+
+E2E smoke tests:
+- live in `testing/e2e.test.ts`
+- run only when `RUN_E2E=true`
+- validate load/connect/spawn/move/no-runtime-errors
 
 ## Car Models
 - Multiplayer cars now cycle by player ID across multiple models.

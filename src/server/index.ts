@@ -1,6 +1,6 @@
 import { Server as Engine } from '@socket.io/bun-engine';
 import { Server } from 'socket.io';
-import type { PlayerStateUpdate, UpdateStatePayload } from '@/shared/network/types';
+import type { JoinRoomPayload, PlayerStateUpdate, UpdateStatePayload } from '@/shared/network/types';
 import { serverConfig } from '@/server/config';
 import { RoomStore } from '@/server/roomStore';
 
@@ -37,6 +37,13 @@ const isUpdateStatePayload = (value: unknown): value is UpdateStatePayload => {
     return isString(payload.roomId) && isPlayerStateUpdate(payload.state);
 };
 
+const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
+    if (!value || typeof value !== 'object') return false;
+
+    const payload = value as Record<string, unknown>;
+    return isString(payload.roomId) && isString(payload.playerName);
+};
+
 const corsOrigin =
     serverConfig.allowedOrigins.length > 0
         ? serverConfig.allowedOrigins
@@ -66,16 +73,25 @@ io.on('connection', (socket) => {
     let lastUpdateStateAtMs = 0;
     const minimumTickIntervalMs = 1000 / Math.max(serverConfig.maxInboundTickRateHz, 1);
 
-    socket.on('join_room', (rawRoomId: unknown) => {
-        if (!isString(rawRoomId)) return;
-        if (getPayloadBytes(rawRoomId) > serverConfig.maxJoinRoomPayloadBytes) return;
+    socket.on('join_room', (rawJoinRoom: unknown) => {
+        let roomId = '';
+        let playerName = 'Player';
 
-        const roomId = rawRoomId.trim();
+        if (isString(rawJoinRoom)) {
+            roomId = rawJoinRoom.trim();
+        } else if (isJoinRoomPayload(rawJoinRoom)) {
+            if (getPayloadBytes(rawJoinRoom) > serverConfig.maxJoinRoomPayloadBytes) return;
+            roomId = rawJoinRoom.roomId.trim();
+            playerName = rawJoinRoom.playerName;
+        } else {
+            return;
+        }
+
         if (roomId.length === 0 || roomId.length > 16) return;
 
         socket.join(roomId);
 
-        const { created, player, room } = roomStore.joinRoom(roomId, socket.id);
+        const { created, player, room } = roomStore.joinRoom(roomId, socket.id, playerName);
         if (created) {
             console.log(`[Room ${roomId}] Created with seed ${room.seed}`);
         }

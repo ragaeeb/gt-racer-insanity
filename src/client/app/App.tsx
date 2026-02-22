@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense, lazy, useState } from 'react';
 import * as THREE from 'three';
+import { PlayerNameDialog } from '@/client/app/PlayerNameDialog';
 import type { ConnectionStatus } from '@/shared/network/types';
 
 const RaceWorld = lazy(async () => {
@@ -9,16 +10,25 @@ const RaceWorld = lazy(async () => {
 });
 
 export const App = () => {
+    const [playerName, setPlayerName] = useState(() => {
+        const storedName = window.sessionStorage.getItem('gt-player-name-session');
+        return storedName?.trim() ? storedName : '';
+    });
     const [score, setScore] = useState(0);
     const [gameOver, setGameOver] = useState(false);
     const [resetNonce, setResetNonce] = useState(0);
     const [cruiseControlEnabled, setCruiseControlEnabled] = useState(true);
-    const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+    const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
     const appVersion = __APP_VERSION__;
 
     const handleRestart = () => {
         setGameOver(false);
         setResetNonce((current) => current + 1);
+    };
+
+    const handlePlayerNameConfirmed = (nextName: string) => {
+        window.sessionStorage.setItem('gt-player-name-session', nextName);
+        setPlayerName(nextName);
     };
 
     return (
@@ -37,6 +47,7 @@ export const App = () => {
                     />
                     Cruise
                 </label>
+                <div id="player-name-badge">{playerName || 'Not set'}</div>
                 <div id="app-version">v{appVersion}</div>
                 <div id="game-over" className={gameOver ? '' : 'hidden'}>
                     <h1>GAME OVER</h1>
@@ -57,15 +68,24 @@ export const App = () => {
                 shadows
             >
                 <Suspense fallback={null}>
-                    <RaceWorld
-                        cruiseControlEnabled={cruiseControlEnabled}
-                        onConnectionStatusChange={setConnectionStatus}
-                        onGameOverChange={setGameOver}
-                        onScoreChange={setScore}
-                        resetNonce={resetNonce}
-                    />
+                    {playerName ? (
+                        <RaceWorld
+                            cruiseControlEnabled={cruiseControlEnabled}
+                            onConnectionStatusChange={setConnectionStatus}
+                            onGameOverChange={setGameOver}
+                            onScoreChange={setScore}
+                            playerName={playerName}
+                            resetNonce={resetNonce}
+                        />
+                    ) : null}
                 </Suspense>
             </Canvas>
+
+            <PlayerNameDialog
+                initialValue={playerName}
+                isOpen={!playerName}
+                onConfirm={handlePlayerNameConfirmed}
+            />
         </>
     );
 };

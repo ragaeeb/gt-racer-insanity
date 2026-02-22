@@ -6,6 +6,7 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 ## Stack
 - Runtime/package manager: `bun`
 - Client: `React + Vite + @react-three/fiber + three`
+- UI: `Tailwind CSS` + shadcn-style component patterns
 - Realtime server: `Bun + Socket.IO + @socket.io/bun-engine`
 - Language: `TypeScript` targeting `ESNext`
 - Testing: `bun:test`
@@ -25,10 +26,13 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Build: `bun run build`
 - Unit tests: `bun run test`
 - Watch tests: `bun run test:watch`
+- E2E tests: `bun run e2e` (opt-in, runs with `RUN_E2E=true`)
 - Full check: `bun run check`
 
 ## Repository Layout
 - `src/client/app`: React app shell, entrypoint, global styles
+- `src/components`: reusable UI components
+- `src/lib`: shared client utility helpers
 - `src/client/game`: runtime gameplay systems and scene
 - `src/client/network`: client realtime networking
 - `src/server`: Bun Socket.IO server and room management
@@ -42,6 +46,9 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Keep deterministic/testable logic in `src/shared`.
 - Keep room lifecycle and server state handling in `src/server/roomStore.ts`.
 - Networking protocol shapes should live in `src/shared/network/types.ts`.
+- Player identity is part of shared network player state (`name` on `PlayerState`).
+- Scene presentation should be defined through environment profiles in `src/client/game/scene/environment/sceneEnvironmentProfiles.ts`.
+- E2E tests are intentionally gated and should not run in default `bun test` flows.
 
 ## UI/Asset Notes
 - Favicon/app icon uses:

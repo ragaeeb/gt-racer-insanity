@@ -22,6 +22,7 @@ type RaceWorldProps = {
     resetNonce: number;
     onScoreChange: (score: number) => void;
     onGameOverChange: (isGameOver: boolean) => void;
+    playerName: string;
 };
 
 type GTDebugState = {
@@ -42,6 +43,7 @@ export const RaceWorld = ({
     resetNonce,
     onScoreChange,
     onGameOverChange,
+    playerName,
 }: RaceWorldProps) => {
     const { scene, camera } = useThree();
 
@@ -151,7 +153,7 @@ export const RaceWorld = ({
     }, [camera]);
 
     useEffect(() => {
-        const networkManager = new NetworkManager();
+        const networkManager = new NetworkManager(playerName);
         networkManagerRef.current = networkManager;
 
         const unsubscribeConnectionStatus = networkManager.onConnectionStatus((status) => {
@@ -183,7 +185,8 @@ export const RaceWorld = ({
                 audioListenerRef.current ?? undefined,
                 carAssets,
                 modelVariant.scene,
-                modelVariant.yawOffsetRadians
+                modelVariant.yawOffsetRadians,
+                player.name
             );
 
             opponentCar.isLocalPlayer = false;
@@ -221,7 +224,8 @@ export const RaceWorld = ({
                         audioListenerRef.current ?? undefined,
                         carAssets,
                         modelVariant.scene,
-                        modelVariant.yawOffsetRadians
+                        modelVariant.yawOffsetRadians,
+                        player.name
                     );
                     localCarRef.current.position.set(player.x, player.y, player.z);
                     localCarRef.current.rotationY = player.rotationY;
@@ -274,6 +278,7 @@ export const RaceWorld = ({
         onGameOverChange,
         onScoreChange,
         scene,
+        playerName,
     ]);
 
     useEffect(() => {
