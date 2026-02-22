@@ -1,0 +1,139 @@
+html,
+body,
+#app {
+    height: 100%;
+    margin: 0;
+    width: 100%;
+}
+
+body {
+    overflow: hidden;
+}
+
+#app {
+    position: relative;
+}
+
+canvas {
+    display: block;
+    height: 100%;
+    width: 100%;
+}
+
+#game-ui {
+    height: 100%;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    width: 100%;
+    z-index: 10;
+}
+
+#score {
+    color: #00ffcc;
+    font-family: monospace;
+    font-size: 2rem;
+    font-weight: bold;
+    position: absolute;
+    right: 20px;
+    text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc;
+    top: 20px;
+}
+
+#connection-status {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    color: #f4f6ff;
+    font-family: monospace;
+    font-size: 0.85rem;
+    left: 20px;
+    letter-spacing: 0.04em;
+    padding: 6px 10px;
+    position: absolute;
+    text-transform: uppercase;
+    top: 80px;
+}
+
+#connection-status[data-status='connected'] {
+    border-color: rgba(0, 255, 204, 0.55);
+    color: #9dfde9;
+}
+
+#connection-status[data-status='reconnecting'],
+#connection-status[data-status='connecting'] {
+    border-color: rgba(255, 187, 0, 0.6);
+    color: #ffdf84;
+}
+
+#connection-status[data-status='disconnected'] {
+    border-color: rgba(255, 0, 85, 0.6);
+    color: #ff8bb0;
+}
+
+#game-logo {
+    filter: drop-shadow(0 0 8px rgba(0, 255, 204, 0.35));
+    height: 48px;
+    left: 20px;
+    position: absolute;
+    top: 20px;
+    width: 48px;
+}
+
+#app-version {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(0, 255, 204, 0.35);
+    border-radius: 8px;
+    bottom: 20px;
+    color: #9dfde9;
+    font-family: monospace;
+    font-size: 0.9rem;
+    left: 20px;
+    letter-spacing: 0.04em;
+    padding: 6px 10px;
+    position: absolute;
+}
+
+#game-over {
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid #ff0055;
+    border-radius: 12px;
+    box-shadow: 0 0 20px #ff0055, inset 0 0 20px #ff0055;
+    left: 50%;
+    padding: 40px;
+    pointer-events: auto;
+    position: absolute;
+    text-align: center;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+#game-over h1 {
+    color: #ff0055;
+    margin-top: 0;
+    text-shadow: 0 0 10px #ff0055;
+}
+
+#game-over button {
+    background: #ff0055;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    font-size: 1.2rem;
+    font-weight: bold;
+    padding: 12px 24px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+}
+
+#game-over button:hover {
+    background: #ff3377;
+    box-shadow: 0 0 15px #ff0055;
+    transform: scale(1.05);
+}
+
+.hidden {
+    display: none !important;
+}
