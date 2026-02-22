@@ -4,7 +4,7 @@ import {
     stepCarMotion,
     type CarControlState,
     type CarMotionState,
-} from '../../src/shared/game/carPhysics';
+} from './carPhysics';
 
 const noInput: CarControlState = {
     isUp: false,

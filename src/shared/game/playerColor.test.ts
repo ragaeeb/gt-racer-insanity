@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { playerIdToHue } from '../../src/shared/game/playerColor';
+import { playerIdToHue } from './playerColor';
 
 describe('playerIdToHue', () => {
     it('should return deterministic hue values for the same id', () => {

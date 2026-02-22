@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { seededRandom } from '../../src/shared/utils/prng';
+import { seededRandom } from './prng';
 
 describe('seededRandom', () => {
     it('should generate deterministic values for the same seed', () => {

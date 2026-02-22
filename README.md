@@ -41,10 +41,10 @@ Server health:
 ## Scripts
 - `bun run dev` -> start Vite dev client
 - `bun run server` -> start Bun Socket.IO server
-- `bun run test` -> run unit tests
+- `bun run test` -> run all tests (`e2e` suite is skipped unless `RUN_E2E=true`)
 - `bun run test:watch` -> run tests in watch mode
 - `bun run test:e2e:install` -> install Chromium for Playwright smoke tests
-- `bun run test:e2e` -> run browser smoke test (load/connect/move/no crash)
+- `bun run e2e` -> run browser smoke test (load/connect/move/no crash)
 - `bun run build` -> typecheck and production build
 - `bun run check` -> run tests then build
 
@@ -57,7 +57,7 @@ src/
     network/
   server/
   shared/
-tests/
+testing/
 public/
   branding/
 ```

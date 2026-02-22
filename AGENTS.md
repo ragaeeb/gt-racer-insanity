@@ -32,8 +32,8 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - `src/client/game`: runtime gameplay systems and scene
 - `src/client/network`: client realtime networking
 - `src/server`: Bun Socket.IO server and room management
-- `src/shared`: shared domain logic/types used by client and server
-- `tests`: unit tests for shared/server logic
+- `src/shared`: shared domain logic/types used by client and server (with colocated unit tests)
+- `testing`: opt-in end-to-end tests
 - `public/branding`: icons and branding assets (`icon.svg`, `icon.png`)
 - `.github/workflows`: CI and release automation
 

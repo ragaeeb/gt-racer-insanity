@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { RoomStore } from '../../src/server/roomStore';
+import { RoomStore } from './roomStore';
 
 const sequence = (values: number[]) => {
     let index = 0;

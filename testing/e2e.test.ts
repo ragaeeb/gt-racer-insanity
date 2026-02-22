@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { chromium, type Browser, type ConsoleMessage, type Page } from 'playwright';
+import { type Browser, type ConsoleMessage, chromium, type Page } from 'playwright';
 
 const CLIENT_URL = 'http://127.0.0.1:4173';
 const SERVER_HEALTH_URL = 'http://127.0.0.1:3001/health';
 const STARTUP_TIMEOUT_MS = 90_000;
+const shouldRunE2E = Bun.env.RUN_E2E === 'true' || process.env.RUN_E2E === 'true';
+const e2eDescribe = shouldRunE2E ? describe : describe.skip;
 
 type GTDebugState = {
     isRunning: boolean;
@@ -19,7 +21,9 @@ const waitForHttpOk = async (url: string, timeoutMs: number) => {
     while (Date.now() - startedAt < timeoutMs) {
         try {
             const response = await fetch(url);
-            if (response.ok) return;
+            if (response.ok) {
+                return;
+            }
             lastError = `Status ${response.status}`;
         } catch (error) {
             lastError = error instanceof Error ? error.message : String(error);
@@ -41,7 +45,9 @@ const startProcess = (command: string[]) => {
 };
 
 const stopProcess = async (processHandle: Bun.Subprocess | null) => {
-    if (!processHandle) return;
+    if (!processHandle) {
+        return;
+    }
 
     if (processHandle.exitCode === null) {
         processHandle.kill();
@@ -50,7 +56,7 @@ const stopProcess = async (processHandle: Bun.Subprocess | null) => {
     await processHandle.exited;
 };
 
-describe('e2e smoke', () => {
+e2eDescribe('e2e smoke', () => {
     let browser: Browser | null = null;
     let serverProcess: Bun.Subprocess | null = null;
     let clientProcess: Bun.Subprocess | null = null;
@@ -158,7 +164,7 @@ describe('e2e smoke', () => {
                         key: 'w',
                         code: 'KeyW',
                         bubbles: true,
-                    })
+                    }),
                 );
             });
 
@@ -170,7 +176,7 @@ describe('e2e smoke', () => {
                         key: 'w',
                         code: 'KeyW',
                         bubbles: true,
-                    })
+                    }),
                 );
             });
 
@@ -180,7 +186,9 @@ describe('e2e smoke', () => {
             while (Date.now() < movementDeadline) {
                 const state = await readDebugState(page);
                 updatedCarZ = state?.localCarZ ?? initialCarZ;
-                if (updatedCarZ > initialCarZ) break;
+                if (updatedCarZ > initialCarZ) {
+                    break;
+                }
                 await page.waitForTimeout(250);
             }
 
@@ -194,6 +202,6 @@ describe('e2e smoke', () => {
 
             await page.close();
         },
-        STARTUP_TIMEOUT_MS
+        STARTUP_TIMEOUT_MS,
     );
 });
