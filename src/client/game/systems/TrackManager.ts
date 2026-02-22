@@ -15,6 +15,7 @@ export class TrackManager {
     private removeDistance: number = 100;
     private seed: number = 12345;
     private random: () => number = Math.random;
+    private readonly activeObstacles: THREE.Mesh[] = [];
 
     // Materials
     private roadMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
@@ -28,17 +29,23 @@ export class TrackManager {
 
     private disposeSegment = (segment: TrackSegment) => {
         this.scene.remove(segment.mesh);
-        segment.mesh.children.forEach((child) => {
-            const meshChild = child as THREE.Mesh;
-            meshChild.geometry?.dispose();
+        const segmentGeometries = new Set<THREE.BufferGeometry>();
 
-            if (Array.isArray(meshChild.material)) {
-                meshChild.material.forEach((material) => material.dispose());
-                return;
-            }
-
-            meshChild.material?.dispose();
+        segment.mesh.traverse((child) => {
+            if (!(child instanceof THREE.Mesh)) return;
+            segmentGeometries.add(child.geometry);
         });
+
+        for (const geometry of segmentGeometries) {
+            geometry.dispose();
+        }
+    };
+
+    private disposeSharedMaterials = () => {
+        this.roadMat.dispose();
+        this.lineMat.dispose();
+        this.wallMat.dispose();
+        this.obstacleMat.dispose();
     };
 
     public setSeed(seed: number) {
@@ -141,14 +148,13 @@ export class TrackManager {
     }
 
     public getActiveObstacles(): THREE.Mesh[] {
-        // Return global-space meshes (or at least compute their boxes) 
-        // We will just return the actual meshes. Since they are children of group, 
-        // their world matrices must be updated. This happens in the renderer loop.
-        let allObs: THREE.Mesh[] = [];
+        this.activeObstacles.length = 0;
         for (const seg of this.segments) {
-            allObs = allObs.concat(seg.obstacles);
+            for (const obstacle of seg.obstacles) {
+                this.activeObstacles.push(obstacle);
+            }
         }
-        return allObs;
+        return this.activeObstacles;
     }
 
     public reset() {
@@ -171,5 +177,7 @@ export class TrackManager {
             this.disposeSegment(segment);
         }
         this.segments = [];
+        this.activeObstacles.length = 0;
+        this.disposeSharedMaterials();
     }
 }

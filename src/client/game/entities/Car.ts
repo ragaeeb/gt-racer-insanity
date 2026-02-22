@@ -26,6 +26,11 @@ export class Car {
     private engineSound?: THREE.PositionalAudio;
     private accelSound?: THREE.PositionalAudio;
 
+    private hasLoadedGLTF: boolean = false;
+    private fallbackMeshes: THREE.Object3D[] = [];
+    private readonly clonedMaterials = new Set<THREE.Material>();
+    private readonly carColor = new THREE.Color(0xff0055);
+
     constructor(
         private scene: THREE.Scene,
         private inputManager: InputManager | null,
@@ -66,21 +71,36 @@ export class Car {
         }
     }
 
-    private hasLoadedGLTF: boolean = false;
-    private fallbackMeshes: THREE.Object3D[] = [];
+    private disposeFallbackVisuals() {
+        for (const fallbackMesh of this.fallbackMeshes) {
+            this.mesh.remove(fallbackMesh);
+
+            if (!(fallbackMesh instanceof THREE.Mesh)) continue;
+
+            fallbackMesh.geometry.dispose();
+
+            if (Array.isArray(fallbackMesh.material)) {
+                for (const material of fallbackMesh.material) {
+                    material.dispose();
+                }
+            } else {
+                fallbackMesh.material.dispose();
+            }
+        }
+
+        this.fallbackMeshes = [];
+    }
 
     private createVisuals(colorHue?: number) {
-        const color = new THREE.Color();
         if (colorHue !== undefined) {
-            color.setHSL(colorHue, 1.0, 0.5);
+            this.carColor.setHSL(colorHue, 1.0, 0.5);
         } else {
-            color.setHex(0xff0055); // Default player color
+            this.carColor.setHex(0xff0055); // Default player color
         }
-        (this as any).carColor = color; // Store for assigning to GLTF later
 
         // Fallback Box Geometries (used while GLTF is loading)
         const bodyGeo = new THREE.BoxGeometry(2, 0.8, 4);
-        const bodyMat = new THREE.MeshStandardMaterial({ color: color });
+        const bodyMat = new THREE.MeshStandardMaterial({ color: this.carColor });
         const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
         bodyMesh.position.y = 0.4;
         bodyMesh.castShadow = true;
@@ -101,9 +121,7 @@ export class Car {
     private setupGLTFVisuals() {
         if (!this.assets || !this.assets.carModel || this.hasLoadedGLTF) return;
 
-        // Remove fallback boxes
-        this.fallbackMeshes.forEach((mesh) => this.mesh.remove(mesh));
-        this.fallbackMeshes = [];
+        this.disposeFallbackVisuals();
 
         // Clone the original loaded GLTF scene
         const model = this.assets.carModel.clone();
@@ -140,13 +158,23 @@ export class Car {
                 // If it's the main paint body (usually has a distinguishing name or material name), assign the unique player hash color
                 // For safety on arbitrary uninspected models, let's just color everything that isn't black-ish
                 if (mesh.material) {
-                    const material = mesh.material as THREE.MeshStandardMaterial;
-                    const clonedMaterial = material.clone();
+                    const originalMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                    const clonedMaterials = originalMaterials.map((material) => material.clone());
 
-                    if (clonedMaterial.color && clonedMaterial.color.getHex() !== 0x000000 && clonedMaterial.color.r > 0.1) {
-                        clonedMaterial.color.copy((this as any).carColor);
+                    for (const clonedMaterial of clonedMaterials) {
+                        this.clonedMaterials.add(clonedMaterial);
+
+                        if (
+                            'color' in clonedMaterial &&
+                            clonedMaterial.color instanceof THREE.Color &&
+                            clonedMaterial.color.getHex() !== 0x000000 &&
+                            clonedMaterial.color.r > 0.1
+                        ) {
+                            clonedMaterial.color.copy(this.carColor);
+                        }
                     }
-                    mesh.material = clonedMaterial;
+
+                    mesh.material = Array.isArray(mesh.material) ? clonedMaterials : clonedMaterials[0];
                 }
             }
         });
@@ -247,5 +275,34 @@ export class Car {
 
         if (this.engineSound && !this.engineSound.isPlaying) this.engineSound.play();
         if (this.accelSound && !this.accelSound.isPlaying) this.accelSound.play();
+    }
+
+    public dispose() {
+        if (this.engineSound) {
+            if (this.engineSound.isPlaying) {
+                this.engineSound.stop();
+            }
+            this.mesh.remove(this.engineSound);
+            this.engineSound.disconnect();
+            this.engineSound = undefined;
+        }
+
+        if (this.accelSound) {
+            if (this.accelSound.isPlaying) {
+                this.accelSound.stop();
+            }
+            this.mesh.remove(this.accelSound);
+            this.accelSound.disconnect();
+            this.accelSound = undefined;
+        }
+
+        this.disposeFallbackVisuals();
+
+        for (const material of this.clonedMaterials) {
+            material.dispose();
+        }
+        this.clonedMaterials.clear();
+
+        this.scene.remove(this.mesh);
     }
 }

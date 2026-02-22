@@ -1,4 +1,4 @@
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -45,7 +45,17 @@ export const RaceWorld = ({
     const opponentsRef = useRef<Map<string, Car>>(new Map());
 
     const audioListenerRef = useRef<THREE.AudioListener | null>(null);
-    const audioAssetsRef = useRef<CarAssets>({});
+    const carModelGltf = useLoader(GLTFLoader, '/car.glb');
+    const engineAudioBuffer = useLoader(THREE.AudioLoader, '/engine.mp3');
+    const accelerateAudioBuffer = useLoader(THREE.AudioLoader, '/accelerate.mp3');
+    const carAssets = useMemo<CarAssets>(
+        () => ({
+            accelerate: accelerateAudioBuffer,
+            carModel: carModelGltf.scene,
+            engine: engineAudioBuffer,
+        }),
+        [accelerateAudioBuffer, carModelGltf, engineAudioBuffer]
+    );
 
     const isRunningRef = useRef(false);
     const connectionStatusRef = useRef<ConnectionStatus>('connecting');
@@ -109,36 +119,6 @@ export const RaceWorld = ({
         window.addEventListener('keydown', resumeAudio, { once: true });
         window.addEventListener('click', resumeAudio, { once: true });
 
-        const audioLoader = new THREE.AudioLoader();
-        const gltfLoader = new GLTFLoader();
-
-        audioLoader.load(
-            '/engine.mp3',
-            (buffer) => {
-                audioAssetsRef.current.engine = buffer;
-            },
-            undefined,
-            (error) => console.error('Error loading engine audio:', error)
-        );
-
-        audioLoader.load(
-            '/accelerate.mp3',
-            (buffer) => {
-                audioAssetsRef.current.accelerate = buffer;
-            },
-            undefined,
-            (error) => console.error('Error loading accelerate audio:', error)
-        );
-
-        gltfLoader.load(
-            '/car.glb',
-            (gltf) => {
-                audioAssetsRef.current.carModel = gltf.scene;
-            },
-            undefined,
-            (error) => console.error('Error loading car GLTF:', error)
-        );
-
         return () => {
             camera.remove(listener);
             audioListenerRef.current = null;
@@ -158,12 +138,12 @@ export const RaceWorld = ({
 
         const clearCars = () => {
             if (localCarRef.current) {
-                scene.remove(localCarRef.current.mesh);
+                localCarRef.current.dispose();
                 localCarRef.current = null;
             }
 
             opponentsRef.current.forEach((opponentCar) => {
-                scene.remove(opponentCar.mesh);
+                opponentCar.dispose();
             });
             opponentsRef.current.clear();
         };
@@ -176,7 +156,7 @@ export const RaceWorld = ({
                 null,
                 playerIdToHue(player.id),
                 audioListenerRef.current ?? undefined,
-                audioAssetsRef.current
+                carAssets
             );
 
             opponentCar.isLocalPlayer = false;
@@ -192,7 +172,7 @@ export const RaceWorld = ({
             const opponentCar = opponentsRef.current.get(playerId);
             if (!opponentCar) return;
 
-            scene.remove(opponentCar.mesh);
+            opponentCar.dispose();
             opponentsRef.current.delete(playerId);
         };
 
@@ -210,7 +190,7 @@ export const RaceWorld = ({
                         inputManager,
                         playerIdToHue(player.id),
                         audioListenerRef.current ?? undefined,
-                        audioAssetsRef.current
+                        carAssets
                     );
                     localCarRef.current.position.set(player.x, player.y, player.z);
                     localCarRef.current.rotationY = player.rotationY;
@@ -255,7 +235,7 @@ export const RaceWorld = ({
             networkManager.disconnect();
             networkManagerRef.current = null;
         };
-    }, [inputManager, onConnectionStatusChange, onGameOverChange, onScoreChange, scene]);
+    }, [carAssets, inputManager, onConnectionStatusChange, onGameOverChange, onScoreChange, scene]);
 
     useEffect(() => {
         if (resetNonce === 0) return;
