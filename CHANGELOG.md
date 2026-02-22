@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.1.0...v1.2.0) (2026-02-22)
+
+
+### Features
+
+* **cars:** Cycle between different cars per player ([145e7fb](https://github.com/ragaeeb/gt-racer-insanity/commit/145e7fbea8b97467dcdf1e6b37bc462222ea3c23))
+
 # [1.1.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.0.1...v1.1.0) (2026-02-22)
 
 
