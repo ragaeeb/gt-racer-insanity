@@ -12,6 +12,7 @@ import {
     type SetStateAction,
 } from 'react';
 import * as THREE from 'three';
+import { toast, Toaster } from 'sonner';
 import { clientConfig } from '@/client/app/config';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
@@ -376,6 +377,9 @@ export const App = () => {
     const lap = useHudStore((state) => state.lap);
     const position = useHudStore((state) => state.position);
     const trackLabel = useHudStore((state) => state.trackLabel);
+    const activeEffectIds = useHudStore((state) => state.activeEffectIds);
+    const pendingToast = useHudStore((state) => state.pendingToast);
+    const clearPendingToast = useHudStore((state) => state.clearPendingToast);
     const latestSnapshot = useRuntimeStore((state) => state.latestSnapshot);
     const roomIdFromUrl = useMemo(() => new URLSearchParams(routeSearch).get('room') ?? '', [routeSearch]);
     const winnerName = useMemo(() => {
@@ -398,6 +402,19 @@ export const App = () => {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedColorId excluded: only re-check on vehicle/route change
     }, [routePath, selectedVehicleId]);
+
+    useEffect(() => {
+        if (!pendingToast) return;
+        const variant = pendingToast.variant;
+        if (variant === 'success') {
+            toast.success(pendingToast.message);
+        } else if (variant === 'error') {
+            toast.error(pendingToast.message);
+        } else {
+            toast.warning(pendingToast.message);
+        }
+        clearPendingToast();
+    }, [pendingToast, clearPendingToast]);
 
     const setLocationState = () => {
         setRoutePath(window.location.pathname);
@@ -662,7 +679,20 @@ export const App = () => {
                         Generate Debug Log
                     </button>
                     <div id="player-name-badge">{playerName || 'Not set'}</div>
+                    {activeEffectIds.length > 0 && (
+                        <div id="effect-indicators">
+                            {activeEffectIds.map((effectId) => (
+                                <span
+                                    key={effectId}
+                                    className={`effect-badge ${effectId === 'boosted' ? 'effect-boost' : effectId === 'flat_tire' ? 'effect-flat-tire' : effectId === 'stunned' ? 'effect-stunned' : 'effect-slowed'}`}
+                                >
+                                    {effectId === 'boosted' ? 'BOOSTED' : effectId === 'flat_tire' ? 'FLAT TIRE' : effectId === 'stunned' ? 'STUNNED' : 'SLOWED'}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
+                <Toaster position="top-center" richColors closeButton duration={2000} />
                 <div id="app-version">v{appVersion}</div>
                 <div id="game-over" className={gameOver ? '' : 'hidden'}>
                     <h1>RACE RESULTS</h1>

@@ -47,8 +47,25 @@ export type RaceState = {
     winnerPlayerId: string | null;
 };
 
+export type SnapshotPowerupState = {
+    id: string;
+    isActive: boolean;
+    powerupId: string;
+    x: number;
+    z: number;
+};
+
+export type SnapshotHazardState = {
+    hazardId: string;
+    id: string;
+    x: number;
+    z: number;
+};
+
 export type ServerSnapshotPayload = {
+    hazards: SnapshotHazardState[];
     players: SnapshotPlayerState[];
+    powerups: SnapshotPowerupState[];
     raceState: RaceState;
     roomId: string;
     seq: number;
@@ -151,6 +168,8 @@ export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshot
         isFiniteNumber(payload.seq) &&
         isFiniteNumber(payload.serverTimeMs) &&
         isRaceState(payload.raceState) &&
+        Array.isArray(payload.powerups) &&
+        Array.isArray(payload.hazards) &&
         payload.players.every((player) => isSnapshotPlayerState(player))
     );
 };

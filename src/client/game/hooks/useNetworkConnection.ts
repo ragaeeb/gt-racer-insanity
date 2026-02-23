@@ -7,13 +7,15 @@ import {
     createInterpolationBuffer,
     pushInterpolationSample,
 } from '@/client/game/systems/interpolationSystem';
+import { SceneryManager } from '@/client/game/systems/SceneryManager';
 import { TrackManager } from '@/client/game/systems/TrackManager';
 import { NetworkManager } from '@/client/network/NetworkManager';
 import { playerIdToHue } from '@/shared/game/playerColor';
 import { playerIdToVehicleIndex } from '@/shared/game/playerVehicle';
 import { colorIdToHSL, vehicleClassToModelIndex } from '@/client/game/vehicleSelections';
 import { DEFAULT_CAR_PHYSICS_CONFIG } from '@/shared/game/carPhysics';
-import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { seededRandom } from '@/shared/utils/prng';
 import { getVehicleClassManifestById, vehicleManifestToPhysicsConfig } from '@/shared/game/vehicle/vehicleClassManifest';
 import {
     DEFAULT_SCENE_ENVIRONMENT_ID,
@@ -157,6 +159,18 @@ export const useNetworkConnection = ({
             session.trackManager?.dispose();
             session.trackManager = new TrackManager(scene, seed, selectedTrackId);
 
+            session.sceneryManager?.dispose();
+            const trackManifest = getTrackManifestById(selectedTrackId);
+            const totalTrackLength = trackManifest.lengthMeters * trackManifest.totalLaps;
+            session.sceneryManager = new SceneryManager(
+                scene,
+                seededRandom(seed + 7919),
+                DEFAULT_TRACK_WIDTH_METERS,
+                totalTrackLength,
+                trackManifest.themeId,
+            );
+            session.sceneryManager.build();
+
             clearCars();
 
             const socketId = roomJoinedPayload.localPlayerId ?? networkManager.getSocketId();
@@ -214,6 +228,24 @@ export const useNetworkConnection = ({
             removeOpponent(playerId);
         });
 
+        networkManager.onRaceEvent((event) => {
+            const localPlayerId = useRuntimeStore.getState().localPlayerId;
+            if (event.playerId !== localPlayerId) return;
+
+            if (event.kind === 'powerup_collected') {
+                useHudStore.getState().showToast('SPEED BOOST!', 'success');
+            } else if (event.kind === 'hazard_triggered') {
+                const effectType = event.metadata?.effectType;
+                if (effectType === 'flat_tire') {
+                    useHudStore.getState().showToast('FLAT TIRE!', 'error');
+                } else if (effectType === 'stunned') {
+                    useHudStore.getState().showToast('STUNNED!', 'warning');
+                } else if (effectType === 'slowed') {
+                    useHudStore.getState().showToast('SLOWED!', 'warning');
+                }
+            }
+        });
+
         networkManager.onServerSnapshot((snapshot) => {
             useRuntimeStore.getState().applySnapshot(snapshot);
             callbacks.onRaceStateChange(snapshot.raceState);
@@ -223,6 +255,11 @@ export const useNetworkConnection = ({
                 if (session.trackManager) {
                     session.trackManager.setTrack(nextTrackId);
                 }
+            }
+
+            if (session.trackManager) {
+                session.trackManager.syncPowerups(snapshot.powerups);
+                session.trackManager.syncHazards(snapshot.hazards);
             }
 
             const localPlayerId = useRuntimeStore.getState().localPlayerId;
@@ -281,11 +318,24 @@ export const useNetworkConnection = ({
                 useHudStore
                     .getState()
                     .setActiveEffectIds(localSnapshotPlayer.activeEffects.map((effect) => effect.effectType));
+
+                // #region agent log
+                if (localSnapshotPlayer.activeEffects.length > 0) {
+                    fetch('http://127.0.0.1:7864/ingest/8933f922-e1d0-4caa-9723-1bd57a8f2bd5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'86c492'},body:JSON.stringify({sessionId:'86c492',location:'useNetworkConnection.ts:321',message:'snapshot-with-active-effects',data:{effects:localSnapshotPlayer.activeEffects,serverSpeed:localSnapshotPlayer.speed,raceStatus:snapshot.raceState.status},timestamp:Date.now()})}).catch(()=>{});
+                }
+                // #endregion
             }
 
             if (snapshot.raceState.status === 'finished' && session.isRunning) {
                 session.isRunning = false;
                 callbacks.onGameOverChange(true);
+                session.localCar?.fadeOutAudio();
+                for (const [, opponent] of session.opponents) {
+                    opponent.fadeOutAudio();
+                }
+                // #region agent log
+                fetch('http://127.0.0.1:7864/ingest/8933f922-e1d0-4caa-9723-1bd57a8f2bd5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'86c492'},body:JSON.stringify({sessionId:'86c492',location:'useNetworkConnection.ts:330',message:'race-finished-fadeout-triggered',data:{raceStatus:'finished',localCarExists:!!session.localCar,opponentCount:session.opponents.size},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
             }
         });
 
@@ -293,6 +343,8 @@ export const useNetworkConnection = ({
             session.isRunning = false;
             session.trackManager?.dispose();
             session.trackManager = null;
+            session.sceneryManager?.dispose();
+            session.sceneryManager = null;
             clearCars();
             unsubscribeConnectionStatus();
             session.connectionStatus = 'disconnected';

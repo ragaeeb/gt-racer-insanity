@@ -47,7 +47,7 @@ const getMotionMultipliers = (player: SimPlayerState): MotionMultipliers => {
     }
 
     return {
-        movementMultiplier: clamp(movementMultiplier, 0, 3),
+        movementMultiplier: clamp(movementMultiplier, 0, 5),
         steeringMultiplier: clamp(steeringMultiplier, 0, 2),
     };
 };

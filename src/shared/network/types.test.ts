@@ -69,6 +69,7 @@ describe('network v2 validators', () => {
 
     it('should validate server snapshot payload shape', () => {
         const payload = {
+            hazards: [],
             players: [
                 {
                     activeEffects: [],
@@ -93,6 +94,7 @@ describe('network v2 validators', () => {
                     z: 2,
                 },
             ],
+            powerups: [],
             raceState: {
                 endedAtMs: null,
                 playerOrder: ['player-1'],

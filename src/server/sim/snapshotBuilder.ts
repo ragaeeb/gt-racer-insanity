@@ -1,4 +1,4 @@
-import type { ServerSnapshotPayload, SnapshotPlayerState } from '@/shared/network/snapshot';
+import type { ServerSnapshotPayload, SnapshotHazardState, SnapshotPlayerState, SnapshotPowerupState } from '@/shared/network/snapshot';
 import type { SimRoomState } from '@/server/sim/types';
 
 const toSnapshotPlayerState = (player: SimRoomState['players'] extends Map<string, infer U> ? U : never): SnapshotPlayerState => {
@@ -32,8 +32,25 @@ export const buildServerSnapshot = (roomState: SimRoomState, serverTimeMs: numbe
 
     roomState.raceState.playerOrder = players.map((player) => player.id);
 
+    const powerups: SnapshotPowerupState[] = roomState.activePowerups.map((p) => ({
+        id: p.id,
+        isActive: p.collectedAtMs === null,
+        powerupId: p.powerupId,
+        x: p.position.x,
+        z: p.position.z,
+    }));
+
+    const hazards: SnapshotHazardState[] = roomState.hazards.map((h) => ({
+        hazardId: h.hazardId,
+        id: h.id,
+        x: h.position.x,
+        z: h.position.z,
+    }));
+
     return {
+        hazards,
         players,
+        powerups,
         raceState: roomState.raceState,
         roomId: roomState.roomId,
         seq: roomState.snapshotSeq,
