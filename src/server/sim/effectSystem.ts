@@ -9,12 +9,26 @@ export const applyStatusEffectToPlayer = (
     intensity = 1
 ) => {
     const manifest = getStatusEffectManifestById(effectType);
-    player.activeEffects.push({
+    const existingEffectIndex = player.activeEffects.findIndex((effect) => effect.effectType === effectType);
+    const nextEffect = {
         appliedAtMs: nowMs,
         effectType,
         expiresAtMs: nowMs + manifest.defaultDurationMs,
-        intensity,
-    });
+        intensity: Math.max(0, intensity),
+    };
+
+    if (existingEffectIndex < 0) {
+        player.activeEffects.push(nextEffect);
+        return;
+    }
+
+    const existingEffect = player.activeEffects[existingEffectIndex];
+    player.activeEffects[existingEffectIndex] = {
+        ...existingEffect,
+        appliedAtMs: nowMs,
+        expiresAtMs: Math.max(existingEffect.expiresAtMs, nextEffect.expiresAtMs),
+        intensity: Math.max(existingEffect.intensity, nextEffect.intensity),
+    };
 };
 
 export const tickStatusEffects = (player: SimPlayerState, nowMs: number) => {

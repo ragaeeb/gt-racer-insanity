@@ -267,6 +267,10 @@ e2eDescribe('e2e smoke', () => {
                 );
             });
 
+            const speedLabelText = await page.textContent('#speed');
+            const speedValue = Number((speedLabelText ?? '').replace(/[^0-9.-]/g, ''));
+            expect(speedValue).toBeGreaterThan(0);
+
             let updatedCarZ = initialCarZ;
             const movementDeadline = Date.now() + 8000;
 

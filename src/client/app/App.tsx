@@ -1,11 +1,12 @@
-import { Canvas } from '@react-three/fiber';
-import { Suspense, lazy, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Canvas, type RootState } from '@react-three/fiber';
+import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import * as THREE from 'three';
 import { clientConfig } from '@/client/app/config';
 import { useHudStore } from '@/client/game/state/hudStore';
+import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { ConnectionStatus } from '@/shared/network/types';
+import type { ConnectionStatus, RaceState } from '@/shared/network/types';
 
 const RaceWorld = lazy(async () => {
     const module = await import('@/client/game/scene/RaceWorld');
@@ -48,6 +49,62 @@ const techStack = [
     { name: 'Socket.IO', description: 'Real-time, ultra-fast multiplayer game synchronization.', icon: <SocketIoIcon /> },
     { name: 'Tailwind CSS', description: 'Utility-first styling for beautiful and responsive UIs.', icon: <TailwindIcon /> }
 ];
+
+type RaceSceneCanvasProps = {
+    cruiseControlEnabled: boolean;
+    onConnectionStatusChange: (status: ConnectionStatus) => void;
+    onGameOverChange: (isGameOver: boolean) => void;
+    onRaceStateChange: (state: RaceState | null) => void;
+    playerName: string;
+    resetNonce: number;
+    roomId: string;
+};
+
+const RACE_CANVAS_CAMERA = { fov: 60, near: 0.1, far: 1000, position: [0, 30, -30] as [number, number, number] };
+const RACE_CANVAS_SHADOWS = { type: THREE.PCFShadowMap as THREE.ShadowMapType };
+
+const RaceSceneCanvas = memo(
+    ({
+        cruiseControlEnabled,
+        onConnectionStatusChange,
+        onGameOverChange,
+        onRaceStateChange,
+        playerName,
+        resetNonce,
+        roomId,
+    }: RaceSceneCanvasProps) => {
+        const handleCreated = useCallback(({ gl }: RootState) => {
+            gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            gl.shadowMap.enabled = true;
+            gl.shadowMap.type = THREE.PCFShadowMap;
+        }, []);
+
+        return (
+            <Canvas
+                camera={RACE_CANVAS_CAMERA}
+                dpr={[1, 2]}
+                onCreated={handleCreated}
+                shadows={RACE_CANVAS_SHADOWS}
+            >
+                <Suspense fallback={null}>
+                    {playerName && roomId ? (
+                        <RaceWorld
+                            cruiseControlEnabled={cruiseControlEnabled}
+                            onConnectionStatusChange={onConnectionStatusChange}
+                            onGameOverChange={onGameOverChange}
+                            onRaceStateChange={onRaceStateChange}
+                            playerName={playerName}
+                            roomId={roomId}
+                            resetNonce={resetNonce}
+                        />
+                    ) : null}
+                </Suspense>
+            </Canvas>
+        );
+    }
+);
+
+RaceSceneCanvas.displayName = 'RaceSceneCanvas';
 
 const LandingHero = ({
     isCheckingServer,
@@ -241,16 +298,26 @@ export const App = () => {
     const [routePath, setRoutePath] = useState(window.location.pathname);
     const [routeSearch, setRouteSearch] = useState(window.location.search);
 
-    const [score, setScore] = useState(0);
     const [gameOver, setGameOver] = useState(false);
     const [resetNonce, setResetNonce] = useState(0);
     const [cruiseControlEnabled, setCruiseControlEnabled] = useState(true);
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+    const [raceState, setRaceState] = useState<RaceState | null>(null);
     const appVersion = __APP_VERSION__;
     const speedKph = useHudStore((state) => state.speedKph);
     const lap = useHudStore((state) => state.lap);
     const position = useHudStore((state) => state.position);
+    const trackLabel = useHudStore((state) => state.trackLabel);
+    const latestSnapshot = useRuntimeStore((state) => state.latestSnapshot);
     const roomIdFromUrl = useMemo(() => new URLSearchParams(routeSearch).get('room') ?? '', [routeSearch]);
+    const winnerName = useMemo(() => {
+        if (!raceState?.winnerPlayerId) {
+            return null;
+        }
+
+        const winnerSnapshot = latestSnapshot?.players.find((player) => player.id === raceState.winnerPlayerId);
+        return winnerSnapshot?.name ?? raceState.winnerPlayerId;
+    }, [latestSnapshot, raceState]);
 
     const setLocationState = () => {
         setRoutePath(window.location.pathname);
@@ -336,6 +403,7 @@ export const App = () => {
 
     const handleRestart = () => {
         setGameOver(false);
+        setRaceState(null);
         setResetNonce((current) => current + 1);
     };
 
@@ -380,6 +448,38 @@ export const App = () => {
             navigateTo('/race', roomIdFromUrl);
         }
     };
+
+    useEffect(() => {
+        const originalWarn = console.warn.bind(console);
+        console.warn = (...args: unknown[]) => {
+            const firstArg = args[0];
+            if (typeof firstArg === 'string') {
+                if (firstArg.includes('THREE.THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.')) {
+                    return;
+                }
+                if (firstArg.includes('using deprecated parameters for the initialization function; pass a single object instead')) {
+                    return;
+                }
+            }
+
+            originalWarn(...args);
+        };
+
+        return () => {
+            console.warn = originalWarn;
+        };
+    }, []);
+
+    const handleGenerateDebugLog = useCallback(() => {
+        const debugWindow = window as Window & {
+            __GT_DIAG__?: {
+                clearReport: () => void;
+                downloadReport: () => void;
+            };
+        };
+
+        debugWindow.__GT_DIAG__?.downloadReport();
+    }, []);
 
     if (routePath === '/') {
         return (
@@ -429,56 +529,58 @@ export const App = () => {
     return (
         <div className="h-full w-full">
             <div id="game-ui">
-                <div id="score">Score: {score}</div>
-                <div id="speed">Speed: {Math.round(speedKph)} km/h</div>
-                <div id="lap-position">
-                    Lap {lap} | P{position}
+                <div id="hud-panel">
+                    <div id="speed">Speed: {Math.round(speedKph)} km/h</div>
+                    <div id="lap-position">
+                        Lap {lap} | P{position}
+                    </div>
+                    <div id="track-name">{trackLabel}</div>
+                    <div data-status={connectionStatus} id="connection-status">
+                        {connectionStatus}
+                    </div>
+                    <label id="control-mode-toggle">
+                        <input
+                            checked={cruiseControlEnabled}
+                            onChange={(event) => setCruiseControlEnabled(event.target.checked)}
+                            type="checkbox"
+                        />
+                        Cruise
+                    </label>
+                    <button id="generate-debug-log-btn" onClick={handleGenerateDebugLog} type="button">
+                        Generate Debug Log
+                    </button>
+                    <div id="player-name-badge">{playerName || 'Not set'}</div>
                 </div>
-                <div data-status={connectionStatus} id="connection-status">
-                    {connectionStatus}
-                </div>
-                <label id="control-mode-toggle">
-                    <input
-                        checked={cruiseControlEnabled}
-                        onChange={(event) => setCruiseControlEnabled(event.target.checked)}
-                        type="checkbox"
-                    />
-                    Cruise
-                </label>
-                <div id="player-name-badge">{playerName || 'Not set'}</div>
                 <div id="app-version">v{appVersion}</div>
                 <div id="game-over" className={gameOver ? '' : 'hidden'}>
-                    <h1>GAME OVER</h1>
+                    <h1>RACE RESULTS</h1>
+                    <p id="race-result-summary">
+                        Winner: {winnerName ?? 'TBD'}
+                    </p>
+                    <p id="race-result-position">
+                        Your Finish: P{position}
+                    </p>
+                    <p id="race-result-laps">
+                        Laps: {lap}/{raceState?.totalLaps ?? lap}
+                    </p>
+                    <p id="race-result-track">
+                        Track: {trackLabel}
+                    </p>
                     <button id="restart-btn" onClick={handleRestart} type="button">
                         Restart
                     </button>
                 </div>
             </div>
 
-            <Canvas
-                camera={{ fov: 60, near: 0.1, far: 1000, position: [0, 30, -30] }}
-                dpr={[1, 2]}
-                onCreated={({ gl }) => {
-                    gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-                    gl.shadowMap.enabled = true;
-                    gl.shadowMap.type = THREE.PCFShadowMap;
-                }}
-                shadows
-            >
-                <Suspense fallback={null}>
-                    {playerName && roomIdFromUrl ? (
-                        <RaceWorld
-                            cruiseControlEnabled={cruiseControlEnabled}
-                            onConnectionStatusChange={setConnectionStatus}
-                            onGameOverChange={setGameOver}
-                            onScoreChange={setScore}
-                            playerName={playerName}
-                            roomId={roomIdFromUrl}
-                            resetNonce={resetNonce}
-                        />
-                    ) : null}
-                </Suspense>
-            </Canvas>
+            <RaceSceneCanvas
+                cruiseControlEnabled={cruiseControlEnabled}
+                onConnectionStatusChange={setConnectionStatus}
+                onGameOverChange={setGameOver}
+                onRaceStateChange={setRaceState}
+                playerName={playerName}
+                resetNonce={resetNonce}
+                roomId={roomIdFromUrl}
+            />
         </div>
     );
 };

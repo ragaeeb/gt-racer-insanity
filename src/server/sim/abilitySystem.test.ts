@@ -38,15 +38,21 @@ describe('ability system', () => {
         const players = new Map<string, SimPlayerState>([['player-1', createPlayer('player-1')]]);
         const cooldownStore = new Map<string, number>();
 
-        const result = applyAbilityActivation(players, {
-            abilityId: 'turbo-boost',
-            roomId: 'ROOM1',
-            seq: 1,
-            targetPlayerId: 'player-1',
-        }, 1_000, cooldownStore);
+        const result = applyAbilityActivation(
+            players,
+            'player-1',
+            {
+                abilityId: 'turbo-boost',
+                seq: 1,
+                targetPlayerId: null,
+            },
+            1_000,
+            cooldownStore
+        );
 
         expect(result.applied).toEqual(true);
         expect(players.get('player-1')?.activeEffects.length).toEqual(1);
+        expect(players.get('player-1')?.activeEffects[0]?.effectType).toEqual('boosted');
         expect(cooldownStore.size).toEqual(1);
     });
 
@@ -54,18 +60,28 @@ describe('ability system', () => {
         const players = new Map<string, SimPlayerState>([['player-1', createPlayer('player-1')]]);
         const cooldownStore = new Map<string, number>();
 
-        const first = applyAbilityActivation(players, {
-            abilityId: 'turbo-boost',
-            roomId: 'ROOM1',
-            seq: 1,
-            targetPlayerId: 'player-1',
-        }, 1_000, cooldownStore);
-        const second = applyAbilityActivation(players, {
-            abilityId: 'turbo-boost',
-            roomId: 'ROOM1',
-            seq: 2,
-            targetPlayerId: 'player-1',
-        }, 1_001, cooldownStore);
+        const first = applyAbilityActivation(
+            players,
+            'player-1',
+            {
+                abilityId: 'turbo-boost',
+                seq: 1,
+                targetPlayerId: null,
+            },
+            1_000,
+            cooldownStore
+        );
+        const second = applyAbilityActivation(
+            players,
+            'player-1',
+            {
+                abilityId: 'turbo-boost',
+                seq: 2,
+                targetPlayerId: null,
+            },
+            1_001,
+            cooldownStore
+        );
 
         expect(first.applied).toEqual(true);
         expect(second.applied).toEqual(false);

@@ -2,28 +2,59 @@ import { describe, expect, it } from 'bun:test';
 import { RoomStore } from '@/server/roomStore';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
-const sequence = (values: number[]) => {
-    let index = 0;
-    return () => {
-        const value = values[index] ?? values[values.length - 1] ?? 0;
-        index += 1;
-        return value;
+const createInputFrame = (
+    roomId: string,
+    seq: number,
+    timestampMs: number,
+    throttle = 1,
+    steering = 0
+) => {
+    return {
+        ackSnapshotSeq: null,
+        controls: {
+            boost: false,
+            brake: false,
+            handbrake: false,
+            steering,
+            throttle,
+        },
+        cruiseControlEnabled: true,
+        precisionOverrideActive: false,
+        protocolVersion: PROTOCOL_V2,
+        roomId,
+        seq,
+        timestampMs,
     };
+};
+
+const advanceSimulation = (
+    store: RoomStore,
+    roomId: string,
+    playerId: string,
+    stepCount: number,
+    startMs: number
+) => {
+    for (let step = 0; step < stepCount; step += 1) {
+        const nowMs = startMs + (step + 1) * 16;
+        store.queueInputFrame(roomId, playerId, createInputFrame(roomId, step + 1, nowMs));
+        store.stepSimulations(nowMs);
+    }
 };
 
 describe('RoomStore', () => {
     it('should create a room and join the first player', () => {
-        const store = new RoomStore(() => 101, () => 2.5);
+        const store = new RoomStore(() => 101);
         const result = store.joinRoom('ABCD', 'player-1', 'Alice');
 
         expect(result.created).toEqual(true);
         expect(result.room.seed).toEqual(101);
         expect(result.room.players.size).toEqual(1);
-        expect(result.player.x).toEqual(2.5);
+        expect(result.player.x).toEqual(-6);
+        expect(result.player.z).toBeCloseTo(0, 6);
     });
 
     it('should keep the same room seed when other players join', () => {
-        const store = new RoomStore(() => 777, sequence([1, -1]));
+        const store = new RoomStore(() => 777);
 
         const first = store.joinRoom('ROOM1', 'player-1', 'Alice');
         const second = store.joinRoom('ROOM1', 'player-2', 'Bob');
@@ -34,44 +65,80 @@ describe('RoomStore', () => {
     });
 
     it('should sanitize blank player names to a default', () => {
-        const store = new RoomStore(() => 1, () => 0);
+        const store = new RoomStore(() => 1);
 
         const result = store.joinRoom('ROOM1', 'player-1', '   ');
 
         expect(result.player.name).toEqual('Player');
     });
 
-    it('should update an existing player state', () => {
-        const store = new RoomStore(
-            () => 5,
-            () => 0,
-            {
-                maxMovementSpeedPerSecond: 1_000_000,
-                maxPositionDeltaPerTick: 1000,
-                maxRotationDeltaPerTick: 10,
-            }
-        );
-        store.joinRoom('ROOM1', 'player-1', 'Alice');
-
-        const updated = store.updatePlayerState('ROOM1', 'player-1', {
-            x: 10,
-            y: 0,
-            z: 20,
-            rotationY: 1.2,
-        }, 1_000);
-
-        expect(updated).toEqual({
-            id: 'player-1',
-            name: 'Alice',
-            x: 10,
-            y: 0,
-            z: 20,
-            rotationY: 1.2,
+    it('should rotate room tracks deterministically when default track mode is rotation', () => {
+        const firstStore = new RoomStore(() => 1, {
+            defaultTrackId: 'rotation',
         });
+        const secondStore = new RoomStore(() => 2, {
+            defaultTrackId: 'rotation',
+        });
+
+        firstStore.joinRoom('ROOM1', 'player-1', 'Alice');
+        secondStore.joinRoom('ROOM2', 'player-1', 'Alice');
+
+        const firstTrack = firstStore.buildRoomSnapshot('ROOM1', 1_000)?.raceState.trackId;
+        const secondTrack = secondStore.buildRoomSnapshot('ROOM2', 1_000)?.raceState.trackId;
+
+        expect(firstTrack).toEqual('canyon-sprint');
+        expect(secondTrack).toEqual('sunset-loop');
+    });
+
+    it('should honor explicitly configured default track ids', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'canyon-sprint',
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
+        const snapshot = store.buildRoomSnapshot('ROOM1', 1_000);
+
+        expect(snapshot?.raceState.trackId).toEqual('canyon-sprint');
+    });
+
+    it('should return false when queueing input for an unknown room', () => {
+        const store = new RoomStore(() => 5);
+
+        const enqueued = store.queueInputFrame(
+            'ROOM1',
+            'player-1',
+            createInputFrame('ROOM1', 1, 1_000)
+        );
+
+        expect(enqueued).toEqual(false);
+    });
+
+    it('should provide late-join snapshots with authoritative positions', () => {
+        const store = new RoomStore(() => 42, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 60,
+            totalLaps: 3,
+        });
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
+        advanceSimulation(store, 'ROOM1', 'player-1', 40, 1_000);
+
+        const preJoinSnapshot = store.buildRoomSnapshot('ROOM1', 1_700);
+        const preJoinPlayer = preJoinSnapshot?.players.find((player) => player.id === 'player-1');
+
+        expect(preJoinPlayer).not.toBeNull();
+        expect(preJoinPlayer?.z ?? 0).toBeGreaterThan(2);
+
+        const secondJoin = store.joinRoom('ROOM1', 'player-2', 'Bob');
+        const postJoinSnapshot = store.buildRoomSnapshot('ROOM1', 1_701);
+        const firstPlayerFromPostJoin = postJoinSnapshot?.players.find((player) => player.id === 'player-1');
+
+        expect(secondJoin.created).toEqual(false);
+        expect(postJoinSnapshot?.players).toHaveLength(2);
+        expect(firstPlayerFromPostJoin?.z ?? 0).toBeGreaterThan(2);
     });
 
     it('should remove the room when the last player leaves', () => {
-        const store = new RoomStore(() => 9, () => 0);
+        const store = new RoomStore(() => 9);
         store.joinRoom('ROOM1', 'player-1', 'Alice');
 
         const result = store.removePlayerFromRoom('ROOM1', 'player-1');
@@ -82,7 +149,7 @@ describe('RoomStore', () => {
     });
 
     it('should keep the room when at least one player remains', () => {
-        const store = new RoomStore(() => 9, () => 0);
+        const store = new RoomStore(() => 9);
         store.joinRoom('ROOM1', 'player-1', 'Alice');
         store.joinRoom('ROOM1', 'player-2', 'Bob');
 
@@ -94,117 +161,14 @@ describe('RoomStore', () => {
         expect(store.getRoom('ROOM1')?.players.size).toEqual(1);
     });
 
-    it('should clamp impossible position jumps to the per-tick maximum', () => {
-        const store = new RoomStore(
-            () => 1,
-            () => 0,
-            {
-                maxMovementSpeedPerSecond: 1000,
-                maxPositionDeltaPerTick: 5,
-                maxRotationDeltaPerTick: 2,
-            }
-        );
-        store.joinRoom('ROOM1', 'player-1', 'Alice');
-
-        const updated = store.updatePlayerState(
-            'ROOM1',
-            'player-1',
-            {
-                x: 999,
-                y: 0,
-                z: 0,
-                rotationY: 0,
-            },
-            1_000
-        );
-
-        expect(updated?.x).toBeCloseTo(5, 6);
-        expect(updated?.z).toBeCloseTo(0, 6);
-    });
-
-    it('should clamp impossible rotation jumps to the per-tick maximum', () => {
-        const store = new RoomStore(
-            () => 1,
-            () => 0,
-            {
-                maxMovementSpeedPerSecond: 1000,
-                maxPositionDeltaPerTick: 5,
-                maxRotationDeltaPerTick: 0.25,
-            }
-        );
-        store.joinRoom('ROOM1', 'player-1', 'Alice');
-
-        const updated = store.updatePlayerState(
-            'ROOM1',
-            'player-1',
-            {
-                x: 0,
-                y: 0,
-                z: 0,
-                rotationY: Math.PI,
-            },
-            1_000
-        );
-
-        expect(updated?.rotationY).toBeCloseTo(0.25, 6);
-    });
-
-    it('should clamp movement by speed limit using elapsed time', () => {
-        const store = new RoomStore(
-            () => 1,
-            () => 0,
-            {
-                maxMovementSpeedPerSecond: 10,
-                maxPositionDeltaPerTick: 100,
-                maxRotationDeltaPerTick: 2,
-            }
-        );
-        store.joinRoom('ROOM1', 'player-1', 'Alice');
-
-        store.updatePlayerState(
-            'ROOM1',
-            'player-1',
-            {
-                x: 0,
-                y: 0,
-                z: 0,
-                rotationY: 0,
-            },
-            1_000
-        );
-
-        const updated = store.updatePlayerState(
-            'ROOM1',
-            'player-1',
-            {
-                x: 50,
-                y: 0,
-                z: 0,
-                rotationY: 0,
-            },
-            1_100
-        );
-
-        expect(updated?.x).toBeCloseTo(1, 6);
-    });
-
-    it('should enqueue v2 input frames and emit simulation snapshots when simulation is enabled', () => {
-        const store = new RoomStore(
-            () => 1,
-            () => 0,
-            {
-                maxMovementSpeedPerSecond: 1000,
-                maxPositionDeltaPerTick: 100,
-                maxRotationDeltaPerTick: 2,
-            },
-            {
-                simulationTickHz: 60,
-                useServerSimulation: true,
-            }
-        );
+    it('should emit simulation snapshots with processed v2 input frames', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 60,
+            totalLaps: 3,
+        });
 
         const joined = store.joinRoom('ROOM1', 'player-1', 'Alice', {
-            protocolVersion: PROTOCOL_V2,
             selectedColorId: 'red',
             selectedVehicleId: 'sport',
         });
@@ -234,5 +198,37 @@ describe('RoomStore', () => {
         const snapshots = store.buildSimulationSnapshots(1_016);
         expect(snapshots).toHaveLength(1);
         expect(snapshots[0]?.snapshot.players[0]?.lastProcessedInputSeq).toEqual(1);
+        expect((snapshots[0]?.snapshot.players[0]?.z ?? 0) > 0).toEqual(true);
+    });
+
+    it('should reset room race state and player position when restarting the room race', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 3,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
+        advanceSimulation(store, 'ROOM1', 'player-1', 80, 1_000);
+        const beforeRestartSnapshot = store.buildRoomSnapshot('ROOM1', 5_000);
+        const beforeRestartPlayer = beforeRestartSnapshot?.players.find((player) => player.id === 'player-1');
+
+        expect(beforeRestartPlayer).toBeDefined();
+        expect(beforeRestartPlayer?.z ?? 0).toBeGreaterThan(5);
+
+        const restarted = store.restartRoomRace('ROOM1', 6_000);
+        expect(restarted).toEqual(true);
+
+        const afterRestartSnapshot = store.buildRoomSnapshot('ROOM1', 6_000);
+        const afterRestartPlayer = afterRestartSnapshot?.players.find((player) => player.id === 'player-1');
+        expect(afterRestartSnapshot?.raceState.status).toEqual('running');
+        expect(afterRestartSnapshot?.raceState.winnerPlayerId).toEqual(null);
+        expect(afterRestartSnapshot?.raceState.endedAtMs).toEqual(null);
+        expect(afterRestartSnapshot?.raceState.startedAtMs).toEqual(6_000);
+        expect(afterRestartPlayer).toBeDefined();
+        expect(afterRestartPlayer?.x ?? 0).toBeCloseTo(-6, 5);
+        expect(afterRestartPlayer?.z ?? 0).toBeCloseTo(0, 5);
+        expect(afterRestartPlayer?.speed ?? 1).toBeCloseTo(0, 5);
+        expect(afterRestartPlayer?.lastProcessedInputSeq).toEqual(-1);
     });
 });

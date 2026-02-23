@@ -16,12 +16,15 @@
 
 ![GT Racer Insanity logo](public/branding/icon.png)
 
-Multiplayer racing game evolving from prototype architecture to a production-style multiplayer stack with authoritative simulation scaffolding, finite tracks, and data-driven gameplay manifests.
+Multiplayer racing game with a server-authoritative V2 simulation stack, finite race flow, and data-driven gameplay manifests.
 
 ## Latest Features
-- Protocol V2 scaffolding with input frames and server snapshots (`input_frame`, `server_snapshot`), feature-flagged alongside legacy sync.
-- Server simulation loop scaffolding (fixed tick + snapshot broadcast) with shared race progress types.
-- Finite track manifest system with lap/checkpoint progression helpers and explicit track-end barrier.
+- V2-only realtime transport (`join_room`, `input_frame`, `ability_activate`, `restart_race`, `server_snapshot`, `race_event`) with sequenced input acknowledgements.
+- Authoritative server simulation with Rapier rigid bodies for collision bumping and non-overlap guarantees.
+- Late join now receives a fresh authoritative snapshot so active player positions are correct on entry.
+- Finite full-race track flow with lap/checkpoint progression and a race-end barrier.
+- Race results overlay with winner/position/lap summary plus restart flow.
+- Authoritative status-effect pipeline for abilities, hazards, and power-ups.
 - Expanded shared data manifests and validators for vehicles, abilities, effects, hazards, powerups, and tracks.
 - Player name prompt on join, with in-world name tags above every car.
 - Multi-car catalog rotation by player ID (not only color differences).
@@ -33,7 +36,7 @@ Multiplayer racing game evolving from prototype architecture to a production-sty
 ## Tech Stack
 - `bun` runtime and package manager
 - `React + Vite + @react-three/fiber + three` for the client runtime
-- `@react-three/rapier` added for physics migration path (scaffolding present)
+- Rapier physics (`@dimforge/rapier3d-compat`) on the authoritative server simulation
 - `zustand` for runtime/HUD state
 - `Socket.IO + @socket.io/bun-engine` for realtime server communication
 - `Tailwind CSS` + shadcn-style component patterns for app UI
@@ -68,9 +71,9 @@ Server health:
 - `src/client/game`: R3F runtime, entity controllers, finite track renderer, scene systems, camera loop.
 - `src/client/game/state`: Zustand stores for runtime and HUD state.
 - `src/client/game/systems`: interpolation/reconciliation/prediction helpers and gameplay adapters.
-- `src/client/network`: Socket.IO transport with V1/V2 compatibility paths.
-- `src/server`: Socket.IO server, room lifecycle, V2 simulation tick/snapshot plumbing.
-- `src/server/sim`: authoritative simulation modules (`inputQueue`, `roomSimulation`, snapshot builder, effect/ability systems).
+- `src/client/network`: Socket.IO V2 transport with sequenced `input_frame` and snapshot/race-event listeners.
+- `src/server`: Socket.IO server, room lifecycle, authoritative simulation tick/snapshot broadcast.
+- `src/server/sim`: authoritative simulation modules (Rapier world, colliders, input queue, race progression, effect/ability systems).
 - `src/shared`: protocol contracts, manifests, deterministic logic and validators used by client/server.
 - `testing`: opt-in browser E2E suites, gated from default `bun test`.
 
@@ -107,10 +110,10 @@ E2E tests:
 - validate load/connect/spawn/move/no-runtime-errors
 - validate multiplayer visibility + non-overlap separation behavior
 
-## Current Status / Known Gaps
-- True physics bumping (mass/impulse car-vs-car collision) is not complete yet; current implementation prevents overlap but is not full rigid-body bump combat.
-- V2 netcode is scaffolded and partially integrated; legacy path still exists for compatibility.
-- Finite track rendering and race-distance termination are present; full production race UX/polish is still in progress.
+## Current Status
+- V2-only netcode cutover is active; legacy `update_state`/`player_moved` runtime paths are removed.
+- Server-authoritative collision bumping and finite race completion are enabled in the default multiplayer flow.
+- Remaining roadmap work is focused on content depth, polish, and long-horizon scaling hardening.
 
 ## Car Models
 - Multiplayer cars now cycle by player ID across multiple models.

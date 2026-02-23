@@ -46,6 +46,7 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Keep deterministic/testable logic in `src/shared`.
 - Keep room lifecycle and server state handling in `src/server/roomStore.ts`.
 - Networking protocol shapes should live in `src/shared/network/types.ts`.
+- Realtime room events are owned in `src/server/index.ts` and mirrored by `src/client/network/NetworkManager.ts` (including `restart_race`).
 - Player identity is part of shared network player state (`name` on `PlayerState`).
 - Scene presentation should be defined through environment profiles in `src/client/game/scene/environment/sceneEnvironmentProfiles.ts`.
 - E2E tests are intentionally gated and should not run in default `bun test` flows.
@@ -58,4 +59,4 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 
 ## CI/Versioning
 - CI workflow runs build + tests on push and pull requests.
-- Release workflow increments semantic version on each commit to `main` and tags `vX.Y.Z`.
+- Release workflow runs `semantic-release` on `main` and publishes tags/releases based on Conventional Commits.

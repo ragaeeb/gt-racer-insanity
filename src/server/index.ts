@@ -2,13 +2,7 @@ import { Server as Engine } from '@socket.io/bun-engine';
 import { Server } from 'socket.io';
 import { isInputFramePayload } from '@/shared/network/inputFrame';
 import { coerceProtocolVersion, PROTOCOL_V2 } from '@/shared/network/protocolVersion';
-import type {
-    AbilityActivatePayload,
-    JoinRoomPayload,
-    ProtocolVersion,
-    PlayerStateUpdate,
-    UpdateStatePayload,
-} from '@/shared/network/types';
+import type { AbilityActivatePayload, JoinRoomPayload } from '@/shared/network/types';
 import { serverConfig } from '@/server/config';
 import { RoomStore } from '@/server/roomStore';
 
@@ -26,27 +20,10 @@ const isFiniteNumber = (value: unknown): value is number => {
     return typeof value === 'number' && Number.isFinite(value);
 };
 
-const isPlayerStateUpdate = (value: unknown): value is PlayerStateUpdate => {
-    if (!value || typeof value !== 'object') return false;
-
-    const payload = value as Record<string, unknown>;
-    return (
-        isFiniteNumber(payload.x) &&
-        isFiniteNumber(payload.y) &&
-        isFiniteNumber(payload.z) &&
-        isFiniteNumber(payload.rotationY)
-    );
-};
-
-const isUpdateStatePayload = (value: unknown): value is UpdateStatePayload => {
-    if (!value || typeof value !== 'object') return false;
-
-    const payload = value as Record<string, unknown>;
-    return isString(payload.roomId) && isPlayerStateUpdate(payload.state);
-};
-
 const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
-    if (!value || typeof value !== 'object') return false;
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
 
     const payload = value as Record<string, unknown>;
     const protocolVersion = payload.protocolVersion;
@@ -63,9 +40,11 @@ const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
 };
 
 const isAbilityActivatePayload = (value: unknown): value is AbilityActivatePayload => {
-    if (!value || typeof value !== 'object') return false;
-    const payload = value as Record<string, unknown>;
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
 
+    const payload = value as Record<string, unknown>;
     return (
         isString(payload.roomId) &&
         isString(payload.abilityId) &&
@@ -114,7 +93,11 @@ const simulationIntervalMs = 1000 / Math.max(serverConfig.simulationTickHz, 1);
 const snapshotIntervalMs = 1000 / Math.max(serverConfig.snapshotTickHz, 1);
 
 setInterval(() => {
-    roomStore.stepSimulations(Date.now());
+    const nowMs = Date.now();
+    const raceEvents = roomStore.stepSimulations(nowMs);
+    for (const { event, roomId } of raceEvents) {
+        io.to(roomId).emit('race_event', event);
+    }
 }, simulationIntervalMs);
 
 setInterval(() => {
@@ -129,52 +112,63 @@ setInterval(() => {
 
 io.on('connection', (socket) => {
     console.log(`[+] Player connected: ${socket.id}`);
-    let lastUpdateStateAtMs = 0;
     let lastInputFrameAtMs = 0;
-    const minimumLegacyTickIntervalMs = 1000 / Math.max(serverConfig.maxInboundTickRateHz, 1);
     const minimumInputTickIntervalMs = 1000 / Math.max(serverConfig.maxInputRateHz, 1);
 
     socket.on('join_room', (rawJoinRoom: unknown) => {
         let roomId = '';
         let playerName = 'Player';
-        let protocolVersion: ProtocolVersion = PROTOCOL_V2;
         let selectedVehicleId: string | undefined;
         let selectedColorId: string | undefined;
 
         if (isString(rawJoinRoom)) {
             roomId = rawJoinRoom.trim();
-            protocolVersion = PROTOCOL_V2;
         } else if (isJoinRoomPayload(rawJoinRoom)) {
-            if (getPayloadBytes(rawJoinRoom) > serverConfig.maxJoinRoomPayloadBytes) return;
+            if (getPayloadBytes(rawJoinRoom) > serverConfig.maxJoinRoomPayloadBytes) {
+                return;
+            }
+
             roomId = rawJoinRoom.roomId.trim();
             playerName = rawJoinRoom.playerName;
-            protocolVersion = coerceProtocolVersion(rawJoinRoom.protocolVersion);
             selectedVehicleId = rawJoinRoom.selectedVehicleId;
             selectedColorId = rawJoinRoom.selectedColorId;
+
+            if (coerceProtocolVersion(rawJoinRoom.protocolVersion) !== PROTOCOL_V2) {
+                return;
+            }
         } else {
             return;
         }
 
-        if (roomId.length === 0 || roomId.length > 16) return;
-        if (serverConfig.protocolV2Required && protocolVersion !== PROTOCOL_V2) return;
+        if (roomId.length === 0 || roomId.length > 16) {
+            return;
+        }
 
         socket.join(roomId);
 
         const { created, player, room } = roomStore.joinRoom(roomId, socket.id, playerName, {
-            protocolVersion,
             selectedColorId,
             selectedVehicleId,
         });
+
         if (created) {
             console.log(`[Room ${roomId}] Created with seed ${room.seed}`);
         }
 
+        const snapshot = roomStore.buildRoomSnapshot(roomId, Date.now());
         socket.emit('room_joined', {
             localPlayerId: socket.id,
-            players: Array.from(room.players.values()),
-            protocolVersion,
+            players: snapshot?.players.map((snapshotPlayer) => ({
+                id: snapshotPlayer.id,
+                name: snapshotPlayer.name,
+                rotationY: snapshotPlayer.rotationY,
+                x: snapshotPlayer.x,
+                y: snapshotPlayer.y,
+                z: snapshotPlayer.z,
+            })) ?? Array.from(room.players.values()),
+            protocolVersion: PROTOCOL_V2,
             seed: room.seed,
-            snapshot: room.simulation ? room.simulation.buildSnapshot(Date.now()) : undefined,
+            snapshot: snapshot ?? undefined,
         });
 
         socket.to(roomId).emit('player_joined', player);
@@ -182,46 +176,74 @@ io.on('connection', (socket) => {
     });
 
     socket.on('input_frame', (data: unknown) => {
-        if (!isInputFramePayload(data)) return;
-        if (getPayloadBytes(data) > serverConfig.maxInputFramePayloadBytes) return;
+        if (!isInputFramePayload(data)) {
+            return;
+        }
+
+        if (getPayloadBytes(data) > serverConfig.maxInputFramePayloadBytes) {
+            return;
+        }
 
         const nowMs = Date.now();
-        if (nowMs - lastInputFrameAtMs < minimumInputTickIntervalMs) return;
+        if (nowMs - lastInputFrameAtMs < minimumInputTickIntervalMs) {
+            return;
+        }
         lastInputFrameAtMs = nowMs;
 
         roomStore.queueInputFrame(data.roomId, socket.id, data.frame);
     });
 
     socket.on('ability_activate', (data: unknown) => {
-        if (!isAbilityActivatePayload(data)) return;
-        io.to(data.roomId).emit('race_event', {
-            kind: 'race_started',
-            playerId: data.targetPlayerId,
-            roomId: data.roomId,
-            serverTimeMs: Date.now(),
+        if (!isAbilityActivatePayload(data)) {
+            return;
+        }
+
+        roomStore.queueAbilityActivation(data.roomId, socket.id, {
+            abilityId: data.abilityId,
+            seq: data.seq,
+            targetPlayerId: data.targetPlayerId,
         });
     });
 
-    socket.on('update_state', (data: unknown) => {
-        if (!isUpdateStatePayload(data)) return;
-        if (getPayloadBytes(data) > serverConfig.maxUpdateStatePayloadBytes) return;
+    socket.on('restart_race', (data: unknown) => {
+        if (!data || typeof data !== 'object') {
+            return;
+        }
 
-        const nowMs = Date.now();
-        if (nowMs - lastUpdateStateAtMs < minimumLegacyTickIntervalMs) return;
-        lastUpdateStateAtMs = nowMs;
+        const payload = data as Record<string, unknown>;
+        if (!isString(payload.roomId)) {
+            return;
+        }
 
-        const storedPlayer = roomStore.updatePlayerState(data.roomId, socket.id, data.state, nowMs);
-        if (!storedPlayer) return;
+        const roomId = payload.roomId;
+        if (!socket.rooms.has(roomId)) {
+            return;
+        }
 
-        socket.volatile.to(data.roomId).emit('player_moved', storedPlayer);
+        const restarted = roomStore.restartRoomRace(roomId, Date.now());
+        if (!restarted) {
+            return;
+        }
+
+        const snapshot = roomStore.buildRoomSnapshot(roomId, Date.now());
+        if (snapshot) {
+            io.to(roomId).emit('server_snapshot', {
+                roomId,
+                snapshot,
+            });
+        }
     });
 
     socket.on('disconnecting', () => {
         for (const roomId of socket.rooms) {
-            if (roomId === socket.id) continue;
+            if (roomId === socket.id) {
+                continue;
+            }
 
             const { removed, roomDeleted } = roomStore.removePlayerFromRoom(roomId, socket.id);
-            if (!removed) continue;
+            if (!removed) {
+                continue;
+            }
 
             socket.to(roomId).emit('player_left', socket.id);
             console.log(`[Room ${roomId}] Player ${socket.id} left.`);
@@ -272,8 +294,11 @@ Bun.serve({
             return Response.json(
                 {
                     ok: true,
+                    protocolVersion: PROTOCOL_V2,
                     rooms: roomStore.getRoomCount(),
-                    serverSimV2: serverConfig.serverSimV2,
+                    simulation: 'authoritative-v2',
+                    simulationTickHz: serverConfig.simulationTickHz,
+                    snapshotTickHz: serverConfig.snapshotTickHz,
                 },
                 {
                     headers: new Headers(corsHeaders),

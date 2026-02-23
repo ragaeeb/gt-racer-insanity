@@ -97,7 +97,6 @@ export class Car {
         if (!this.listener || !this.assets) return;
 
         if (this.assets.engine && !this.engineSound) {
-            console.log('Initializing engine sound for car');
             this.engineSound = new THREE.PositionalAudio(this.listener);
             this.engineSound.setBuffer(this.assets.engine);
             this.engineSound.setRefDistance(10);
@@ -108,7 +107,6 @@ export class Car {
         }
 
         if (this.assets.accelerate && !this.accelSound) {
-            console.log('Initializing accelerate sound for car');
             this.accelSound = new THREE.PositionalAudio(this.listener);
             this.accelSound.setBuffer(this.assets.accelerate);
             this.accelSound.setRefDistance(10);
@@ -119,7 +117,6 @@ export class Car {
         }
 
         if (this.assets.driving && !this.drivingSound) {
-            console.log('Initializing driving sound for car');
             this.drivingSound = new THREE.PositionalAudio(this.listener);
             this.drivingSound.setBuffer(this.assets.driving);
             this.drivingSound.setRefDistance(10);
@@ -130,7 +127,6 @@ export class Car {
         }
 
         if (this.assets.brake && !this.brakeSound) {
-            console.log('Initializing brake sound for car');
             this.brakeSound = new THREE.PositionalAudio(this.listener);
             this.brakeSound.setBuffer(this.assets.brake);
             this.brakeSound.setRefDistance(10);
@@ -250,7 +246,6 @@ export class Car {
 
         this.mesh.add(wrapper);
         this.hasLoadedGLTF = true;
-        console.log('Swapped to realistic GLTF car model!');
     }
 
     public update(dt: number) {
@@ -357,6 +352,10 @@ export class Car {
         if (this.accelSound && !this.accelSound.isPlaying) this.accelSound.play();
         if (this.drivingSound && !this.drivingSound.isPlaying) this.drivingSound.play();
     }
+
+    public getSpeed = () => {
+        return this.controller.getSpeed();
+    };
 
     public dispose() {
         if (this.engineSound) {
