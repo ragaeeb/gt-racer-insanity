@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.7.0...v1.8.0) (2026-02-23)
+
+
+### Features
+
+* **v2:** stabilize authoritative race flow, restart, and gameplay regressions ([#16](https://github.com/ragaeeb/gt-racer-insanity/issues/16)) ([856f2e1](https://github.com/ragaeeb/gt-racer-insanity/commit/856f2e12690d7a1a91a0d2812282f00855c0b46f))
+
 # [1.7.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.6.0...v1.7.0) (2026-02-22)
 
 
