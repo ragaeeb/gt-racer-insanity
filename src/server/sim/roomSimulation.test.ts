@@ -123,7 +123,7 @@ describe('RoomSimulation', () => {
             simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
 
             let nowMs = 1_000;
-            for (let step = 1; step <= 7_000; step += 1) {
+            for (let step = 1; step <= 12_000; step += 1) {
                 nowMs = 1_000 + step * 16;
                 simulation.queueInputFrame('player-1', createInputFrame('ROOM1', step, nowMs, 1, 0));
                 simulation.queueInputFrame('player-2', createInputFrame('ROOM1', step, nowMs, 0.65, 0));

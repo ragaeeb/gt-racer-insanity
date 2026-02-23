@@ -8,13 +8,12 @@ import { useCarInterpolation } from '@/client/game/hooks/useCarInterpolation';
 import { useDiagnostics } from '@/client/game/hooks/useDiagnostics';
 import { useInputEmitter } from '@/client/game/hooks/useInputEmitter';
 import { useNetworkConnection } from '@/client/game/hooks/useNetworkConnection';
-import { useObstacleCollision } from '@/client/game/hooks/useObstacleCollision';
 import { useRaceSession } from '@/client/game/hooks/useRaceSession';
 import type { RaceWorldCallbacks } from '@/client/game/hooks/types';
 import { SceneEnvironment } from '@/client/game/scene/environment/SceneEnvironment';
 import { getSceneEnvironmentProfile } from '@/client/game/scene/environment/sceneEnvironmentProfiles';
+import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
-
 
 type RaceWorldProps = {
     cruiseControlEnabled: boolean;
@@ -24,6 +23,8 @@ type RaceWorldProps = {
     playerName: string;
     resetNonce: number;
     roomId: string;
+    selectedColorId: string;
+    selectedVehicleId: VehicleClassId;
 };
 
 export const RaceWorld = ({
@@ -34,6 +35,8 @@ export const RaceWorld = ({
     playerName,
     resetNonce,
     roomId,
+    selectedColorId,
+    selectedVehicleId,
 }: RaceWorldProps) => {
     const dirLightRef = useRef<THREE.DirectionalLight>(null);
 
@@ -63,6 +66,8 @@ export const RaceWorld = ({
         playerName,
         resetNonce,
         roomId,
+        selectedColorId,
+        selectedVehicleId,
         sessionRef,
     });
 
@@ -73,7 +78,6 @@ export const RaceWorld = ({
 
     const wallClampCountRef = useCarInterpolation(sessionRef);
     useInputEmitter(sessionRef);
-    useObstacleCollision(sessionRef, callbacks);
     const cameraMetricsRef = useCameraFollow(sessionRef, activeSceneEnvironment, dirLightRef);
     useDiagnostics(sessionRef, cameraMetricsRef, wallClampCountRef);
 

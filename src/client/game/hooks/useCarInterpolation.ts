@@ -3,17 +3,19 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { clientConfig } from '@/client/app/config';
 import type { InterpolationState, RaceSession } from '@/client/game/hooks/types';
+import {
+    HARD_SNAP_THRESHOLD_METERS,
+    MIN_CORRECTION_THRESHOLD,
+    YAW_PER_FRAME_ALPHA,
+    computeCorrectionAlpha,
+    lerpAngle,
+} from '@/client/game/systems/correctionSystem';
 import { sampleInterpolationBuffer } from '@/client/game/systems/interpolationSystem';
 import { useHudStore } from '@/client/game/state/hudStore';
 
 const TRACK_WIDTH_METERS = 76;
 const PLAYER_COLLIDER_HALF_WIDTH_METERS = 1.1;
 const LOCAL_TRACK_BOUNDARY_X_METERS = TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
-
-const lerpAngle = (from: number, to: number, alpha: number) => {
-    const delta = Math.atan2(Math.sin(to - from), Math.cos(to - from));
-    return from + delta * alpha;
-};
 
 const interpolate = (from: InterpolationState, to: InterpolationState, alpha: number): InterpolationState => ({
     rotationY: lerpAngle(from.rotationY, to.rotationY, alpha),
@@ -35,23 +37,76 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
         const nowMs = Date.now();
         const renderTimeMs = nowMs - clientConfig.interpolationDelayMs;
 
-        const localInterpolatedState = sampleInterpolationBuffer(
-            session.localInterpolationBuffer,
-            renderTimeMs,
-            interpolate,
-        );
-        if (localInterpolatedState) {
-            localCar.targetPosition.set(localInterpolatedState.x, localInterpolatedState.y, localInterpolatedState.z);
-            localCar.targetRotationY = localInterpolatedState.rotationY;
-        } else if (session.latestLocalSnapshot) {
-            localCar.targetPosition.set(
-                session.latestLocalSnapshot.x,
-                session.latestLocalSnapshot.y,
-                session.latestLocalSnapshot.z,
-            );
-            localCar.targetRotationY = session.latestLocalSnapshot.rotationY;
-        }
         localCar.update(dt);
+
+        const localSnapshot = session.latestLocalSnapshot;
+        if (localSnapshot) {
+            const snapshotSeq = session.latestLocalSnapshotSeq;
+            const isNewSnapshot = snapshotSeq !== null && snapshotSeq !== session.lastReconciledSnapshotSeq;
+            if (isNewSnapshot) {
+                session.lastReconciledSnapshotSeq = snapshotSeq;
+            }
+
+            const positionError = Math.hypot(
+                localCar.position.x - localSnapshot.x,
+                localCar.position.z - localSnapshot.z,
+            );
+            const yawError = Math.abs(
+                Math.atan2(
+                    Math.sin(localSnapshot.rotationY - localCar.rotationY),
+                    Math.cos(localSnapshot.rotationY - localCar.rotationY),
+                ),
+            );
+
+            let mode: 'hard' | 'none' | 'soft' = 'none';
+            let appliedDelta = 0;
+
+            if (positionError >= HARD_SNAP_THRESHOLD_METERS) {
+                localCar.position.set(localSnapshot.x, localSnapshot.y, localSnapshot.z);
+                localCar.rotationY = localSnapshot.rotationY;
+                localCar.mesh.position.copy(localCar.position);
+                localCar.mesh.rotation.y = localCar.rotationY;
+                mode = 'hard';
+                appliedDelta = positionError;
+            } else if (positionError >= MIN_CORRECTION_THRESHOLD) {
+                const alpha = computeCorrectionAlpha(positionError);
+                const prevX = localCar.position.x;
+                const prevZ = localCar.position.z;
+                localCar.position.x += (localSnapshot.x - localCar.position.x) * alpha;
+                localCar.position.z += (localSnapshot.z - localCar.position.z) * alpha;
+                localCar.position.y = localSnapshot.y;
+                localCar.mesh.position.copy(localCar.position);
+                mode = 'soft';
+                appliedDelta = Math.hypot(localCar.position.x - prevX, localCar.position.z - prevZ);
+            }
+
+            if (yawError >= clientConfig.reconciliationYawThresholdRadians) {
+                localCar.rotationY = lerpAngle(localCar.rotationY, localSnapshot.rotationY, YAW_PER_FRAME_ALPHA);
+                localCar.mesh.rotation.y = localCar.rotationY;
+            }
+
+            if (isNewSnapshot) {
+                const inputLead = Math.max(
+                    0,
+                    session.localInputSequence - Math.max(localSnapshot.lastProcessedInputSeq, 0),
+                );
+
+                session.lastCorrection = {
+                    appliedPositionDelta: appliedDelta,
+                    inputLead,
+                    mode,
+                    positionError,
+                    sequence: snapshotSeq!,
+                    yawError,
+                };
+            }
+
+            useHudStore.getState().setSpeedKph(Math.max(0, localSnapshot.speed * 3.6));
+        } else {
+            useHudStore
+                .getState()
+                .setSpeedKph(Math.max(0, localCar.getSpeed() * 3.6));
+        }
 
         if (session.isRunning) {
             const clampedX = THREE.MathUtils.clamp(
@@ -87,41 +142,6 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
         }
 
         session.opponents.forEach((opponentCar) => opponentCar.update(dt));
-
-        const localSnapshot = session.latestLocalSnapshot;
-        if (localSnapshot) {
-            const snapshotSeq = session.latestLocalSnapshotSeq;
-            if (snapshotSeq !== null && snapshotSeq !== session.lastReconciledSnapshotSeq) {
-                session.lastReconciledSnapshotSeq = snapshotSeq;
-                const inputLead = Math.max(
-                    0,
-                    session.localInputSequence - Math.max(localSnapshot.lastProcessedInputSeq, 0),
-                );
-                const positionError = Math.hypot(
-                    localCar.position.x - localSnapshot.x,
-                    localCar.position.z - localSnapshot.z,
-                );
-                const yawError = Math.abs(
-                    Math.atan2(
-                        Math.sin(localSnapshot.rotationY - localCar.rotationY),
-                        Math.cos(localSnapshot.rotationY - localCar.rotationY),
-                    ),
-                );
-                session.lastCorrection = {
-                    appliedPositionDelta: 0,
-                    inputLead,
-                    mode: 'none',
-                    positionError,
-                    sequence: snapshotSeq,
-                    yawError,
-                };
-            }
-            useHudStore.getState().setSpeedKph(Math.max(0, localSnapshot.speed * 3.6));
-        } else {
-            useHudStore
-                .getState()
-                .setSpeedKph(Math.max(0, localCar.position.distanceTo(localCar.targetPosition) * 36));
-        }
     });
 
     return wallClampCountRef;

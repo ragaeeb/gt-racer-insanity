@@ -51,7 +51,7 @@ const parseInterpolationDelayMs = () => {
 const parsePositionThreshold = () => {
     const parsed = Number(import.meta.env.VITE_RECONCILE_POSITION_THRESHOLD);
     if (!Number.isFinite(parsed) || parsed <= 0) {
-        return 0.35;
+        return 1.5;
     }
     return parsed;
 };

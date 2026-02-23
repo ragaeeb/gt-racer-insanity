@@ -1,8 +1,10 @@
 import type RAPIER from '@dimforge/rapier3d-compat';
 import type { World } from '@dimforge/rapier3d-compat';
 import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { generateTrackObstacles } from '@/shared/game/track/trackObstacles';
 
 type TrackColliderBuildOptions = {
+    seed: number;
     totalLaps: number;
     trackId: string;
     trackWidthMeters?: number;
@@ -11,6 +13,7 @@ type TrackColliderBuildOptions = {
 
 export type TrackColliderBuildResult = {
     finishBarrierColliderHandle: number;
+    obstacleColliderHandles: Set<number>;
     totalTrackLengthMeters: number;
     trackWidthMeters: number;
 };
@@ -79,6 +82,30 @@ const createFinishBarrierCollider = (
     return finishBarrierCollider.handle;
 };
 
+const createObstacleColliders = (
+    rapier: typeof RAPIER,
+    world: World,
+    options: TrackColliderBuildOptions,
+    trackWidthMeters: number,
+    staticBody: ReturnType<World['createRigidBody']>,
+): Set<number> => {
+    const totalLaps = Math.max(1, options.totalLaps);
+    const layout = generateTrackObstacles(options.trackId, options.seed, totalLaps, trackWidthMeters);
+    const handles = new Set<number>();
+
+    for (const obs of layout.obstacles) {
+        const colliderDesc = rapier.ColliderDesc.cuboid(obs.halfSize, obs.halfSize, obs.halfSize)
+            .setTranslation(obs.positionX, obs.halfSize, obs.positionZ)
+            .setSensor(true)
+            .setActiveEvents(rapier.ActiveEvents.COLLISION_EVENTS);
+
+        const collider = world.createCollider(colliderDesc, staticBody);
+        handles.add(collider.handle);
+    }
+
+    return handles;
+};
+
 export const buildTrackColliders = (
     rapier: typeof RAPIER,
     world: World,
@@ -116,8 +143,17 @@ export const buildTrackColliders = (
         staticBody
     );
 
+    const obstacleColliderHandles = createObstacleColliders(
+        rapier,
+        world,
+        options,
+        trackWidthMeters,
+        staticBody,
+    );
+
     return {
         finishBarrierColliderHandle,
+        obstacleColliderHandles,
         totalTrackLengthMeters,
         trackWidthMeters,
     };

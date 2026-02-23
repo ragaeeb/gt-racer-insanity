@@ -11,6 +11,7 @@ import { TrackManager } from '@/client/game/systems/TrackManager';
 import { NetworkManager } from '@/client/network/NetworkManager';
 import { playerIdToHue } from '@/shared/game/playerColor';
 import { playerIdToVehicleIndex } from '@/shared/game/playerVehicle';
+import { colorIdToHSL, vehicleClassToModelIndex } from '@/client/game/vehicleSelections';
 import { getTrackManifestById } from '@/shared/game/track/trackManifest';
 import {
     DEFAULT_SCENE_ENVIRONMENT_ID,
@@ -31,6 +32,8 @@ type UseNetworkConnectionParams = {
     playerName: string;
     resetNonce: number;
     roomId: string;
+    selectedColorId: string;
+    selectedVehicleId: string;
     sessionRef: React.RefObject<RaceSession>;
 };
 
@@ -41,6 +44,8 @@ export const useNetworkConnection = ({
     playerName,
     resetNonce,
     roomId,
+    selectedColorId,
+    selectedVehicleId,
     sessionRef,
 }: UseNetworkConnectionParams) => {
     const { scene, camera } = useThree();
@@ -68,19 +73,24 @@ export const useNetworkConnection = ({
         session.opponentInterpolationBuffers.clear();
     }, [session]);
 
-    const createOpponent = useCallback((player: PlayerState) => {
+    const createOpponent = useCallback((player: PlayerState, snapshotPlayer?: { colorId?: string; vehicleId?: string }) => {
         if (session.opponents.has(player.id)) {
             return;
         }
 
         const { modelVariants, assets } = carAssetsBundle;
-        const modelIndex = playerIdToVehicleIndex(player.id, modelVariants.length);
-        const modelVariant = modelVariants[modelIndex];
+        const modelIndex = snapshotPlayer?.vehicleId
+            ? vehicleClassToModelIndex(snapshotPlayer.vehicleId)
+            : playerIdToVehicleIndex(player.id, modelVariants.length);
+        const modelVariant = modelVariants[modelIndex] ?? modelVariants[0];
+        const hsl = snapshotPlayer?.colorId
+            ? colorIdToHSL(snapshotPlayer.colorId)
+            : { h: playerIdToHue(player.id), s: 1.0, l: 0.5 };
 
         const opponentCar = new Car(
             scene,
             null,
-            playerIdToHue(player.id),
+            hsl,
             audioListenerRef.current ?? undefined,
             assets,
             modelVariant.scene,
@@ -127,6 +137,8 @@ export const useNetworkConnection = ({
         const { modelVariants, assets } = carAssetsBundle;
         const networkManager = new NetworkManager(playerName, roomId, {
             protocolVersion: PROTOCOL_V2,
+            selectedColorId,
+            selectedVehicleId,
         });
         session.networkManager = networkManager;
 
@@ -149,21 +161,22 @@ export const useNetworkConnection = ({
             const socketId = roomJoinedPayload.localPlayerId ?? networkManager.getSocketId();
             useRuntimeStore.getState().setLocalPlayerId(socketId);
 
+            const snapshotPlayers = roomJoinedPayload.snapshot?.players;
             for (const player of players) {
                 if (player.id === socketId) {
-                    const modelIndex = playerIdToVehicleIndex(player.id, modelVariants.length);
-                    const modelVariant = modelVariants[modelIndex];
+                    const localModelIndex = vehicleClassToModelIndex(selectedVehicleId);
+                    const localModelVariant = modelVariants[localModelIndex] ?? modelVariants[0];
                     session.localCar = new Car(
                         scene,
                         session.inputManager,
-                        playerIdToHue(player.id),
+                        colorIdToHSL(selectedColorId),
                         audioListenerRef.current ?? undefined,
                         assets,
-                        modelVariant.scene,
-                        modelVariant.yawOffsetRadians,
+                        localModelVariant.scene,
+                        localModelVariant.yawOffsetRadians,
                         player.name,
                     );
-                    session.localCar.isLocalPlayer = false;
+                    session.localCar.isLocalPlayer = true;
                     session.localCar.position.set(player.x, player.y, player.z);
                     session.localCar.rotationY = player.rotationY;
                     session.localCar.targetPosition.set(player.x, player.y, player.z);
@@ -171,7 +184,8 @@ export const useNetworkConnection = ({
                     continue;
                 }
 
-                createOpponent(player);
+                const sp = snapshotPlayers?.find((s) => s.id === player.id);
+                createOpponent(player, sp);
             }
 
             resetSessionState();
@@ -243,7 +257,7 @@ export const useNetworkConnection = ({
                 }
 
                 if (!session.opponents.has(snapshotPlayer.id)) {
-                    createOpponent(snapshotPlayer);
+                    createOpponent(snapshotPlayer, snapshotPlayer);
                 }
 
                 const interpolationBuffer = session.opponentInterpolationBuffers.get(snapshotPlayer.id);
@@ -305,6 +319,8 @@ export const useNetworkConnection = ({
         resetSessionState,
         roomId,
         scene,
+        selectedColorId,
+        selectedVehicleId,
         session,
     ]);
 

@@ -8,6 +8,8 @@ coverage/
 # Logs
 *.log
 
+.cursor
+
 # Environment files
 .env
 .env.*

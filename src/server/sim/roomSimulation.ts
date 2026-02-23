@@ -6,7 +6,7 @@ import type { AbilityActivatePayload, RaceEventPayload } from '@/shared/network/
 import type { ClientInputFrame } from '@/shared/network/inputFrame';
 import type { ServerSnapshotPayload } from '@/shared/network/snapshot';
 import { applyAbilityActivation } from '@/server/sim/abilitySystem';
-import { applyDriveStep, drainStartedPlayerCollisions, syncPlayerMotionFromRigidBody } from '@/server/sim/collisionSystem';
+import { applyDriveStep, drainStartedCollisions, syncPlayerMotionFromRigidBody } from '@/server/sim/collisionSystem';
 import { tickStatusEffects } from '@/server/sim/effectSystem';
 import { applyHazardTriggers, type HazardTrigger } from '@/server/sim/hazardSystem';
 import { InputQueue } from '@/server/sim/inputQueue';
@@ -66,9 +66,11 @@ export class RoomSimulation {
     private readonly cooldownStore = new Map<string, number>();
     private readonly abilityActivationQueue: AbilityActivationEnvelope[] = [];
     private readonly hazardTriggerQueue: HazardTrigger[] = [];
+    private readonly obstacleStunCooldownByPlayerId = new Map<string, number>();
     private readonly powerupTriggerQueue: PowerupTrigger[] = [];
     private readonly trackManifest;
     private readonly totalTrackLengthMeters: number;
+    private obstacleColliderHandles = new Set<number>();
 
     constructor(options: RoomSimulationOptions) {
         this.dtSeconds = 1 / Math.max(options.tickHz, 1);
@@ -76,10 +78,12 @@ export class RoomSimulation {
         this.trackManifest = getTrackManifestById(options.trackId);
 
         const trackColliders = buildTrackColliders(this.rapierContext.rapier, this.rapierContext.world, {
+            seed: options.seed,
             totalLaps: options.totalLaps,
             trackId: options.trackId,
         });
         this.totalTrackLengthMeters = trackColliders.totalTrackLengthMeters;
+        this.obstacleColliderHandles = trackColliders.obstacleColliderHandles;
 
         this.state = {
             players: new Map(),
@@ -394,6 +398,7 @@ export class RoomSimulation {
 
         this.abilityActivationQueue.length = 0;
         this.hazardTriggerQueue.length = 0;
+        this.obstacleStunCooldownByPlayerId.clear();
         this.powerupTriggerQueue.length = 0;
         this.cooldownStore.clear();
         this.state.raceEvents.length = 0;
@@ -447,16 +452,27 @@ export class RoomSimulation {
             this.updateRaceProgress(player, nowMs);
         }
 
-        const collisionPairs = drainStartedPlayerCollisions(
+        const collisionResult = drainStartedCollisions(
             this.rapierContext.eventQueue,
-            this.playerIdByColliderHandle
+            this.playerIdByColliderHandle,
+            this.obstacleColliderHandles,
         );
-        for (const pair of collisionPairs) {
+        for (const pair of collisionResult.playerPairs) {
             this.pushRaceEvent(
                 toRaceEvent(this.state.roomId, 'collision_bump', nowMs, pair.firstPlayerId, {
                     againstPlayerId: pair.secondPlayerId,
                 })
             );
+        }
+        for (const hit of collisionResult.obstacleHits) {
+            const cooldownUntil = this.obstacleStunCooldownByPlayerId.get(hit.playerId) ?? 0;
+            if (nowMs < cooldownUntil) {
+                continue;
+            }
+
+            this.hazardTriggerQueue.push({ effectType: 'stunned', playerId: hit.playerId });
+            const stunDurationMs = 1_600;
+            this.obstacleStunCooldownByPlayerId.set(hit.playerId, nowMs + stunDurationMs + 500);
         }
 
         this.processAbilityQueue(nowMs);

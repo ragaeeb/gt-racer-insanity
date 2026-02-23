@@ -4,7 +4,7 @@ import {
     type TrackId,
     type TrackThemeId,
 } from '@/shared/game/track/trackManifest';
-import { seededRandom } from '@/shared/utils/prng';
+import { generateTrackObstacles, type ObstacleDescriptor } from '@/shared/game/track/trackObstacles';
 
 type TrackSegment = {
     mesh: THREE.Group;
@@ -45,7 +45,6 @@ export class TrackManager {
     public segments: TrackSegment[] = [];
     private trackWidth = 76;
     private seed: number = 12345;
-    private random: () => number = Math.random;
     private readonly activeObstacles: THREE.Mesh[] = [];
     private trackId: TrackId = 'sunset-loop';
     private totalLaps = 1;
@@ -99,7 +98,11 @@ export class TrackManager {
         this.obstacleMat.emissive.setHex(palette.obstacleEmissive);
     };
 
-    private createSegment = (segmentLength: number, zStart: number, safe: boolean): TrackSegment => {
+    private createSegment = (
+        segmentLength: number,
+        zStart: number,
+        obstacleDescriptors: ObstacleDescriptor[],
+    ): TrackSegment => {
         const group = new THREE.Group();
         group.position.z = zStart + segmentLength / 2;
 
@@ -135,21 +138,17 @@ export class TrackManager {
         group.add(leftWall);
         group.add(rightWall);
 
+        const segmentCenterZ = zStart + segmentLength / 2;
         const obstacles: THREE.Mesh[] = [];
-        if (!safe) {
-            const numObstacles = Math.floor(this.random() * 4) + 2;
-            for (let i = 0; i < numObstacles; i++) {
-                const obsSize = this.random() * 3 + 2;
-                const obsGeo = new THREE.BoxGeometry(obsSize, obsSize, obsSize);
-                const obs = new THREE.Mesh(obsGeo, this.obstacleMat);
-                const posX = (this.random() - 0.5) * (this.trackWidth - obsSize * 2);
-                const posZ = (this.random() - 0.5) * segmentLength;
-                obs.position.set(posX, obsSize / 2, posZ);
-                obs.castShadow = true;
-                obs.receiveShadow = true;
-                group.add(obs);
-                obstacles.push(obs);
-            }
+        for (const desc of obstacleDescriptors) {
+            const obsSize = desc.halfSize * 2;
+            const obsGeo = new THREE.BoxGeometry(obsSize, obsSize, obsSize);
+            const obs = new THREE.Mesh(obsGeo, this.obstacleMat);
+            obs.position.set(desc.positionX, desc.halfSize, desc.positionZ - segmentCenterZ);
+            obs.castShadow = true;
+            obs.receiveShadow = true;
+            group.add(obs);
+            obstacles.push(obs);
         }
 
         this.scene.add(group);
@@ -165,17 +164,22 @@ export class TrackManager {
         const trackManifest = getTrackManifestById(this.trackId);
         this.applyTrackPalette(trackManifest.themeId);
         this.totalLaps = trackManifest.totalLaps;
-        let zCursor = 0;
         this.segments = [];
 
+        const layout = generateTrackObstacles(this.trackId, this.seed, this.totalLaps, this.trackWidth);
+
+        let zCursor = 0;
         for (let lapIndex = 0; lapIndex < this.totalLaps; lapIndex += 1) {
             for (let segmentIndex = 0; segmentIndex < trackManifest.segments.length; segmentIndex += 1) {
                 const segment = trackManifest.segments[segmentIndex];
-                const builtSegment = this.createSegment(
-                    segment.lengthMeters,
-                    zCursor,
-                    lapIndex === 0 && segmentIndex === 0
+                const segmentZStart = zCursor;
+                const segmentZEnd = zCursor + segment.lengthMeters;
+
+                const segmentObstacles = layout.obstacles.filter(
+                    (obs) => obs.positionZ >= segmentZStart && obs.positionZ < segmentZEnd,
                 );
+
+                const builtSegment = this.createSegment(segment.lengthMeters, zCursor, segmentObstacles);
                 this.segments.push(builtSegment);
                 zCursor += segment.lengthMeters;
             }
@@ -195,7 +199,6 @@ export class TrackManager {
 
     public setSeed = (seed: number) => {
         this.seed = seed;
-        this.random = seededRandom(this.seed);
         this.reset();
     };
 
@@ -237,7 +240,6 @@ export class TrackManager {
             this.disposeSegment(segment);
         }
         this.segments = [];
-        this.random = seededRandom(this.seed);
         this.buildFiniteTrack();
     };
 

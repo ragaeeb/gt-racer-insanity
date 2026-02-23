@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { RaceSession } from '@/client/game/hooks/types';
+import { computeCameraLerpAlpha } from '@/client/game/systems/correctionSystem';
 import type { SceneEnvironmentProfile } from '@/client/game/scene/environment/sceneEnvironmentProfiles';
 
 type CameraVectors = {
@@ -28,6 +29,7 @@ export type CameraFrameMetrics = {
     cameraJumpMeters: number;
     cameraMotionMeters: number;
     lastCameraPosition: THREE.Vector3;
+    smoothedSpeed: number;
 };
 
 export const useCameraFollow = (
@@ -41,6 +43,7 @@ export const useCameraFollow = (
         cameraJumpMeters: 0,
         cameraMotionMeters: 0,
         lastCameraPosition: camera.position.clone(),
+        smoothedSpeed: 0,
     });
 
     useFrame(() => {
@@ -72,7 +75,10 @@ export const useCameraFollow = (
         m.cameraMotionMeters = camera.position.distanceTo(m.lastCameraPosition);
         m.lastCameraPosition.copy(camera.position);
 
-        camera.position.lerp(v.desiredPosition, 0.1);
+        const speedMps = localCar.getSpeed();
+        m.smoothedSpeed += (speedMps - m.smoothedSpeed) * 0.02;
+        const lerpAlpha = computeCameraLerpAlpha(m.smoothedSpeed);
+        camera.position.lerp(v.desiredPosition, lerpAlpha);
 
         v.lookTarget.copy(localCar.position);
         v.rotatedLookAhead.copy(v.lookAhead);

@@ -21,7 +21,7 @@ export type VehicleClassManifest = {
 export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
     {
         abilityId: 'turbo-boost',
-        colorPaletteIds: ['red', 'white', 'black', 'gold'],
+        colorPaletteIds: ['red', 'white', 'gold'],
         id: 'sport',
         label: 'Sport',
         physics: {
@@ -36,7 +36,7 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
     },
     {
         abilityId: 'ram-wave',
-        colorPaletteIds: ['blue', 'silver', 'orange', 'black'],
+        colorPaletteIds: ['blue', 'silver', 'orange'],
         id: 'muscle',
         label: 'Muscle',
         physics: {
