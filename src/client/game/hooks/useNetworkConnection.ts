@@ -12,7 +12,9 @@ import { NetworkManager } from '@/client/network/NetworkManager';
 import { playerIdToHue } from '@/shared/game/playerColor';
 import { playerIdToVehicleIndex } from '@/shared/game/playerVehicle';
 import { colorIdToHSL, vehicleClassToModelIndex } from '@/client/game/vehicleSelections';
+import { DEFAULT_CAR_PHYSICS_CONFIG } from '@/shared/game/carPhysics';
 import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { getVehicleClassManifestById, vehicleManifestToPhysicsConfig } from '@/shared/game/vehicle/vehicleClassManifest';
 import {
     DEFAULT_SCENE_ENVIRONMENT_ID,
     type SceneEnvironmentProfileId,
@@ -156,7 +158,6 @@ export const useNetworkConnection = ({
             session.trackManager = new TrackManager(scene, seed, selectedTrackId);
 
             clearCars();
-            session.localInterpolationBuffer = createInterpolationBuffer<InterpolationState>();
 
             const socketId = roomJoinedPayload.localPlayerId ?? networkManager.getSocketId();
             useRuntimeStore.getState().setLocalPlayerId(socketId);
@@ -166,6 +167,11 @@ export const useNetworkConnection = ({
                 if (player.id === socketId) {
                     const localModelIndex = vehicleClassToModelIndex(selectedVehicleId);
                     const localModelVariant = modelVariants[localModelIndex] ?? modelVariants[0];
+                    const localVehicleManifest = getVehicleClassManifestById(selectedVehicleId);
+                    const localPhysicsConfig = vehicleManifestToPhysicsConfig(
+                        localVehicleManifest.physics,
+                        DEFAULT_CAR_PHYSICS_CONFIG.deceleration,
+                    );
                     session.localCar = new Car(
                         scene,
                         session.inputManager,
@@ -175,6 +181,7 @@ export const useNetworkConnection = ({
                         localModelVariant.scene,
                         localModelVariant.yawOffsetRadians,
                         player.name,
+                        localPhysicsConfig,
                     );
                     session.localCar.isLocalPlayer = true;
                     session.localCar.position.set(player.x, player.y, player.z);
@@ -230,16 +237,6 @@ export const useNetworkConnection = ({
 
             const localCar = session.localCar;
             if (localCar && localSnapshotPlayer) {
-                pushInterpolationSample(session.localInterpolationBuffer, {
-                    sequence: snapshot.seq,
-                    state: {
-                        rotationY: localSnapshotPlayer.rotationY,
-                        x: localSnapshotPlayer.x,
-                        y: localSnapshotPlayer.y,
-                        z: localSnapshotPlayer.z,
-                    },
-                    timeMs: snapshot.serverTimeMs,
-                });
                 localCar.targetPosition.set(localSnapshotPlayer.x, localSnapshotPlayer.y, localSnapshotPlayer.z);
                 localCar.targetRotationY = localSnapshotPlayer.rotationY;
                 if (!session.hasLocalAuthoritativeTarget) {
@@ -340,7 +337,6 @@ export const useNetworkConnection = ({
 
         localCar.reset();
         trackManager.reset();
-        session.localInterpolationBuffer = createInterpolationBuffer<InterpolationState>();
 
         resetSessionState();
         callbacks.onRaceStateChange(null);
@@ -348,7 +344,8 @@ export const useNetworkConnection = ({
         session.isRunning = true;
         useHudStore.getState().setSpeedKph(0);
         session.shakeSpikeGraceUntilMs = Date.now() + SHAKE_SPIKE_GRACE_PERIOD_MS;
-    }, [callbacks, camera, resetNonce, resetSessionState, session]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- camera not used in reset logic
+    }, [callbacks, resetNonce, resetSessionState, session]);
 
     return sceneEnvironmentId;
 };

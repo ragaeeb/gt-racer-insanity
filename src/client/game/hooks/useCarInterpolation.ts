@@ -12,10 +12,10 @@ import {
 } from '@/client/game/systems/correctionSystem';
 import { sampleInterpolationBuffer } from '@/client/game/systems/interpolationSystem';
 import { useHudStore } from '@/client/game/state/hudStore';
+import { DEFAULT_TRACK_WIDTH_METERS } from '@/shared/game/track/trackManifest';
 
-const TRACK_WIDTH_METERS = 76;
 const PLAYER_COLLIDER_HALF_WIDTH_METERS = 1.1;
-const LOCAL_TRACK_BOUNDARY_X_METERS = TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
+const LOCAL_TRACK_BOUNDARY_X_METERS = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
 
 const interpolate = (from: InterpolationState, to: InterpolationState, alpha: number): InterpolationState => ({
     rotationY: lerpAngle(from.rotationY, to.rotationY, alpha),
@@ -141,7 +141,9 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
             opponentCar.targetRotationY = interpolatedState.rotationY;
         }
 
-        session.opponents.forEach((opponentCar) => opponentCar.update(dt));
+        for (const [, opponentCar] of session.opponents) {
+            opponentCar.update(dt);
+        }
     });
 
     return wallClampCountRef;

@@ -14,7 +14,10 @@ const hasTextureMap = (mat: THREE.Material): mat is THREE.MeshStandardMaterial &
  * only — preserving contrast between windshield/body/trim in atlas textures.
  */
 const toGrayscaleTexture = (src: THREE.Texture): THREE.Texture => {
-    const img = src.image as HTMLImageElement | HTMLCanvasElement | ImageBitmap;
+    const img = src.image;
+    if (!img) {
+        return src;
+    }
     const canvas = document.createElement('canvas');
     canvas.width = (img as HTMLImageElement).naturalWidth || (img as HTMLCanvasElement).width || 512;
     canvas.height = (img as HTMLImageElement).naturalHeight || (img as HTMLCanvasElement).height || 512;
@@ -34,6 +37,11 @@ const toGrayscaleTexture = (src: THREE.Texture): THREE.Texture => {
     ctx.putImageData(imageData, 0, 0);
     const tex = new THREE.CanvasTexture(canvas);
     tex.flipY = src.flipY;
+    tex.wrapS = src.wrapS;
+    tex.wrapT = src.wrapT;
+    tex.colorSpace = src.colorSpace;
+    tex.repeat.copy(src.repeat);
+    tex.offset.copy(src.offset);
     tex.needsUpdate = true;
     return tex;
 };

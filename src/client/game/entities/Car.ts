@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 import { InputManager } from '@/client/game/systems/InputManager';
 import { CarController } from '@/client/game/entities/CarController';
 import { CarVisual } from '@/client/game/entities/CarVisual';
@@ -21,7 +22,7 @@ export class Car {
     public targetRotationY: number = 0;
 
     public isLocalPlayer: boolean = true;
-    private readonly controller = new CarController();
+    private readonly controller: CarController;
     private readonly visual = new CarVisual();
 
     // Audio
@@ -48,8 +49,10 @@ export class Car {
         private assets?: CarAssets,
         private carModelTemplate?: THREE.Group,
         private carModelYawOffsetRadians = 0,
-        private playerName = 'Player'
+        private playerName = 'Player',
+        physicsConfig?: CarPhysicsConfig,
     ) {
+        this.controller = new CarController(physicsConfig);
         this.position = new THREE.Vector3(0, 0, 0);
         this.mesh = new THREE.Group();
         this.createVisuals(colorHSL);
@@ -380,6 +383,9 @@ export class Car {
         this.disposeFallbackVisuals();
 
         for (const material of this.clonedMaterials) {
+            if (material instanceof THREE.MeshStandardMaterial && material.map) {
+                material.map.dispose();
+            }
             material.dispose();
         }
         this.clonedMaterials.clear();

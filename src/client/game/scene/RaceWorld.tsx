@@ -76,6 +76,7 @@ export const RaceWorld = ({
         [sceneEnvironmentId],
     );
 
+    // Hook order matters: interpolation updates car state -> input emits -> camera follows -> diagnostics captures
     const wallClampCountRef = useCarInterpolation(sessionRef);
     useInputEmitter(sessionRef);
     const cameraMetricsRef = useCameraFollow(sessionRef, activeSceneEnvironment, dirLightRef);

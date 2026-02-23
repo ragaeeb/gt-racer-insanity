@@ -51,6 +51,8 @@ const parseInterpolationDelayMs = () => {
 const parsePositionThreshold = () => {
     const parsed = Number(import.meta.env.VITE_RECONCILE_POSITION_THRESHOLD);
     if (!Number.isFinite(parsed) || parsed <= 0) {
+        // Tuned up from 0.35 to work with per-frame soft-correction pass in correctionSystem.ts.
+        // Lower values cause over-frequent corrections at normal driving speeds.
         return 1.5;
     }
     return parsed;

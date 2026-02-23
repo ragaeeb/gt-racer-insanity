@@ -5,7 +5,7 @@ import {
     type CarControlState,
     type CarMotionState,
 } from './carPhysics';
-import { VEHICLE_CLASS_MANIFESTS } from './vehicle/vehicleClassManifest';
+import { VEHICLE_CLASS_MANIFESTS, vehicleManifestToPhysicsConfig } from './vehicle/vehicleClassManifest';
 
 const noInput: CarControlState = { isUp: false, isDown: false, isLeft: false, isRight: false };
 const fullThrottle: CarControlState = { isUp: true, isDown: false, isLeft: false, isRight: false };
@@ -41,15 +41,7 @@ describe('car physics stability', () => {
 
     it('should reach max forward speed for every vehicle class within 10 simulated seconds', () => {
         for (const manifest of VEHICLE_CLASS_MANIFESTS) {
-            const config = {
-                maxForwardSpeed: manifest.physics.maxForwardSpeed,
-                maxReverseSpeed: manifest.physics.maxReverseSpeed,
-                acceleration: manifest.physics.acceleration,
-                deceleration: manifest.physics.acceleration,
-                friction: manifest.physics.friction,
-                turnSpeed: manifest.physics.turnSpeed,
-                minTurnSpeed: manifest.physics.minTurnSpeed,
-            };
+            const config = vehicleManifestToPhysicsConfig(manifest.physics, DEFAULT_CAR_PHYSICS_CONFIG.deceleration);
 
             let state = { ...origin };
             const dt = 1 / 60;
@@ -63,15 +55,7 @@ describe('car physics stability', () => {
 
     it('should come to a full stop from max speed within 10 seconds of no input', () => {
         for (const manifest of VEHICLE_CLASS_MANIFESTS) {
-            const config = {
-                maxForwardSpeed: manifest.physics.maxForwardSpeed,
-                maxReverseSpeed: manifest.physics.maxReverseSpeed,
-                acceleration: manifest.physics.acceleration,
-                deceleration: manifest.physics.acceleration,
-                friction: manifest.physics.friction,
-                turnSpeed: manifest.physics.turnSpeed,
-                minTurnSpeed: manifest.physics.minTurnSpeed,
-            };
+            const config = vehicleManifestToPhysicsConfig(manifest.physics, DEFAULT_CAR_PHYSICS_CONFIG.deceleration);
 
             let state: CarMotionState = { ...origin, speed: config.maxForwardSpeed };
             const dt = 1 / 60;

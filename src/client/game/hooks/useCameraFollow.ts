@@ -56,6 +56,7 @@ export const useCameraFollow = (
         const v = vectorsRef.current;
         const m = metricsRef.current;
 
+        // Update track segment visibility based on car progress (placed here to avoid an extra useFrame hook)
         session.trackManager?.update(localCar.position.z);
 
         const dirLight = dirLightRef.current;

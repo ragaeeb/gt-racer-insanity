@@ -4,13 +4,8 @@ import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
 import { applyCarPaint } from '@/client/game/paintSystem';
+import { VEHICLE_CLASS_TO_CATALOG_ID, colorIdToHSL } from '@/client/game/vehicleSelections';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
-
-const VEHICLE_CLASS_TO_CATALOG_ID: Record<VehicleClassId, string> = {
-    sport: 'sport',
-    muscle: 'suv',
-    truck: 'pickup',
-};
 
 const getModelPathForVehicleClass = (vehicleClassId: VehicleClassId): string => {
     const catalogId = VEHICLE_CLASS_TO_CATALOG_ID[vehicleClassId] ?? 'sport';
@@ -18,20 +13,10 @@ const getModelPathForVehicleClass = (vehicleClassId: VehicleClassId): string => 
     return entry?.modelPath ?? CAR_MODEL_CATALOG[0].modelPath;
 };
 
-const COLOR_ID_TO_HEX: Record<string, number> = {
-    blue: 0x1e88e5,
-    gold: 0xffd700,
-    gray: 0x6b7280,
-    green: 0x22c55e,
-    orange: 0xf97316,
-    red: 0xe53935,
-    silver: 0xc0c0c0,
-    white: 0xfafafa,
-    yellow: 0xeab308,
+const paintColorFromId = (colorId: string): THREE.Color => {
+    const hsl = colorIdToHSL(colorId);
+    return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
 };
-
-const paintColorFromId = (colorId: string): THREE.Color =>
-    new THREE.Color(COLOR_ID_TO_HEX[colorId] ?? COLOR_ID_TO_HEX.red);
 
 type CarModelProps = {
     modelPath: string;
@@ -66,6 +51,25 @@ const CarModel = ({ modelPath, colorId }: CarModelProps) => {
         () => buildWrappedCar(gltf.scene, modelPath, colorId),
         [gltf.scene, modelPath, colorId],
     );
+
+    useEffect(() => {
+        return () => {
+            wrapped.traverse((child) => {
+                if ((child as THREE.Mesh).isMesh) {
+                    const mesh = child as THREE.Mesh;
+                    mesh.geometry?.dispose();
+                    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+                    for (const mat of materials) {
+                        if (mat instanceof THREE.MeshStandardMaterial && mat.map) {
+                            mat.map.dispose();
+                        }
+                        mat?.dispose();
+                    }
+                }
+            });
+        };
+    }, [wrapped]);
+
     return <primitive object={wrapped} />;
 };
 
@@ -99,12 +103,11 @@ const PRELOAD_PATHS = [
     getModelPathForVehicleClass('truck'),
 ];
 
+for (const path of PRELOAD_PATHS) {
+    useGLTF.preload(path);
+}
+
 export const LobbyCarPreview = ({ selectedVehicleId, selectedColorId }: LobbyCarPreviewProps) => {
-    useEffect(() => {
-        for (const path of PRELOAD_PATHS) {
-            useGLTF.preload(path);
-        }
-    }, []);
     return (
         <div className="aspect-video w-full overflow-hidden rounded-xl bg-[#1D1F2D] border border-[#BCAE8A]/30">
             <Canvas

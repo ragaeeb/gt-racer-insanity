@@ -1,6 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat';
 import type { World } from '@dimforge/rapier3d-compat';
-import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
 import { generateTrackObstacles } from '@/shared/game/track/trackObstacles';
 
 type TrackColliderBuildOptions = {
@@ -18,7 +18,6 @@ export type TrackColliderBuildResult = {
     trackWidthMeters: number;
 };
 
-const DEFAULT_TRACK_WIDTH_METERS = 76;
 const DEFAULT_WALL_HEIGHT_METERS = 3;
 
 const createFloorCollider = (
@@ -85,12 +84,13 @@ const createFinishBarrierCollider = (
 const createObstacleColliders = (
     rapier: typeof RAPIER,
     world: World,
-    options: TrackColliderBuildOptions,
+    trackId: string,
+    seed: number,
+    totalLaps: number,
     trackWidthMeters: number,
     staticBody: ReturnType<World['createRigidBody']>,
 ): Set<number> => {
-    const totalLaps = Math.max(1, options.totalLaps);
-    const layout = generateTrackObstacles(options.trackId, options.seed, totalLaps, trackWidthMeters);
+    const layout = generateTrackObstacles(trackId, seed, totalLaps, trackWidthMeters);
     const handles = new Set<number>();
 
     for (const obs of layout.obstacles) {
@@ -146,7 +146,9 @@ export const buildTrackColliders = (
     const obstacleColliderHandles = createObstacleColliders(
         rapier,
         world,
-        options,
+        options.trackId,
+        options.seed,
+        totalLaps,
         trackWidthMeters,
         staticBody,
     );

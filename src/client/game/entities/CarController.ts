@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { InputManager } from '@/client/game/systems/InputManager';
-import { stepCarMotion } from '@/shared/game/carPhysics';
+import { DEFAULT_CAR_PHYSICS_CONFIG, stepCarMotion, type CarPhysicsConfig } from '@/shared/game/carPhysics';
 
 type CarControllerState = {
     position: THREE.Vector3;
@@ -9,10 +9,14 @@ type CarControllerState = {
 
 export class CarController {
     private speed = 0;
-    private readonly maxSpeed = 40;
+    private readonly physicsConfig: CarPhysicsConfig;
     private cruiseLatchActive = false;
     private isBrakingInputActive = false;
     private isAcceleratingInputActive = false;
+
+    constructor(physicsConfig?: CarPhysicsConfig) {
+        this.physicsConfig = physicsConfig ?? DEFAULT_CAR_PHYSICS_CONFIG;
+    }
 
     public updateLocal = (
         state: CarControllerState,
@@ -29,7 +33,7 @@ export class CarController {
             inputManager.isKeyPressed('KeyD') || inputManager.isKeyPressed('ArrowRight');
         const isCruiseEnabled = inputManager.isCruiseControlEnabled();
         const isPrecisionOverrideActive = inputManager.isPrecisionOverrideActive();
-        const topSpeedLatchThreshold = this.maxSpeed * 0.98;
+        const topSpeedLatchThreshold = this.physicsConfig.maxForwardSpeed * 0.98;
         this.isBrakingInputActive = isDownPressed;
         this.isAcceleratingInputActive = isUpPressed;
 
@@ -64,7 +68,8 @@ export class CarController {
                 isLeft: isLeftPressed,
                 isRight: isRightPressed,
             },
-            dt
+            dt,
+            this.physicsConfig,
         );
 
         this.speed = movement.speed;
@@ -103,7 +108,7 @@ export class CarController {
     };
 
     public getMaxSpeed = () => {
-        return this.maxSpeed;
+        return this.physicsConfig.maxForwardSpeed;
     };
 
     public isBraking = () => {

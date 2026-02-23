@@ -1,4 +1,4 @@
-import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
 import { seededRandom } from '@/shared/utils/prng';
 
 export type ObstacleDescriptor = {
@@ -13,21 +13,20 @@ export type TrackObstacleLayout = {
     totalTrackLengthMeters: number;
 };
 
-const DEFAULT_TRACK_WIDTH_METERS = 76;
-
 export const generateTrackObstacles = (
     trackId: string,
     seed: number,
     totalLaps: number,
     trackWidthMeters = DEFAULT_TRACK_WIDTH_METERS,
 ): TrackObstacleLayout => {
+    const safeTotalLaps = Math.max(1, totalLaps);
     const random = seededRandom(seed);
     const trackManifest = getTrackManifestById(trackId);
     const obstacles: ObstacleDescriptor[] = [];
 
     let zCursor = 0;
 
-    for (let lapIndex = 0; lapIndex < totalLaps; lapIndex += 1) {
+    for (let lapIndex = 0; lapIndex < safeTotalLaps; lapIndex += 1) {
         for (let segmentIndex = 0; segmentIndex < trackManifest.segments.length; segmentIndex += 1) {
             const segment = trackManifest.segments[segmentIndex];
             const segmentLength = segment.lengthMeters;
@@ -54,7 +53,7 @@ export const generateTrackObstacles = (
 
     return {
         obstacles,
-        totalTrackLengthMeters: trackManifest.lengthMeters * totalLaps,
+        totalTrackLengthMeters: trackManifest.lengthMeters * safeTotalLaps,
         trackWidthMeters,
     };
 };

@@ -4,24 +4,10 @@ import {
     getVehicleClassManifestById,
     type VehicleClassId,
 } from './vehicleClassManifest';
-
-const VEHICLE_CLASS_TO_CATALOG_ID: Record<VehicleClassId, string> = {
-    sport: 'sport',
-    muscle: 'suv',
-    truck: 'pickup',
-};
-
-const COLOR_ID_TO_HSL: Record<string, { h: number; s: number; l: number }> = {
-    blue: { h: 0.583, s: 1.0, l: 0.5 },
-    gold: { h: 0.131, s: 0.8, l: 0.55 },
-    gray: { h: 0, s: 0.0, l: 0.42 },
-    green: { h: 0.394, s: 1.0, l: 0.5 },
-    orange: { h: 0.078, s: 1.0, l: 0.5 },
-    red: { h: 0.003, s: 1.0, l: 0.5 },
-    silver: { h: 0, s: 0.0, l: 0.75 },
-    white: { h: 0, s: 0.0, l: 0.95 },
-    yellow: { h: 0.167, s: 1.0, l: 0.5 },
-};
+import {
+    COLOR_ID_TO_HSL,
+    VEHICLE_CLASS_TO_CATALOG_ID,
+} from '@/client/game/vehicleSelections';
 
 describe('vehicle selection integration', () => {
     describe('vehicle class manifests', () => {

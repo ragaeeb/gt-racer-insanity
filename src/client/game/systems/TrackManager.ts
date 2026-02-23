@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {
+    DEFAULT_TRACK_WIDTH_METERS,
     getTrackManifestById,
     type TrackId,
     type TrackThemeId,
@@ -98,7 +99,7 @@ const createCheckerFlagMaterial = (): THREE.MeshStandardMaterial => {
 export class TrackManager {
     public segments: TrackSegment[] = [];
     public finishLineGroup: THREE.Group | null = null;
-    private trackWidth = 76;
+    private trackWidth = DEFAULT_TRACK_WIDTH_METERS;
     private seed: number = 12345;
     private readonly activeObstacles: THREE.Mesh[] = [];
     private readonly flags: THREE.Mesh[] = [];
@@ -223,17 +224,22 @@ export class TrackManager {
         this.segments = [];
 
         const layout = generateTrackObstacles(this.trackId, this.seed, this.totalLaps, this.trackWidth);
+        const sortedObstacles = layout.obstacles;
 
         let zCursor = 0;
+        let obsCursor = 0;
         for (let lapIndex = 0; lapIndex < this.totalLaps; lapIndex += 1) {
             for (let segmentIndex = 0; segmentIndex < trackManifest.segments.length; segmentIndex += 1) {
                 const segment = trackManifest.segments[segmentIndex];
-                const segmentZStart = zCursor;
                 const segmentZEnd = zCursor + segment.lengthMeters;
 
-                const segmentObstacles = layout.obstacles.filter(
-                    (obs) => obs.positionZ >= segmentZStart && obs.positionZ < segmentZEnd,
-                );
+                const segmentObstacles: ObstacleDescriptor[] = [];
+                while (obsCursor < sortedObstacles.length && sortedObstacles[obsCursor].positionZ < segmentZEnd) {
+                    if (sortedObstacles[obsCursor].positionZ >= zCursor) {
+                        segmentObstacles.push(sortedObstacles[obsCursor]);
+                    }
+                    obsCursor++;
+                }
 
                 const builtSegment = this.createSegment(segment.lengthMeters, zCursor, segmentObstacles);
                 this.segments.push(builtSegment);
@@ -269,10 +275,10 @@ export class TrackManager {
         const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
         const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
 
+        const tileGeo = new THREE.PlaneGeometry(checkerSize, checkerSize);
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-                const geo = new THREE.PlaneGeometry(checkerSize, checkerSize);
-                const tile = new THREE.Mesh(geo, (r + c) % 2 === 0 ? blackMat : whiteMat);
+                const tile = new THREE.Mesh(tileGeo, (r + c) % 2 === 0 ? blackMat : whiteMat);
                 tile.rotation.x = -Math.PI / 2;
                 tile.position.set(
                     -stripWidth / 2 + c * checkerSize + checkerSize / 2,
@@ -384,23 +390,34 @@ export class TrackManager {
         return this.activeObstacles;
     };
 
+    private disposeFinishLine = () => {
+        if (!this.finishLineGroup) {
+            return;
+        }
+        this.scene.remove(this.finishLineGroup);
+        this.finishLineGroup.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+                child.geometry.dispose();
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                for (const mat of materials) {
+                    if (mat instanceof THREE.MeshStandardMaterial && mat.map) {
+                        mat.map.dispose();
+                    }
+                    if (mat instanceof THREE.Material) {
+                        mat.dispose();
+                    }
+                }
+            }
+        });
+        this.finishLineGroup = null;
+        this.flags.length = 0;
+    };
+
     public reset = () => {
         for (const segment of this.segments) {
             this.disposeSegment(segment);
         }
-        if (this.finishLineGroup) {
-            this.scene.remove(this.finishLineGroup);
-            this.finishLineGroup.traverse((child) => {
-                if (child instanceof THREE.Mesh) {
-                    child.geometry.dispose();
-                    if (child.material instanceof THREE.Material) {
-                        child.material.dispose();
-                    }
-                }
-            });
-            this.finishLineGroup = null;
-        }
-        this.flags.length = 0;
+        this.disposeFinishLine();
         this.segments = [];
         this.buildFiniteTrack();
     };
@@ -409,19 +426,7 @@ export class TrackManager {
         for (const segment of this.segments) {
             this.disposeSegment(segment);
         }
-        if (this.finishLineGroup) {
-            this.scene.remove(this.finishLineGroup);
-            this.finishLineGroup.traverse((child) => {
-                if (child instanceof THREE.Mesh) {
-                    child.geometry.dispose();
-                    if (child.material instanceof THREE.Material) {
-                        child.material.dispose();
-                    }
-                }
-            });
-            this.finishLineGroup = null;
-        }
-        this.flags.length = 0;
+        this.disposeFinishLine();
         this.segments = [];
         this.activeObstacles.length = 0;
         this.disposeSharedMaterials();

@@ -188,6 +188,7 @@ export const useDiagnostics = (
         debugWindow.__GT_DIAG__ = {
             clearReport: () => {
                 captureRef.current = createDiagCaptureState();
+                spikeCountRef.current = 0;
                 console.info('[diag] cleared report buffer');
             },
             disable: () => {
@@ -218,6 +219,10 @@ export const useDiagnostics = (
     }, [camera, cameraMetricsRef]);
 
     useFrame((_, dt) => {
+        if (!enabledRef.current) {
+            return;
+        }
+
         const session = sessionRef.current;
         const localCar = session.localCar;
         if (!localCar) {
@@ -241,7 +246,7 @@ export const useDiagnostics = (
                     0,
                     localSnapshot?.speed !== undefined
                         ? localSnapshot.speed * 3.6
-                        : localCar.position.distanceTo(localCar.targetPosition) * 36,
+                        : localCar.getSpeed() * 3.6,
                 ),
             );
             const snapshotSpeedKph = Math.round(Math.max(0, (localSnapshot?.speed ?? 0) * 3.6));

@@ -1,6 +1,7 @@
 import type { Collider, RigidBody } from '@dimforge/rapier3d-compat';
 import { advanceRaceProgress, createInitialRaceProgress } from '@/shared/game/track/raceProgress';
 import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
 import { getVehicleClassManifestById, type VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { AbilityActivatePayload, RaceEventPayload } from '@/shared/network/types';
 import type { ClientInputFrame } from '@/shared/network/inputFrame';
@@ -322,6 +323,7 @@ export class RoomSimulation {
         this.state.players.delete(playerId);
         this.inputQueue.clearPlayer(playerId);
         this.removePlayerRigidBody(playerId);
+        this.obstacleStunCooldownByPlayerId.delete(playerId);
     };
 
     public queueInputFrame = (playerId: string, frame: ClientInputFrame) => {
@@ -471,7 +473,9 @@ export class RoomSimulation {
             }
 
             this.hazardTriggerQueue.push({ effectType: 'stunned', playerId: hit.playerId });
-            const stunDurationMs = 1_600;
+            const stunManifest = getStatusEffectManifestById('stunned');
+            const stunDurationMs = stunManifest?.defaultDurationMs ?? 1_600;
+            // 500ms grace period after stun expires before another obstacle can re-stun
             this.obstacleStunCooldownByPlayerId.set(hit.playerId, nowMs + stunDurationMs + 500);
         }
 

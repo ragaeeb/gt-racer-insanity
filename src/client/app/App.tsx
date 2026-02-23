@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LobbyCarPreview } from '@/components/LobbyCarPreview';
 import { VEHICLE_CLASS_MANIFESTS, type VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
+import { colorIdToHexString } from '@/client/game/vehicleSelections';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
 
 const RaceWorld = lazy(async () => {
@@ -395,7 +396,8 @@ export const App = () => {
         if (!palette.includes(selectedColorId)) {
             setSelectedColorId(palette[0]);
         }
-    }, [routePath, selectedVehicleId, selectedColorId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedColorId excluded: only re-check on vehicle/route change
+    }, [routePath, selectedVehicleId]);
 
     const setLocationState = () => {
         setRoutePath(window.location.pathname);
@@ -609,7 +611,7 @@ export const App = () => {
                                             ? 'border-[#EBD4A0] scale-110 ring-2 ring-[#D0B378]/50'
                                             : 'border-[#BCAE8A]/30 hover:border-[#BCAE8A]/60'
                                     }`}
-                                    style={{ backgroundColor: colorId }}
+                                    style={{ backgroundColor: colorIdToHexString(colorId) }}
                                     title={colorId}
                                 />
                             ))}

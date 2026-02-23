@@ -4,7 +4,7 @@ import type { InputManager } from '@/client/game/systems/InputManager';
 import type { InterpolationBuffer } from '@/client/game/systems/interpolationSystem';
 import type { TrackManager } from '@/client/game/systems/TrackManager';
 import type { NetworkManager } from '@/client/network/NetworkManager';
-import type { ConnectionStatus, SnapshotPlayerState } from '@/shared/network/types';
+import type { ConnectionStatus, RaceState, SnapshotPlayerState } from '@/shared/network/types';
 
 export type CarModelVariant = {
     scene: THREE.Group;
@@ -18,7 +18,7 @@ export type InterpolationState = {
     z: number;
 };
 
-export type CorrectionMode = 'deferred' | 'hard' | 'none' | 'soft';
+export type CorrectionMode = 'hard' | 'none' | 'soft';
 
 export type CorrectionSnapshot = {
     appliedPositionDelta: number;
@@ -43,7 +43,6 @@ export type RaceSession = {
     latestLocalSnapshotSeq: number | null;
     localCar: Car | null;
     localInputSequence: number;
-    localInterpolationBuffer: InterpolationBuffer<InterpolationState>;
     networkManager: NetworkManager | null;
     networkUpdateTimer: number;
     opponentInterpolationBuffers: Map<string, InterpolationBuffer<InterpolationState>>;
@@ -55,7 +54,7 @@ export type RaceSession = {
 export type RaceWorldCallbacks = {
     onConnectionStatusChange: (status: ConnectionStatus) => void;
     onGameOverChange: (isGameOver: boolean) => void;
-    onRaceStateChange: (state: import('@/shared/network/types').RaceState | null) => void;
+    onRaceStateChange: (state: RaceState | null) => void;
 };
 
 export type CarAssetsBundle = {
