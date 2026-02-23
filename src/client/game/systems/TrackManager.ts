@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import {
+    DEFAULT_TRACK_WIDTH_METERS,
     getTrackManifestById,
     type TrackId,
     type TrackThemeId,
 } from '@/shared/game/track/trackManifest';
-import { seededRandom } from '@/shared/utils/prng';
+import { generateTrackObstacles, type ObstacleDescriptor } from '@/shared/game/track/trackObstacles';
 
 type TrackSegment = {
     mesh: THREE.Group;
@@ -41,12 +42,67 @@ const TRACK_THEME_PALETTES: Record<TrackThemeId, TrackPalette> = {
     },
 };
 
+const canUseDOM = typeof document !== 'undefined';
+
+const createCheckerBannerMaterial = (): THREE.MeshStandardMaterial => {
+    if (!canUseDOM) {
+        return new THREE.MeshStandardMaterial({ color: 0xff0000, side: THREE.DoubleSide });
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d')!;
+
+    const checkSize = 32;
+    for (let r = 0; r < canvas.height / checkSize; r++) {
+        for (let c = 0; c < canvas.width / checkSize; c++) {
+            ctx.fillStyle = (r + c) % 2 === 0 ? '#000' : '#fff';
+            ctx.fillRect(c * checkSize, r * checkSize, checkSize, checkSize);
+        }
+    }
+
+    ctx.font = 'bold 72px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ff0000';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.strokeText('FINISH', canvas.width / 2, canvas.height / 2);
+    ctx.fillText('FINISH', canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    return new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide, transparent: true });
+};
+
+const createCheckerFlagMaterial = (): THREE.MeshStandardMaterial => {
+    if (!canUseDOM) {
+        return new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    }
+
+    const flagCanvas = document.createElement('canvas');
+    flagCanvas.width = 128;
+    flagCanvas.height = 96;
+    const fctx = flagCanvas.getContext('2d')!;
+    const fcheck = 16;
+    for (let r = 0; r < flagCanvas.height / fcheck; r++) {
+        for (let c = 0; c < flagCanvas.width / fcheck; c++) {
+            fctx.fillStyle = (r + c) % 2 === 0 ? '#000' : '#fff';
+            fctx.fillRect(c * fcheck, r * fcheck, fcheck, fcheck);
+        }
+    }
+
+    const flagTexture = new THREE.CanvasTexture(flagCanvas);
+    return new THREE.MeshStandardMaterial({ map: flagTexture, side: THREE.DoubleSide });
+};
+
 export class TrackManager {
     public segments: TrackSegment[] = [];
-    private trackWidth = 76;
+    public finishLineGroup: THREE.Group | null = null;
+    private trackWidth = DEFAULT_TRACK_WIDTH_METERS;
     private seed: number = 12345;
-    private random: () => number = Math.random;
     private readonly activeObstacles: THREE.Mesh[] = [];
+    private readonly flags: THREE.Mesh[] = [];
     private trackId: TrackId = 'sunset-loop';
     private totalLaps = 1;
 
@@ -99,7 +155,11 @@ export class TrackManager {
         this.obstacleMat.emissive.setHex(palette.obstacleEmissive);
     };
 
-    private createSegment = (segmentLength: number, zStart: number, safe: boolean): TrackSegment => {
+    private createSegment = (
+        segmentLength: number,
+        zStart: number,
+        obstacleDescriptors: ObstacleDescriptor[],
+    ): TrackSegment => {
         const group = new THREE.Group();
         group.position.z = zStart + segmentLength / 2;
 
@@ -135,21 +195,17 @@ export class TrackManager {
         group.add(leftWall);
         group.add(rightWall);
 
+        const segmentCenterZ = zStart + segmentLength / 2;
         const obstacles: THREE.Mesh[] = [];
-        if (!safe) {
-            const numObstacles = Math.floor(this.random() * 4) + 2;
-            for (let i = 0; i < numObstacles; i++) {
-                const obsSize = this.random() * 3 + 2;
-                const obsGeo = new THREE.BoxGeometry(obsSize, obsSize, obsSize);
-                const obs = new THREE.Mesh(obsGeo, this.obstacleMat);
-                const posX = (this.random() - 0.5) * (this.trackWidth - obsSize * 2);
-                const posZ = (this.random() - 0.5) * segmentLength;
-                obs.position.set(posX, obsSize / 2, posZ);
-                obs.castShadow = true;
-                obs.receiveShadow = true;
-                group.add(obs);
-                obstacles.push(obs);
-            }
+        for (const desc of obstacleDescriptors) {
+            const obsSize = desc.halfSize * 2;
+            const obsGeo = new THREE.BoxGeometry(obsSize, obsSize, obsSize);
+            const obs = new THREE.Mesh(obsGeo, this.obstacleMat);
+            obs.position.set(desc.positionX, desc.halfSize, desc.positionZ - segmentCenterZ);
+            obs.castShadow = true;
+            obs.receiveShadow = true;
+            group.add(obs);
+            obstacles.push(obs);
         }
 
         this.scene.add(group);
@@ -165,17 +221,27 @@ export class TrackManager {
         const trackManifest = getTrackManifestById(this.trackId);
         this.applyTrackPalette(trackManifest.themeId);
         this.totalLaps = trackManifest.totalLaps;
-        let zCursor = 0;
         this.segments = [];
 
+        const layout = generateTrackObstacles(this.trackId, this.seed, this.totalLaps, this.trackWidth);
+        const sortedObstacles = layout.obstacles;
+
+        let zCursor = 0;
+        let obsCursor = 0;
         for (let lapIndex = 0; lapIndex < this.totalLaps; lapIndex += 1) {
             for (let segmentIndex = 0; segmentIndex < trackManifest.segments.length; segmentIndex += 1) {
                 const segment = trackManifest.segments[segmentIndex];
-                const builtSegment = this.createSegment(
-                    segment.lengthMeters,
-                    zCursor,
-                    lapIndex === 0 && segmentIndex === 0
-                );
+                const segmentZEnd = zCursor + segment.lengthMeters;
+
+                const segmentObstacles: ObstacleDescriptor[] = [];
+                while (obsCursor < sortedObstacles.length && sortedObstacles[obsCursor].positionZ < segmentZEnd) {
+                    if (sortedObstacles[obsCursor].positionZ >= zCursor) {
+                        segmentObstacles.push(sortedObstacles[obsCursor]);
+                    }
+                    obsCursor++;
+                }
+
+                const builtSegment = this.createSegment(segment.lengthMeters, zCursor, segmentObstacles);
                 this.segments.push(builtSegment);
                 zCursor += segment.lengthMeters;
             }
@@ -190,12 +256,96 @@ export class TrackManager {
             endBarrier.receiveShadow = true;
             lastSegment.mesh.add(endBarrier);
             lastSegment.obstacles.push(endBarrier);
+
+            this.createFinishLine(lastSegment.zEnd - 10);
         }
+    };
+
+    private createFinishLine = (zPosition: number) => {
+        const group = new THREE.Group();
+        group.position.set(0, 0, zPosition);
+        group.name = 'finish-line';
+
+        const stripWidth = this.trackWidth;
+        const stripDepth = 4;
+        const checkerSize = 2;
+        const rows = Math.ceil(stripDepth / checkerSize);
+        const cols = Math.ceil(stripWidth / checkerSize);
+
+        const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+
+        const tileGeo = new THREE.PlaneGeometry(checkerSize, checkerSize);
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const tile = new THREE.Mesh(tileGeo, (r + c) % 2 === 0 ? blackMat : whiteMat);
+                tile.rotation.x = -Math.PI / 2;
+                tile.position.set(
+                    -stripWidth / 2 + c * checkerSize + checkerSize / 2,
+                    0.06,
+                    -stripDepth / 2 + r * checkerSize + checkerSize / 2,
+                );
+                group.add(tile);
+            }
+        }
+
+        this.createFinishGantry(group, stripWidth);
+        this.createFlag(group, -stripWidth / 2 - 2, 8);
+        this.createFlag(group, stripWidth / 2 + 2, 8);
+
+        this.scene.add(group);
+        this.finishLineGroup = group;
+    };
+
+    private createFinishGantry = (parent: THREE.Group, width: number) => {
+        const poleMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.3 });
+        const poleGeo = new THREE.CylinderGeometry(0.3, 0.3, 10, 8);
+
+        const leftPole = new THREE.Mesh(poleGeo, poleMat);
+        leftPole.position.set(-width / 2 - 1, 5, 0);
+        leftPole.castShadow = true;
+        parent.add(leftPole);
+
+        const rightPole = new THREE.Mesh(poleGeo, poleMat);
+        rightPole.position.set(width / 2 + 1, 5, 0);
+        rightPole.castShadow = true;
+        parent.add(rightPole);
+
+        const barGeo = new THREE.BoxGeometry(width + 4, 0.5, 1);
+        const barMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.4, roughness: 0.4 });
+        const bar = new THREE.Mesh(barGeo, barMat);
+        bar.position.y = 10;
+        bar.castShadow = true;
+        parent.add(bar);
+
+        const bannerGeo = new THREE.PlaneGeometry(width + 2, 3);
+        const bannerMat = createCheckerBannerMaterial();
+        const banner = new THREE.Mesh(bannerGeo, bannerMat);
+        banner.position.y = 7.5;
+        banner.name = 'finish-banner';
+        parent.add(banner);
+    };
+
+    private createFlag = (parent: THREE.Group, x: number, height: number) => {
+        const poleMat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.5, roughness: 0.4 });
+        const poleGeo = new THREE.CylinderGeometry(0.15, 0.15, height, 6);
+        const pole = new THREE.Mesh(poleGeo, poleMat);
+        pole.position.set(x, height / 2, 0);
+        pole.castShadow = true;
+        parent.add(pole);
+
+        const flagGeo = new THREE.PlaneGeometry(3, 2, 8, 1);
+        const flagMat = createCheckerFlagMaterial();
+        const flag = new THREE.Mesh(flagGeo, flagMat);
+        flag.position.set(x + 1.5, height - 1, 0);
+        flag.name = 'finish-flag';
+        parent.add(flag);
+
+        this.flags.push(flag);
     };
 
     public setSeed = (seed: number) => {
         this.seed = seed;
-        this.random = seededRandom(this.seed);
         this.reset();
     };
 
@@ -205,7 +355,15 @@ export class TrackManager {
     };
 
     public update = (_carZ: number) => {
-        // Finite tracks are static by design in v2.
+        const time = performance.now() * 0.003;
+        for (const flag of this.flags) {
+            const positions = flag.geometry.attributes.position;
+            for (let i = 0; i < positions.count; i++) {
+                const x = positions.getX(i);
+                positions.setZ(i, Math.sin(x * 2 + time) * 0.3);
+            }
+            positions.needsUpdate = true;
+        }
     };
 
     public getTrackLengthMeters = () => {
@@ -232,12 +390,35 @@ export class TrackManager {
         return this.activeObstacles;
     };
 
+    private disposeFinishLine = () => {
+        if (!this.finishLineGroup) {
+            return;
+        }
+        this.scene.remove(this.finishLineGroup);
+        this.finishLineGroup.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+                child.geometry.dispose();
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                for (const mat of materials) {
+                    if (mat instanceof THREE.MeshStandardMaterial && mat.map) {
+                        mat.map.dispose();
+                    }
+                    if (mat instanceof THREE.Material) {
+                        mat.dispose();
+                    }
+                }
+            }
+        });
+        this.finishLineGroup = null;
+        this.flags.length = 0;
+    };
+
     public reset = () => {
         for (const segment of this.segments) {
             this.disposeSegment(segment);
         }
+        this.disposeFinishLine();
         this.segments = [];
-        this.random = seededRandom(this.seed);
         this.buildFiniteTrack();
     };
 
@@ -245,6 +426,7 @@ export class TrackManager {
         for (const segment of this.segments) {
             this.disposeSegment(segment);
         }
+        this.disposeFinishLine();
         this.segments = [];
         this.activeObstacles.length = 0;
         this.disposeSharedMaterials();

@@ -63,6 +63,8 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
     },
 ];
 
+export const DEFAULT_TRACK_WIDTH_METERS = 76;
+
 export const TRACK_DEFAULT_LABEL = TRACK_MANIFESTS[0]?.label ?? 'Track';
 
 export const getTrackManifestById = (trackId: string): TrackManifest => {

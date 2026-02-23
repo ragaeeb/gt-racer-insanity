@@ -17,6 +17,9 @@ import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LobbyCarPreview } from '@/components/LobbyCarPreview';
+import { VEHICLE_CLASS_MANIFESTS, type VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
+import { colorIdToHexString } from '@/client/game/vehicleSelections';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
 
 const RaceWorld = lazy(async () => {
@@ -69,6 +72,8 @@ type RaceSceneCanvasProps = {
     playerName: string;
     resetNonce: number;
     roomId: string;
+    selectedColorId: string;
+    selectedVehicleId: VehicleClassId;
 };
 
 const RACE_CANVAS_CAMERA = { fov: 60, near: 0.1, far: 1000, position: [0, 30, -30] as [number, number, number] };
@@ -115,6 +120,8 @@ const RaceSceneCanvas = memo(
         playerName,
         resetNonce,
         roomId,
+        selectedColorId,
+        selectedVehicleId,
     }: RaceSceneCanvasProps) => {
         const handleCreated = useCallback(({ gl }: RootState) => {
             gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -142,6 +149,8 @@ const RaceSceneCanvas = memo(
                             playerName={playerName}
                             roomId={roomId}
                             resetNonce={resetNonce}
+                            selectedColorId={selectedColorId}
+                            selectedVehicleId={selectedVehicleId}
                         />
                     ) : null}
                 </Suspense>
@@ -355,6 +364,8 @@ export const App = () => {
     const [routePath, setRoutePath] = useState(window.location.pathname);
     const [routeSearch, setRouteSearch] = useState(window.location.search);
 
+    const [selectedVehicleId, setSelectedVehicleId] = useState<VehicleClassId>('sport');
+    const [selectedColorId, setSelectedColorId] = useState('red');
     const [gameOver, setGameOver] = useState(false);
     const [resetNonce, setResetNonce] = useState(0);
     const [cruiseControlEnabled, setCruiseControlEnabled] = useState(true);
@@ -375,6 +386,18 @@ export const App = () => {
         const winnerSnapshot = latestSnapshot?.players.find((player) => player.id === raceState.winnerPlayerId);
         return winnerSnapshot?.name ?? raceState.winnerPlayerId;
     }, [latestSnapshot, raceState]);
+
+    useEffect(() => {
+        if (routePath !== '/lobby') {
+            return;
+        }
+        const activeVehicle = VEHICLE_CLASS_MANIFESTS.find((v) => v.id === selectedVehicleId) ?? VEHICLE_CLASS_MANIFESTS[0];
+        const palette = activeVehicle.colorPaletteIds;
+        if (!palette.includes(selectedColorId)) {
+            setSelectedColorId(palette[0]);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedColorId excluded: only re-check on vehicle/route change
+    }, [routePath, selectedVehicleId]);
 
     const setLocationState = () => {
         setRoutePath(window.location.pathname);
@@ -533,9 +556,12 @@ export const App = () => {
     }
 
     if (routePath === '/lobby') {
+        const activeVehicle = VEHICLE_CLASS_MANIFESTS.find((v) => v.id === selectedVehicleId) ?? VEHICLE_CLASS_MANIFESTS[0];
+        const availableColors = activeVehicle.colorPaletteIds;
+
         return (
             <div className="flex min-h-screen items-center justify-center bg-[#202230] px-4 font-sans before:absolute before:inset-0 before:bg-[url('/branding/icon.svg')] before:bg-no-repeat before:bg-center before:opacity-5 before:pointer-events-none">
-                <form className="w-full max-w-sm space-y-6 p-8 bg-[#2A2D3D]/80 backdrop-blur-md rounded-xl border border-[#BCAE8A]/20 shadow-2xl relative z-10" onSubmit={handleStartRace}>
+                <form className="w-full max-w-sm space-y-8 p-8 pb-10 bg-[#2A2D3D]/80 backdrop-blur-md rounded-xl border border-[#BCAE8A]/20 shadow-2xl relative z-10" onSubmit={handleStartRace}>
                     <h2 className="text-3xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[#D0B378] to-[#BBAE8B] text-center uppercase">Join Race</h2>
                     <Input
                         autoFocus
@@ -546,6 +572,56 @@ export const App = () => {
                         value={nameInput}
                         className="h-14 text-lg bg-[#1D1F2D] border-[#BCAE8A]/40 text-[#EBD4A0] placeholder:text-[#BCAE8A]/50 focus-visible:ring-[#D0B378] text-center font-bold"
                     />
+
+                    <fieldset className="space-y-3 border-none p-0 m-0">
+                        <legend className="text-sm font-bold text-[#BCAE8A]/80 uppercase tracking-wider mb-1 block">Vehicle Class</legend>
+                        <div className="grid grid-cols-3 gap-3">
+                            {VEHICLE_CLASS_MANIFESTS.map((vehicle) => (
+                                <button
+                                    key={vehicle.id}
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedVehicleId(vehicle.id);
+                                        if (!vehicle.colorPaletteIds.includes(selectedColorId)) {
+                                            setSelectedColorId(vehicle.colorPaletteIds[0]);
+                                        }
+                                    }}
+                                    className={`py-4 px-3 rounded-lg border-2 font-bold text-sm uppercase transition-all ${
+                                        selectedVehicleId === vehicle.id
+                                            ? 'border-[#D0B378] bg-[#D0B378]/20 text-[#EBD4A0]'
+                                            : 'border-[#BCAE8A]/20 text-[#BCAE8A]/60 hover:border-[#BCAE8A]/40'
+                                    }`}
+                                >
+                                    {vehicle.label}
+                                </button>
+                            ))}
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="space-y-3 border-none p-0 m-0 mt-6">
+                        <legend className="text-sm font-bold text-[#BCAE8A]/80 uppercase tracking-wider mb-2 block">Paintjob</legend>
+                        <div className="flex gap-4 justify-center flex-wrap">
+                            {availableColors.map((colorId) => (
+                                <button
+                                    key={colorId}
+                                    type="button"
+                                    onClick={() => setSelectedColorId(colorId)}
+                                    className={`w-11 h-11 rounded-full border-[3px] transition-all ${
+                                        selectedColorId === colorId
+                                            ? 'border-[#EBD4A0] scale-110 ring-2 ring-[#D0B378]/50'
+                                            : 'border-[#BCAE8A]/30 hover:border-[#BCAE8A]/60'
+                                    }`}
+                                    style={{ backgroundColor: colorIdToHexString(colorId) }}
+                                    title={colorId}
+                                />
+                            ))}
+                        </div>
+                    </fieldset>
+
+                    <div className="mt-6">
+                        <LobbyCarPreview selectedVehicleId={selectedVehicleId} selectedColorId={selectedColorId} />
+                    </div>
+
                     <Button 
                         id="player-name-confirm" 
                         type="submit"
@@ -616,6 +692,8 @@ export const App = () => {
                 playerName={playerName}
                 resetNonce={resetNonce}
                 roomId={roomIdFromUrl}
+                selectedColorId={selectedColorId}
+                selectedVehicleId={selectedVehicleId}
             />
         </div>
     );

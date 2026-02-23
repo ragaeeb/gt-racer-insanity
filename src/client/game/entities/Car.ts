@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 import { InputManager } from '@/client/game/systems/InputManager';
 import { CarController } from '@/client/game/entities/CarController';
 import { CarVisual } from '@/client/game/entities/CarVisual';
+import { applyCarPaint } from '@/client/game/paintSystem';
 
 export type CarAssets = {
     engine?: AudioBuffer;
@@ -20,7 +22,7 @@ export class Car {
     public targetRotationY: number = 0;
 
     public isLocalPlayer: boolean = true;
-    private readonly controller = new CarController();
+    private readonly controller: CarController;
     private readonly visual = new CarVisual();
 
     // Audio
@@ -42,16 +44,18 @@ export class Car {
     constructor(
         private scene: THREE.Scene,
         private inputManager: InputManager | null,
-        colorHue?: number,
+        colorHSL?: { h: number; s: number; l: number },
         private listener?: THREE.AudioListener,
         private assets?: CarAssets,
         private carModelTemplate?: THREE.Group,
         private carModelYawOffsetRadians = 0,
-        private playerName = 'Player'
+        private playerName = 'Player',
+        physicsConfig?: CarPhysicsConfig,
     ) {
+        this.controller = new CarController(physicsConfig);
         this.position = new THREE.Vector3(0, 0, 0);
         this.mesh = new THREE.Group();
-        this.createVisuals(colorHue);
+        this.createVisuals(colorHSL);
         this.createNameTag();
         this.setupAudio();
         this.scene.add(this.mesh);
@@ -156,11 +160,11 @@ export class Car {
         this.fallbackMeshes = [];
     }
 
-    private createVisuals(colorHue?: number) {
-        if (colorHue !== undefined) {
-            this.carColor.setHSL(colorHue, 1.0, 0.5);
+    private createVisuals(colorHSL?: { h: number; s: number; l: number }) {
+        if (colorHSL) {
+            this.carColor.setHSL(colorHSL.h, colorHSL.s, colorHSL.l);
         } else {
-            this.carColor.setHex(0xff0055); // Default player color
+            this.carColor.setHex(0xff0055);
         }
 
         // Fallback Box Geometries (used while GLTF is loading)
@@ -215,34 +219,7 @@ export class Car {
             wrapper.rotation.y = Math.PI + this.carModelYawOffsetRadians;
         }
 
-        wrapper.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-                const mesh = child as THREE.Mesh;
-                mesh.castShadow = true;
-
-                // If it's the main paint body (usually has a distinguishing name or material name), assign the unique player hash color
-                // For safety on arbitrary uninspected models, let's just color everything that isn't black-ish
-                if (mesh.material) {
-                    const originalMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                    const clonedMaterials = originalMaterials.map((material) => material.clone());
-
-                    for (const clonedMaterial of clonedMaterials) {
-                        this.clonedMaterials.add(clonedMaterial);
-
-                        if (
-                            'color' in clonedMaterial &&
-                            clonedMaterial.color instanceof THREE.Color &&
-                            clonedMaterial.color.getHex() !== 0x000000 &&
-                            clonedMaterial.color.r > 0.1
-                        ) {
-                            clonedMaterial.color.copy(this.carColor);
-                        }
-                    }
-
-                    mesh.material = Array.isArray(mesh.material) ? clonedMaterials : clonedMaterials[0];
-                }
-            }
-        });
+        applyCarPaint(wrapper, this.carColor, this.clonedMaterials);
 
         this.mesh.add(wrapper);
         this.hasLoadedGLTF = true;
@@ -406,6 +383,9 @@ export class Car {
         this.disposeFallbackVisuals();
 
         for (const material of this.clonedMaterials) {
+            if (material instanceof THREE.MeshStandardMaterial && material.map) {
+                material.map.dispose();
+            }
             material.dispose();
         }
         this.clonedMaterials.clear();

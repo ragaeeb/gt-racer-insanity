@@ -1,3 +1,5 @@
+import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
+
 export type VehicleClassId = 'sport' | 'muscle' | 'truck';
 
 export type VehiclePhysicsManifest = {
@@ -21,7 +23,7 @@ export type VehicleClassManifest = {
 export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
     {
         abilityId: 'turbo-boost',
-        colorPaletteIds: ['red', 'white', 'black', 'gold'],
+        colorPaletteIds: ['red', 'white', 'gold'],
         id: 'sport',
         label: 'Sport',
         physics: {
@@ -36,7 +38,7 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
     },
     {
         abilityId: 'ram-wave',
-        colorPaletteIds: ['blue', 'silver', 'orange', 'black'],
+        colorPaletteIds: ['blue', 'silver', 'orange'],
         id: 'muscle',
         label: 'Muscle',
         physics: {
@@ -69,3 +71,20 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
 export const getVehicleClassManifestById = (vehicleClassId: string): VehicleClassManifest => {
     return VEHICLE_CLASS_MANIFESTS.find((manifest) => manifest.id === vehicleClassId) ?? VEHICLE_CLASS_MANIFESTS[0];
 };
+
+/**
+ * Convert a VehiclePhysicsManifest to a CarPhysicsConfig suitable for stepCarMotion.
+ * The manifest lacks `deceleration`; we derive it from the provided default.
+ */
+export const vehicleManifestToPhysicsConfig = (
+    physics: VehiclePhysicsManifest,
+    defaultDeceleration: number,
+): CarPhysicsConfig => ({
+    acceleration: physics.acceleration,
+    deceleration: defaultDeceleration,
+    friction: physics.friction,
+    maxForwardSpeed: physics.maxForwardSpeed,
+    maxReverseSpeed: physics.maxReverseSpeed,
+    minTurnSpeed: physics.minTurnSpeed,
+    turnSpeed: physics.turnSpeed,
+});

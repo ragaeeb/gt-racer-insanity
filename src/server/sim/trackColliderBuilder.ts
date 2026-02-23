@@ -1,8 +1,10 @@
 import type RAPIER from '@dimforge/rapier3d-compat';
 import type { World } from '@dimforge/rapier3d-compat';
-import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { generateTrackObstacles } from '@/shared/game/track/trackObstacles';
 
 type TrackColliderBuildOptions = {
+    seed: number;
     totalLaps: number;
     trackId: string;
     trackWidthMeters?: number;
@@ -11,11 +13,11 @@ type TrackColliderBuildOptions = {
 
 export type TrackColliderBuildResult = {
     finishBarrierColliderHandle: number;
+    obstacleColliderHandles: Set<number>;
     totalTrackLengthMeters: number;
     trackWidthMeters: number;
 };
 
-const DEFAULT_TRACK_WIDTH_METERS = 76;
 const DEFAULT_WALL_HEIGHT_METERS = 3;
 
 const createFloorCollider = (
@@ -79,6 +81,31 @@ const createFinishBarrierCollider = (
     return finishBarrierCollider.handle;
 };
 
+const createObstacleColliders = (
+    rapier: typeof RAPIER,
+    world: World,
+    trackId: string,
+    seed: number,
+    totalLaps: number,
+    trackWidthMeters: number,
+    staticBody: ReturnType<World['createRigidBody']>,
+): Set<number> => {
+    const layout = generateTrackObstacles(trackId, seed, totalLaps, trackWidthMeters);
+    const handles = new Set<number>();
+
+    for (const obs of layout.obstacles) {
+        const colliderDesc = rapier.ColliderDesc.cuboid(obs.halfSize, obs.halfSize, obs.halfSize)
+            .setTranslation(obs.positionX, obs.halfSize, obs.positionZ)
+            .setSensor(true)
+            .setActiveEvents(rapier.ActiveEvents.COLLISION_EVENTS);
+
+        const collider = world.createCollider(colliderDesc, staticBody);
+        handles.add(collider.handle);
+    }
+
+    return handles;
+};
+
 export const buildTrackColliders = (
     rapier: typeof RAPIER,
     world: World,
@@ -116,8 +143,19 @@ export const buildTrackColliders = (
         staticBody
     );
 
+    const obstacleColliderHandles = createObstacleColliders(
+        rapier,
+        world,
+        options.trackId,
+        options.seed,
+        totalLaps,
+        trackWidthMeters,
+        staticBody,
+    );
+
     return {
         finishBarrierColliderHandle,
+        obstacleColliderHandles,
         totalTrackLengthMeters,
         trackWidthMeters,
     };

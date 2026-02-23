@@ -144,12 +144,24 @@ export const syncPlayerMotionFromRigidBody = (player: SimPlayerState, rigidBody:
     player.motion.rotationY = yawRadians;
 };
 
-export const drainStartedPlayerCollisions = (
+export type ObstacleHit = {
+    playerId: string;
+};
+
+export type DrainCollisionResult = {
+    obstacleHits: ObstacleHit[];
+    playerPairs: CollisionPair[];
+};
+
+export const drainStartedCollisions = (
     eventQueue: EventQueue,
-    playerIdByColliderHandle: Map<number, string>
-): CollisionPair[] => {
+    playerIdByColliderHandle: Map<number, string>,
+    obstacleColliderHandles: Set<number>,
+): DrainCollisionResult => {
     const uniquePairs = new Set<string>();
-    const pairs: CollisionPair[] = [];
+    const playerPairs: CollisionPair[] = [];
+    const hitPlayerIds = new Set<string>();
+    const obstacleHits: ObstacleHit[] = [];
 
     eventQueue.drainCollisionEvents((firstColliderHandle, secondColliderHandle, started) => {
         if (!started) {
@@ -158,6 +170,20 @@ export const drainStartedPlayerCollisions = (
 
         const firstPlayerId = playerIdByColliderHandle.get(firstColliderHandle) ?? null;
         const secondPlayerId = playerIdByColliderHandle.get(secondColliderHandle) ?? null;
+        const firstIsObstacle = obstacleColliderHandles.has(firstColliderHandle);
+        const secondIsObstacle = obstacleColliderHandles.has(secondColliderHandle);
+
+        if (firstPlayerId && secondIsObstacle && !hitPlayerIds.has(firstPlayerId)) {
+            hitPlayerIds.add(firstPlayerId);
+            obstacleHits.push({ playerId: firstPlayerId });
+            return;
+        }
+
+        if (secondPlayerId && firstIsObstacle && !hitPlayerIds.has(secondPlayerId)) {
+            hitPlayerIds.add(secondPlayerId);
+            obstacleHits.push({ playerId: secondPlayerId });
+            return;
+        }
 
         if (!firstPlayerId || !secondPlayerId || firstPlayerId === secondPlayerId) {
             return;
@@ -173,11 +199,11 @@ export const drainStartedPlayerCollisions = (
         }
 
         uniquePairs.add(key);
-        pairs.push({
+        playerPairs.push({
             firstPlayerId: a,
             secondPlayerId: b,
         });
     });
 
-    return pairs;
+    return { obstacleHits, playerPairs };
 };
