@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.8.0...v1.9.0) (2026-02-23)
+
+
+### Features
+
+* **finish:** Refactor Raceworld into smaller hooks ([#18](https://github.com/ragaeeb/gt-racer-insanity/issues/18)) ([e7c367c](https://github.com/ragaeeb/gt-racer-insanity/commit/e7c367ca9acb71d825c101a79109aed3fd15ef5c))
+
 # [1.8.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.7.0...v1.8.0) (2026-02-23)
 
 
