@@ -477,7 +477,7 @@ export class TrackManager {
         this.reset();
     };
 
-    public update = (_carZ: number) => {
+    public update = (_carZ: number, dt = 1 / 60) => {
         const time = performance.now() * 0.003;
         for (const flag of this.flags) {
             const positions = flag.geometry.attributes.position;
@@ -492,7 +492,7 @@ export class TrackManager {
             if (!visual.visible) {
                 continue;
             }
-            visual.rotation.y += 0.03;
+            visual.rotation.y += 2 * dt;
             visual.position.y = 1.5 + Math.sin(time) * 0.3;
         }
     };

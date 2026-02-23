@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
 import { getPowerupManifestById } from '@/shared/game/powerup/powerupManifest';
+import { getTrackManifestById } from '@/shared/game/track/trackManifest';
 
 const createSim = () =>
     new RoomSimulation({
@@ -16,11 +17,13 @@ describe('powerup collision detection', () => {
         const sim = createSim();
         const nowMs = Date.now();
         sim.joinPlayer('p1', 'Alice', 'sport', 'red', nowMs);
+        const trackManifest = getTrackManifestById('sunset-loop');
 
         const snapshot = sim.buildSnapshot(nowMs);
         expect(snapshot.powerups.length).toBeGreaterThan(0);
         for (const powerup of snapshot.powerups) {
-            expect(powerup.powerupId).toBe('powerup-speed');
+            const expectedId = trackManifest.powerupSpawns[0]?.powerupId;
+            expect(powerup.powerupId).toBe(expectedId);
             expect(typeof powerup.x).toBe('number');
             expect(typeof powerup.z).toBe('number');
             expect(typeof powerup.isActive).toBe('boolean');
@@ -31,14 +34,16 @@ describe('powerup collision detection', () => {
         const sim = createSim();
         const nowMs = Date.now();
         sim.joinPlayer('p1', 'Alice', 'sport', 'red', nowMs);
+        const trackManifest = getTrackManifestById('sunset-loop');
+        const spawnsPerLap = trackManifest.powerupSpawns.length;
 
         const snapshot = sim.buildSnapshot(nowMs);
         const lap0 = snapshot.powerups.filter((p) => p.id.includes('lap0'));
         const lap1 = snapshot.powerups.filter((p) => p.id.includes('lap1'));
         const lap2 = snapshot.powerups.filter((p) => p.id.includes('lap2'));
-        expect(lap0.length).toBe(3);
-        expect(lap1.length).toBe(3);
-        expect(lap2.length).toBe(3);
+        expect(lap0.length).toBe(spawnsPerLap);
+        expect(lap1.length).toBe(spawnsPerLap);
+        expect(lap2.length).toBe(spawnsPerLap);
     });
 
     it('should start all powerups as active', () => {

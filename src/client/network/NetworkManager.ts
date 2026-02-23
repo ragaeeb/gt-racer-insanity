@@ -139,6 +139,9 @@ export class NetworkManager {
 
     public onRaceEvent(callback: OnRaceEventCallback) {
         this.socket.on('race_event', callback);
+        return () => {
+            this.socket.off('race_event', callback);
+        };
     }
 
     public emitInputFrame(frame: Omit<ClientInputFrame, 'protocolVersion' | 'roomId'> & Partial<Pick<ClientInputFrame, 'protocolVersion' | 'roomId'>>) {

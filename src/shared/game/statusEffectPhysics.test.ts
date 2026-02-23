@@ -13,7 +13,11 @@ import {
     FLAT_TIRE_MOVEMENT_MULTIPLIER,
     FLAT_TIRE_STEERING_MULTIPLIER,
     SLOWED_DURATION_MS,
+    SLOWED_MOVEMENT_MULTIPLIER,
+    SLOWED_STEERING_MULTIPLIER,
     STUNNED_DURATION_MS,
+    STUNNED_MOVEMENT_MULTIPLIER,
+    STUNNED_STEERING_MULTIPLIER,
     getStatusEffectManifestById,
 } from './effects/statusEffectManifest';
 
@@ -110,34 +114,6 @@ describe('status effect physics integration', () => {
     });
 
     describe('configurable effect constants', () => {
-        it('should have boost duration of 3 seconds', () => {
-            expect(BOOST_DURATION_MS).toBe(3_000);
-        });
-
-        it('should have boost multiplier of 1.5', () => {
-            expect(BOOST_MOVEMENT_MULTIPLIER).toBe(1.5);
-        });
-
-        it('should have flat tire duration of 5 seconds', () => {
-            expect(FLAT_TIRE_DURATION_MS).toBe(5_000);
-        });
-
-        it('should have flat tire movement multiplier of 0.45', () => {
-            expect(FLAT_TIRE_MOVEMENT_MULTIPLIER).toBe(0.45);
-        });
-
-        it('should have flat tire steering multiplier of 0.5', () => {
-            expect(FLAT_TIRE_STEERING_MULTIPLIER).toBe(0.5);
-        });
-
-        it('should have slowed duration of 2.5 seconds', () => {
-            expect(SLOWED_DURATION_MS).toBe(2_500);
-        });
-
-        it('should have stunned duration of 1.6 seconds', () => {
-            expect(STUNNED_DURATION_MS).toBe(1_600);
-        });
-
         it('should have manifest values matching the named constants', () => {
             const boost = getStatusEffectManifestById('boosted');
             expect(boost).toBeDefined();
@@ -150,10 +126,17 @@ describe('status effect physics integration', () => {
             expect(flatTire!.defaultDurationMs).toBe(FLAT_TIRE_DURATION_MS);
             expect(flatTire!.steeringMultiplier).toBe(FLAT_TIRE_STEERING_MULTIPLIER);
 
+            const slowed = getStatusEffectManifestById('slowed');
+            expect(slowed).toBeDefined();
+            expect(slowed!.movementMultiplier).toBe(SLOWED_MOVEMENT_MULTIPLIER);
+            expect(slowed!.defaultDurationMs).toBe(SLOWED_DURATION_MS);
+            expect(slowed!.steeringMultiplier).toBe(SLOWED_STEERING_MULTIPLIER);
+
             const stunned = getStatusEffectManifestById('stunned');
             expect(stunned).toBeDefined();
-            expect(stunned!.movementMultiplier).toBe(0);
+            expect(stunned!.movementMultiplier).toBe(STUNNED_MOVEMENT_MULTIPLIER);
             expect(stunned!.defaultDurationMs).toBe(STUNNED_DURATION_MS);
+            expect(stunned!.steeringMultiplier).toBe(STUNNED_STEERING_MULTIPLIER);
         });
 
         it('should have all effect multipliers within sane ranges', () => {

@@ -18,6 +18,7 @@ import { createRapierWorld } from '@/server/sim/rapierWorld';
 import { buildServerSnapshot } from '@/server/sim/snapshotBuilder';
 import { buildTrackColliders } from '@/server/sim/trackColliderBuilder';
 import type { ActiveHazard, ActivePowerup, SimPlayerState, SimRoomState } from '@/server/sim/types';
+import { PLAYER_COLLIDER_HALF_LENGTH_METERS, PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 
 type RoomSimulationOptions = {
     roomId: string;
@@ -82,7 +83,7 @@ export class RoomSimulation {
         this.dtSeconds = 1 / Math.max(options.tickHz, 1);
         this.rapierContext = createRapierWorld(this.dtSeconds);
         this.trackManifest = getTrackManifestById(options.trackId);
-        this.trackBoundaryX = DEFAULT_TRACK_WIDTH_METERS * 0.5 - 1.1;
+        this.trackBoundaryX = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
 
         const trackColliders = buildTrackColliders(this.rapierContext.rapier, this.rapierContext.world, {
             seed: options.seed,
@@ -130,7 +131,7 @@ export class RoomSimulation {
         rigidBody.setEnabledTranslations(true, false, true, true);
         rigidBody.setAdditionalMass(Math.max(vehicleClass.physics.collisionMass, 1), true);
 
-        const colliderDesc = this.rapierContext.rapier.ColliderDesc.cuboid(1.1, 0.5, 2.2)
+        const colliderDesc = this.rapierContext.rapier.ColliderDesc.cuboid(PLAYER_COLLIDER_HALF_WIDTH_METERS, 0.5, PLAYER_COLLIDER_HALF_LENGTH_METERS)
             .setActiveEvents(this.rapierContext.rapier.ActiveEvents.COLLISION_EVENTS)
             .setFriction(1.25)
             .setRestitution(0.05);

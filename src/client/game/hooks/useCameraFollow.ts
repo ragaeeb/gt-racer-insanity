@@ -46,7 +46,7 @@ export const useCameraFollow = (
         smoothedSpeed: 0,
     });
 
-    useFrame(() => {
+    useFrame((_, dt) => {
         const session = sessionRef.current;
         const localCar = session.localCar;
         if (!localCar) {
@@ -56,8 +56,7 @@ export const useCameraFollow = (
         const v = vectorsRef.current;
         const m = metricsRef.current;
 
-        // Update track segment visibility based on car progress (placed here to avoid an extra useFrame hook)
-        session.trackManager?.update(localCar.position.z);
+        session.trackManager?.update(localCar.position.z, dt);
 
         const dirLight = dirLightRef.current;
         if (dirLight) {

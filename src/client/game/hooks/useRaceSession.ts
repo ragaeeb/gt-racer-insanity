@@ -24,6 +24,7 @@ export const useRaceSession = (inputManager: InputManager) => {
             networkUpdateTimer: 0,
             opponentInterpolationBuffers: new Map(),
             opponents: new Map(),
+            roomSeed: 0,
             sceneryManager: null,
             shakeSpikeGraceUntilMs: 0,
             trackManager: null,

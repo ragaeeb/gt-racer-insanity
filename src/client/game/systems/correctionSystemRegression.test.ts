@@ -30,16 +30,22 @@ describe('correction system regression tests', () => {
 
         it('should converge within 60 frames when server position catches up after being stuck', () => {
             let localZ = 200;
-            const serverZ = 200;
+            let serverZ = 195;
+            let correctionApplied = false;
 
             for (let frame = 0; frame < 60; frame += 1) {
+                if (frame === 10) {
+                    serverZ = 200;
+                }
                 const error = Math.abs(localZ - serverZ);
                 if (error >= MIN_CORRECTION_THRESHOLD && error < HARD_SNAP_THRESHOLD_METERS) {
                     const alpha = computeCorrectionAlpha(error);
                     localZ += (serverZ - localZ) * alpha;
+                    correctionApplied = true;
                 }
             }
 
+            expect(correctionApplied).toBe(true);
             expect(Math.abs(localZ - serverZ)).toBeLessThan(MIN_CORRECTION_THRESHOLD);
         });
 

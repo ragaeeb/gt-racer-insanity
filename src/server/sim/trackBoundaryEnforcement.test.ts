@@ -2,9 +2,9 @@ import { describe, expect, it } from 'bun:test';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
 import { DEFAULT_TRACK_WIDTH_METERS } from '@/shared/game/track/trackManifest';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
+import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 
-const PLAYER_COLLIDER_HALF_WIDTH = 1.1;
-const TRACK_BOUNDARY_X = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH;
+const TRACK_BOUNDARY_X = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
 
 const createInputFrame = (
     roomId: string,

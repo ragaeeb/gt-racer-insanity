@@ -14,8 +14,8 @@ import { sampleInterpolationBuffer } from '@/client/game/systems/interpolationSy
 import { useHudStore } from '@/client/game/state/hudStore';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
 import { DEFAULT_TRACK_WIDTH_METERS } from '@/shared/game/track/trackManifest';
+import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 
-const PLAYER_COLLIDER_HALF_WIDTH_METERS = 1.1;
 const LOCAL_TRACK_BOUNDARY_X_METERS = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
 
 const interpolate = (from: InterpolationState, to: InterpolationState, alpha: number): InterpolationState => ({
@@ -51,9 +51,6 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
         localCar.setMovementMultiplier(movementMultiplier);
 
         localCar.update(dt);
-
-        localCar.position.x = THREE.MathUtils.clamp(localCar.position.x, -LOCAL_TRACK_BOUNDARY_X_METERS, LOCAL_TRACK_BOUNDARY_X_METERS);
-        localCar.mesh.position.x = localCar.position.x;
 
         const localSnapshot = session.latestLocalSnapshot;
         if (localSnapshot) {

@@ -48,6 +48,7 @@ export type RaceSession = {
     networkUpdateTimer: number;
     opponentInterpolationBuffers: Map<string, InterpolationBuffer<InterpolationState>>;
     opponents: Map<string, Car>;
+    roomSeed: number;
     sceneryManager: SceneryManager | null;
     shakeSpikeGraceUntilMs: number;
     trackManager: TrackManager | null;

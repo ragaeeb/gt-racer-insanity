@@ -84,6 +84,15 @@ const THREE_CLOCK_DEPRECATION_WARNING =
 const RAPIER_DEPRECATION_WARNING =
     'using deprecated parameters for the initialization function; pass a single object instead';
 
+/**
+ * Known deprecation and context-loss messages from Three.js / Rapier dependencies.
+ * We suppress these to reduce console noise since the underlying issues live in
+ * third-party code we cannot patch until the next major upgrade.
+ *
+ * WARNING: This also wraps console.error to suppress the context-loss message.
+ * Keep patterns narrow and specific — avoid broad substrings that could hide
+ * genuine application errors. Remove entries as soon as the upstream fix ships.
+ */
 const SUPPRESSED_PATTERNS = [
     THREE_CLOCK_DEPRECATION_WARNING,
     RAPIER_DEPRECATION_WARNING,
@@ -125,6 +134,13 @@ const suppressThreeDeprecationWarnings = () => {
             console.error = originalError;
         }
     };
+};
+
+const EFFECT_BADGE_CONFIG: Record<string, { label: string; className: string }> = {
+    boosted: { label: 'BOOSTED', className: 'effect-boost' },
+    flat_tire: { label: 'FLAT TIRE', className: 'effect-flat-tire' },
+    stunned: { label: 'STUNNED', className: 'effect-stunned' },
+    slowed: { label: 'SLOWED', className: 'effect-slowed' },
 };
 
 const RaceSceneCanvas = memo(
@@ -393,7 +409,7 @@ export const App = () => {
     const position = useHudStore((state) => state.position);
     const trackLabel = useHudStore((state) => state.trackLabel);
     const activeEffectIds = useHudStore((state) => state.activeEffectIds);
-    const pendingToast = useHudStore((state) => state.pendingToast);
+    const pendingToasts = useHudStore((state) => state.pendingToasts);
     const clearPendingToast = useHudStore((state) => state.clearPendingToast);
     const latestSnapshot = useRuntimeStore((state) => state.latestSnapshot);
     const roomIdFromUrl = useMemo(() => new URLSearchParams(routeSearch).get('room') ?? '', [routeSearch]);
@@ -419,17 +435,19 @@ export const App = () => {
     }, [routePath, selectedVehicleId]);
 
     useEffect(() => {
-        if (!pendingToast) return;
-        const variant = pendingToast.variant;
-        if (variant === 'success') {
-            toast.success(pendingToast.message);
-        } else if (variant === 'error') {
-            toast.error(pendingToast.message);
+        if (pendingToasts.length === 0) {
+            return;
+        }
+        const next = pendingToasts[0];
+        if (next.variant === 'success') {
+            toast.success(next.message);
+        } else if (next.variant === 'error') {
+            toast.error(next.message);
         } else {
-            toast.warning(pendingToast.message);
+            toast.warning(next.message);
         }
         clearPendingToast();
-    }, [pendingToast, clearPendingToast]);
+    }, [pendingToasts, clearPendingToast]);
 
     const setLocationState = () => {
         setRoutePath(window.location.pathname);
@@ -699,9 +717,9 @@ export const App = () => {
                             {activeEffectIds.map((effectId) => (
                                 <span
                                     key={effectId}
-                                    className={`effect-badge ${effectId === 'boosted' ? 'effect-boost' : effectId === 'flat_tire' ? 'effect-flat-tire' : effectId === 'stunned' ? 'effect-stunned' : 'effect-slowed'}`}
+                                    className={`effect-badge ${EFFECT_BADGE_CONFIG[effectId]?.className ?? 'effect-slowed'}`}
                                 >
-                                    {effectId === 'boosted' ? 'BOOSTED' : effectId === 'flat_tire' ? 'FLAT TIRE' : effectId === 'stunned' ? 'STUNNED' : 'SLOWED'}
+                                    {EFFECT_BADGE_CONFIG[effectId]?.label ?? effectId.toUpperCase()}
                                 </span>
                             ))}
                         </div>

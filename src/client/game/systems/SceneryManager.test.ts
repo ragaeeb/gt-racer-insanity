@@ -62,6 +62,7 @@ describe('SceneryManager', () => {
 
         expect(sunnyCount).toBeGreaterThan(0);
         expect(canyonCount).toBeGreaterThan(0);
+        expect(sunnyCount).not.toBe(canyonCount);
     });
 
     it('should add objects to the scene', () => {

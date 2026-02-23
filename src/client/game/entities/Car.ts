@@ -1,12 +1,13 @@
 import * as THREE from 'three';
-import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
-import { InputManager } from '@/client/game/systems/InputManager';
 import { CarController } from '@/client/game/entities/CarController';
 import { CarVisual } from '@/client/game/entities/CarVisual';
 import { applyCarPaint } from '@/client/game/paintSystem';
+import type { InputManager } from '@/client/game/systems/InputManager';
+import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 
-const WHEEL_MESH_RE = /wheel/i;
 const BRAKE_LIGHT_MATERIAL_RE = /^(BrakeLight|TailLights?)$/i;
+export const SUSPENSION_BOUNCE_AMPLITUDE = 0.015;
+const AUDIO_FADE_RATE = 1.2;
 
 export type CarAssets = {
     engine?: AudioBuffer;
@@ -42,8 +43,8 @@ export class Car {
     private fallbackMeshes: THREE.Object3D[] = [];
     private readonly clonedMaterials = new Set<THREE.Material>();
     private readonly carColor = new THREE.Color(0xff0055);
-    private readonly wheelMeshes: THREE.Mesh[] = [];
     private readonly brakeLightMaterials: THREE.MeshStandardMaterial[] = [];
+    private suspensionTime = 0;
     private gltfWrapper: THREE.Group | null = null;
     private nameTagSprite?: THREE.Sprite;
     private nameTagTexture?: THREE.CanvasTexture;
@@ -74,7 +75,9 @@ export class Car {
         nameTextureCanvas.width = 512;
         nameTextureCanvas.height = 128;
         const context = nameTextureCanvas.getContext('2d');
-        if (!context) return;
+        if (!context) {
+            return;
+        }
 
         context.clearRect(0, 0, nameTextureCanvas.width, nameTextureCanvas.height);
         context.fillStyle = 'rgba(10, 20, 30, 0.75)';
@@ -106,7 +109,9 @@ export class Car {
     }
 
     private setupAudio() {
-        if (!this.listener || !this.assets) return;
+        if (!this.listener || !this.assets) {
+            return;
+        }
 
         if (this.assets.engine && !this.engineSound) {
             this.engineSound = new THREE.PositionalAudio(this.listener);
@@ -152,7 +157,9 @@ export class Car {
         for (const fallbackMesh of this.fallbackMeshes) {
             this.mesh.remove(fallbackMesh);
 
-            if (!(fallbackMesh instanceof THREE.Mesh)) continue;
+            if (!(fallbackMesh instanceof THREE.Mesh)) {
+                continue;
+            }
 
             fallbackMesh.geometry.dispose();
 
@@ -196,7 +203,9 @@ export class Car {
     }
 
     private setupGLTFVisuals() {
-        if (!this.carModelTemplate || this.hasLoadedGLTF) return;
+        if (!this.carModelTemplate || this.hasLoadedGLTF) {
+            return;
+        }
 
         this.disposeFallbackVisuals();
 
@@ -221,14 +230,12 @@ export class Car {
 
         applyCarPaint(wrapper, this.carColor, this.clonedMaterials);
 
-        this.wheelMeshes.length = 0;
         this.brakeLightMaterials.length = 0;
         wrapper.traverse((child) => {
-            if (!(child as THREE.Mesh).isMesh) return;
-            const mesh = child as THREE.Mesh;
-            if (WHEEL_MESH_RE.test(mesh.name)) {
-                this.wheelMeshes.push(mesh);
+            if (!(child as THREE.Mesh).isMesh) {
+                return;
             }
+            const mesh = child as THREE.Mesh;
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             for (const mat of materials) {
                 if (mat instanceof THREE.MeshStandardMaterial && BRAKE_LIGHT_MATERIAL_RE.test(mat.name)) {
@@ -251,8 +258,8 @@ export class Car {
 
         this.setupGLTFVisuals();
         this.updateBrakeLights();
-        this.updateSuspensionBounce();
-        this.updateAudio();
+        this.updateSuspensionBounce(dt);
+        this.updateAudio(dt);
     }
 
     private updateBrakeLights() {
@@ -263,27 +270,36 @@ export class Car {
         }
     }
 
-    private updateSuspensionBounce() {
-        if (!this.gltfWrapper) return;
+    private updateSuspensionBounce(dt: number) {
+        if (!this.gltfWrapper) {
+            return;
+        }
         const maxSpeed = this.controller.getMaxSpeed();
-        if (maxSpeed <= 0) return;
+        if (maxSpeed <= 0) {
+            return;
+        }
+        this.suspensionTime += dt;
         const normalizedSpeed = Math.min(1, Math.abs(this.controller.getSpeed()) / maxSpeed);
-        const targetBounce = Math.sin(performance.now() * 0.005) * 0.015 * normalizedSpeed;
+        const targetBounce = Math.sin(this.suspensionTime * 5) * SUSPENSION_BOUNCE_AMPLITUDE * normalizedSpeed;
         this.gltfWrapper.position.y = THREE.MathUtils.lerp(this.gltfWrapper.position.y, targetBounce, 0.05);
     }
 
-    private updateAudio() {
+    private updateAudio(dt: number) {
         if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) {
             this.setupAudio();
         }
 
-        if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) return;
+        if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) {
+            return;
+        }
 
         if (this.isAudioFadingOut) {
-            this.audioFadeMultiplier = Math.max(0, this.audioFadeMultiplier - 0.02);
+            this.audioFadeMultiplier = Math.max(0, this.audioFadeMultiplier - dt * AUDIO_FADE_RATE);
             if (this.audioFadeMultiplier <= 0) {
                 for (const sound of [this.engineSound, this.accelSound, this.drivingSound, this.brakeSound]) {
-                    if (sound.isPlaying) sound.stop();
+                    if (sound.isPlaying) {
+                        sound.stop();
+                    }
                 }
                 return;
             }
@@ -303,13 +319,14 @@ export class Car {
         const idleVolume = Math.max(0, 0.7 - normalizedSpeed * 0.9) * fade;
         const drivingVolume = THREE.MathUtils.smoothstep(normalizedSpeed, 0.08, 0.95) * 0.8 * fade;
         const throttleWeight = this.isLocalPlayer
-            ? (this.controller.isAccelerating() ? 1 : 0)
-            : (speedDelta > 0.2 ? 1 : 0);
-        const accelVolume = THREE.MathUtils.clamp(
-            normalizedSpeed * 0.3 + throttleWeight * 0.5 + accelerationFactor * 0.5,
-            0,
-            1
-        ) * fade;
+            ? this.controller.isAccelerating()
+                ? 1
+                : 0
+            : speedDelta > 0.2
+              ? 1
+              : 0;
+        const accelVolume =
+            THREE.MathUtils.clamp(normalizedSpeed * 0.3 + throttleWeight * 0.5 + accelerationFactor * 0.5, 0, 1) * fade;
 
         this.engineSound.setVolume(idleVolume);
         this.drivingSound.setVolume(drivingVolume);
@@ -339,7 +356,7 @@ export class Car {
         const nextState = this.controller.updateRemote(
             { position: this.position, rotationY: this.rotationY },
             this.targetPosition,
-            this.targetRotationY
+            this.targetRotationY,
         );
 
         this.position.copy(nextState.position);
@@ -348,12 +365,14 @@ export class Car {
     }
 
     private handleLocalMovement(dt: number) {
-        if (!this.inputManager) return;
+        if (!this.inputManager) {
+            return;
+        }
 
         const nextState = this.controller.updateLocal(
             { position: this.position, rotationY: this.rotationY },
             this.inputManager,
-            dt
+            dt,
         );
 
         this.position.copy(nextState.position);
@@ -371,9 +390,15 @@ export class Car {
         this.isAudioFadingOut = false;
         this.visual.applyTransform(this.mesh, this.position, this.rotationY);
 
-        if (this.engineSound && !this.engineSound.isPlaying) this.engineSound.play();
-        if (this.accelSound && !this.accelSound.isPlaying) this.accelSound.play();
-        if (this.drivingSound && !this.drivingSound.isPlaying) this.drivingSound.play();
+        if (this.engineSound && !this.engineSound.isPlaying) {
+            this.engineSound.play();
+        }
+        if (this.accelSound && !this.accelSound.isPlaying) {
+            this.accelSound.play();
+        }
+        if (this.drivingSound && !this.drivingSound.isPlaying) {
+            this.drivingSound.play();
+        }
     }
 
     public getSpeed = () => {

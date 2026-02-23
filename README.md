@@ -20,17 +20,18 @@ Multiplayer racing game with a server-authoritative V2 simulation stack, finite 
 
 ## Latest Features
 - V2-only realtime transport (`join_room`, `input_frame`, `ability_activate`, `restart_race`, `server_snapshot`, `race_event`) with sequenced input acknowledgements.
-- Authoritative server simulation with Rapier rigid bodies for collision bumping and non-overlap guarantees.
+- Authoritative server simulation with Rapier rigid bodies for collision bumping, track boundary enforcement, and non-overlap guarantees.
 - Late join now receives a fresh authoritative snapshot so active player positions are correct on entry.
 - Finite full-race track flow with lap/checkpoint progression and a race-end barrier.
 - Race results overlay with winner/position/lap summary plus restart flow.
-- Authoritative status-effect pipeline for abilities, hazards, and power-ups.
-- Expanded shared data manifests and validators for vehicles, abilities, effects, hazards, powerups, and tracks.
+- Authoritative status-effect pipeline for abilities, hazards, and power-ups (boosted, flat tire, stunned, slowed).
+- Turbo power-ups and road-spike hazards with server-side collision and HUD toasts; scenery (city/canyon) and track-boundary regression tests.
+- Expanded shared data manifests and validators for vehicles, abilities, effects, hazards, powerups, and tracks; snapshot payloads validate powerup/hazard item shapes.
 - Player name prompt on join, with in-world name tags above every car.
 - Multi-car catalog rotation by player ID (not only color differences).
-- Sunny day environment profile system (`sceneEnvironmentProfiles`) for easier level/theme swaps.
-- HUD now includes speed, lap, and position overlays.
-- Layered car audio: idle engine, acceleration, driving loop, and brake one-shot.
+- Sunny day and canyon-dusk environment profiles (`sceneEnvironmentProfiles`) for level/theme swaps; scenery rebuilds on track change.
+- HUD includes speed, lap, position, effect badges (boosted/flat tire/stunned/slowed), and a queued toast pipeline.
+- Layered car audio: idle engine, acceleration, driving loop, brake one-shot; audio fades out when the race finishes (dt-based).
 - E2E coverage includes smoke plus multiplayer non-overlap scenario (`RUN_E2E=true`).
 
 ## Tech Stack
@@ -82,12 +83,16 @@ Server health:
 src/
   client/
     app/
-    game/
+    game/          # R3F runtime, entities, hooks, state, systems (TrackManager, SceneryManager, correction)
     network/
   components/
   lib/
   server/
+    sim/           # Authoritative simulation (Rapier, colliders, input queue, effects, powerups, hazards)
   shared/
+    game/          # Manifests, validators, car physics, track/effects/ability/powerup/hazard
+    network/       # Protocol types, snapshot validators, input frame
+    physics/       # Shared constants (e.g. player collider half-width)
 testing/
 public/
   branding/
@@ -96,12 +101,13 @@ public/
 
 ## Testing Strategy
 Logic that can be deterministic is extracted into shared/server modules and covered by `bun:test`:
-- car motion physics + race progression helpers
-- seeded PRNG
-- player color hashing
-- player vehicle selection hashing
+- car motion physics, status-effect scaling, and race progression helpers
+- client-side and server-side track boundary enforcement (regression tests)
+- correction system (reconciliation alpha, hard snap, convergence)
+- powerup and hazard collision and trigger behavior
+- seeded PRNG, player color/vehicle hashing
 - room state lifecycle + simulation queue/tick behavior
-- protocol V2 payload validators
+- protocol V2 payload and snapshot validators (including powerup/hazard item shapes)
 - manifest schema validation
 
 E2E tests:

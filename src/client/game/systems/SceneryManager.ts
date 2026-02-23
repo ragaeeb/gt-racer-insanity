@@ -152,7 +152,9 @@ export class SceneryManager {
             this.createBuildingCluster(buildings, rightX, z);
         }
 
-        if (buildings.length === 0) return;
+        if (buildings.length === 0) {
+            return;
+        }
 
         const unitGeo = new THREE.BoxGeometry(1, 1, 1);
         this.geometries.push(unitGeo);
@@ -322,6 +324,9 @@ export class SceneryManager {
         this.geometries.length = 0;
 
         for (const mat of this.materials) {
+            if (mat instanceof THREE.MeshStandardMaterial && mat.map) {
+                mat.map.dispose();
+            }
             mat.dispose();
         }
         this.materials.length = 0;

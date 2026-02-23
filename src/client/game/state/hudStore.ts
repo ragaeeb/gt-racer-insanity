@@ -3,11 +3,13 @@ import { TRACK_DEFAULT_LABEL } from '@/shared/game/track/trackManifest';
 
 export type ToastVariant = 'success' | 'warning' | 'error';
 
+export type Toast = { message: string; variant: ToastVariant };
+
 export type HudStoreState = {
     activeEffectIds: string[];
     cooldownMsByAbilityId: Record<string, number>;
     lap: number;
-    pendingToast: { message: string; variant: ToastVariant } | null;
+    pendingToasts: Toast[];
     position: number;
     setActiveEffectIds: (effectIds: string[]) => void;
     setCooldownMsByAbilityId: (cooldownMsByAbilityId: Record<string, number>) => void;
@@ -25,7 +27,7 @@ export const useHudStore = create<HudStoreState>((set) => ({
     activeEffectIds: [],
     cooldownMsByAbilityId: {},
     lap: 1,
-    pendingToast: null,
+    pendingToasts: [],
     position: 1,
     setActiveEffectIds: (activeEffectIds) =>
         set((state) => {
@@ -47,8 +49,8 @@ export const useHudStore = create<HudStoreState>((set) => ({
             return state.speedKph === nextSpeedKph ? state : { speedKph: nextSpeedKph };
         }),
     setTrackLabel: (trackLabel) => set((state) => (state.trackLabel === trackLabel ? state : { trackLabel })),
-    showToast: (message, variant) => set(() => ({ pendingToast: { message, variant } })),
-    clearPendingToast: () => set(() => ({ pendingToast: null })),
+    showToast: (message, variant) => set((state) => ({ pendingToasts: [...state.pendingToasts, { message, variant }] })),
+    clearPendingToast: () => set((state) => ({ pendingToasts: state.pendingToasts.slice(1) })),
     speedKph: 0,
     trackLabel: TRACK_DEFAULT_LABEL,
 }));

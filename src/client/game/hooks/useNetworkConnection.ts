@@ -153,6 +153,7 @@ export const useNetworkConnection = ({
         });
 
         networkManager.onRoomJoined((seed, players, roomJoinedPayload) => {
+            session.roomSeed = seed;
             session.shakeSpikeGraceUntilMs = Date.now() + SHAKE_SPIKE_GRACE_PERIOD_MS;
             const snapshotTrackId = roomJoinedPayload.snapshot?.raceState.trackId ?? session.activeTrackId;
             const selectedTrackId = applyTrackPresentation(snapshotTrackId);
@@ -228,9 +229,11 @@ export const useNetworkConnection = ({
             removeOpponent(playerId);
         });
 
-        networkManager.onRaceEvent((event) => {
+        const unsubscribeRaceEvent = networkManager.onRaceEvent((event) => {
             const localPlayerId = useRuntimeStore.getState().localPlayerId;
-            if (event.playerId !== localPlayerId) return;
+            if (event.playerId !== localPlayerId) {
+                return;
+            }
 
             if (event.kind === 'powerup_collected') {
                 useHudStore.getState().showToast('SPEED BOOST!', 'success');
@@ -255,6 +258,16 @@ export const useNetworkConnection = ({
                 if (session.trackManager) {
                     session.trackManager.setTrack(nextTrackId);
                 }
+                session.sceneryManager?.dispose();
+                const nextManifest = getTrackManifestById(nextTrackId);
+                session.sceneryManager = new SceneryManager(
+                    scene,
+                    seededRandom(session.roomSeed + 7919),
+                    DEFAULT_TRACK_WIDTH_METERS,
+                    nextManifest.lengthMeters * nextManifest.totalLaps,
+                    nextManifest.themeId,
+                );
+                session.sceneryManager.build();
             }
 
             if (session.trackManager) {
@@ -338,6 +351,7 @@ export const useNetworkConnection = ({
             session.sceneryManager = null;
             clearCars();
             unsubscribeConnectionStatus();
+            unsubscribeRaceEvent();
             session.connectionStatus = 'disconnected';
             callbacks.onConnectionStatusChange('disconnected');
             callbacks.onRaceStateChange(null);

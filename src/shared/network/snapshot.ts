@@ -158,6 +158,18 @@ export const isRaceState = (value: unknown): value is RaceState => {
     );
 };
 
+const isSnapshotPowerupState = (value: unknown): value is SnapshotPowerupState => {
+    if (!value || typeof value !== 'object') return false;
+    const p = value as Record<string, unknown>;
+    return isString(p.id) && isString(p.powerupId) && typeof p.isActive === 'boolean' && isFiniteNumber(p.x) && isFiniteNumber(p.z);
+};
+
+const isSnapshotHazardState = (value: unknown): value is SnapshotHazardState => {
+    if (!value || typeof value !== 'object') return false;
+    const p = value as Record<string, unknown>;
+    return isString(p.id) && isString(p.hazardId) && isFiniteNumber(p.x) && isFiniteNumber(p.z);
+};
+
 export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshotPayload => {
     if (!value || typeof value !== 'object') return false;
     const payload = value as Record<string, unknown>;
@@ -170,6 +182,8 @@ export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshot
         isRaceState(payload.raceState) &&
         Array.isArray(payload.powerups) &&
         Array.isArray(payload.hazards) &&
-        payload.players.every((player) => isSnapshotPlayerState(player))
+        payload.players.every((player) => isSnapshotPlayerState(player)) &&
+        payload.powerups.every((p) => isSnapshotPowerupState(p)) &&
+        payload.hazards.every((h) => isSnapshotHazardState(h))
     );
 };
