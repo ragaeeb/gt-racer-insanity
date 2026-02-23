@@ -164,9 +164,9 @@ describe('server track boundary enforcement', () => {
         }
 
         simulation.queueAbilityActivation('player-1', {
-            abilityType: 'speed_boost',
+            abilityId: 'turbo-boost',
             seq: seq + 1,
-            timestampMs: nowMs,
+            targetPlayerId: null,
         });
 
         for (let step = 0; step < 300; step += 1) {
