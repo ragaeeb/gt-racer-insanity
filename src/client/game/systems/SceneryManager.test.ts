@@ -41,7 +41,12 @@ describe('SceneryManager', () => {
         const m2 = new SceneryManager(scene2, seededRandom(999), 76, 2700, 'sunny-day');
         m2.build();
 
-        expect(m1.getObjectCount()).toBe(m2.getObjectCount());
+        expect(m1.getObjectCount()).toBeGreaterThan(0);
+        expect(m2.getObjectCount()).toBeGreaterThan(0);
+        const positions1 = scene1.children.map((c) => `${c.position.x.toFixed(1)},${c.position.z.toFixed(1)}`);
+        const positions2 = scene2.children.map((c) => `${c.position.x.toFixed(1)},${c.position.z.toFixed(1)}`);
+        const shared = positions1.filter((p) => positions2.includes(p));
+        expect(shared.length).toBeLessThan(positions1.length);
     });
 
     it('should produce different object types for different themes', () => {

@@ -250,26 +250,9 @@ export class Car {
         }
 
         this.setupGLTFVisuals();
-        // #region agent log
-        const _prevY = this.gltfWrapper?.position.y ?? 0;
-        // #endregion
-        this.updateWheelRotation(dt);
         this.updateBrakeLights();
         this.updateSuspensionBounce();
-        // #region agent log
-        if (this.isLocalPlayer && this.gltfWrapper && Date.now() % 1000 < 17) {
-            const _bounceY = this.gltfWrapper.position.y;
-            fetch('http://127.0.0.1:7864/ingest/8933f922-e1d0-4caa-9723-1bd57a8f2bd5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'86c492'},body:JSON.stringify({sessionId:'86c492',location:'Car.ts:update',message:'car-frame-state',data:{prevBounceY:_prevY,bounceY:_bounceY,speed:this.controller.getSpeed(),maxSpeed:this.controller.getMaxSpeed(),meshPosY:this.mesh.position.y,wheelCount:this.wheelMeshes.length,dt},timestamp:Date.now(),hypothesisId:'H5-H6'})}).catch(()=>{});
-        }
-        // #endregion
         this.updateAudio();
-    }
-
-    private updateWheelRotation(dt: number) {
-        const wheelSpeed = this.controller.getSpeed() * dt * 2;
-        for (const wheel of this.wheelMeshes) {
-            wheel.rotation.x += wheelSpeed;
-        }
     }
 
     private updateBrakeLights() {

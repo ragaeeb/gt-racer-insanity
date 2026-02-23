@@ -52,11 +52,8 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
 
         localCar.update(dt);
 
-        // #region agent log
-        if (activeEffects && activeEffects.length > 0 && nowMs % 500 < 17) {
-            fetch('http://127.0.0.1:7864/ingest/8933f922-e1d0-4caa-9723-1bd57a8f2bd5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'86c492'},body:JSON.stringify({sessionId:'86c492',location:'useCarInterpolation.ts:55',message:'active-effects-during-update',data:{effects:activeEffects.map((e: {effectType: string})=>e.effectType),serverSpeed:session.latestLocalSnapshot?.speed,localSpeed:localCar.getSpeed(),movementMultiplier,isRunning:session.isRunning},timestamp:Date.now()})}).catch(()=>{});
-        }
-        // #endregion
+        localCar.position.x = THREE.MathUtils.clamp(localCar.position.x, -LOCAL_TRACK_BOUNDARY_X_METERS, LOCAL_TRACK_BOUNDARY_X_METERS);
+        localCar.mesh.position.x = localCar.position.x;
 
         const localSnapshot = session.latestLocalSnapshot;
         if (localSnapshot) {
@@ -104,12 +101,6 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
                 localCar.mesh.rotation.y = localCar.rotationY;
             }
 
-            // #region agent log
-            if (mode !== 'none' && nowMs % 500 < 17) {
-                fetch('http://127.0.0.1:7864/ingest/8933f922-e1d0-4caa-9723-1bd57a8f2bd5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'86c492'},body:JSON.stringify({sessionId:'86c492',location:'useCarInterpolation.ts:correction',message:'correction-applied',data:{mode,positionError,appliedDelta,yawError,localX:localCar.position.x,localZ:localCar.position.z,serverX:localSnapshot.x,serverZ:localSnapshot.z,speed:localCar.getSpeed()},timestamp:Date.now(),hypothesisId:'H7'})}).catch(()=>{});
-            }
-            // #endregion
-
             if (isNewSnapshot) {
                 const inputLead = Math.max(
                     0,
@@ -132,12 +123,6 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
                 .getState()
                 .setSpeedKph(Math.max(0, localCar.getSpeed() * 3.6));
         }
-
-        // #region agent log
-        if (!session.isRunning && nowMs % 2000 < 17) {
-            fetch('http://127.0.0.1:7864/ingest/8933f922-e1d0-4caa-9723-1bd57a8f2bd5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'86c492'},body:JSON.stringify({sessionId:'86c492',location:'useCarInterpolation.ts:115',message:'update-after-race-finished',data:{isRunning:session.isRunning,localSpeed:localCar.getSpeed(),hasEngine:!!localCar},timestamp:Date.now()})}).catch(()=>{});
-        }
-        // #endregion
 
         if (session.isRunning) {
             const clampedX = THREE.MathUtils.clamp(

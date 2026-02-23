@@ -101,12 +101,15 @@ const applySteering = (
     rigidBody.setAngvel({ x: 0, y: yawSpeed, z: 0 }, true);
 };
 
+const MAX_IMPULSE_ACCELERATION_FACTOR = 3;
+
 export const applyDriveStep = ({ dtSeconds, player, rigidBody }: DriveStepArgs) => {
     const multipliers = getMotionMultipliers(player);
 
     applyScalarSpeed(player, dtSeconds, multipliers.movementMultiplier);
     applySteering(player, rigidBody, multipliers.steeringMultiplier);
 
+    const vehicleClass = getVehicleClassManifestById(player.vehicleId);
     const rotation = rigidBody.rotation();
     const yawRadians = getYawFromQuaternion(rotation.x, rotation.y, rotation.z, rotation.w);
     const forwardX = Math.sin(yawRadians);
@@ -119,7 +122,9 @@ export const applyDriveStep = ({ dtSeconds, player, rigidBody }: DriveStepArgs) 
     const currentLateralSpeed = currentVelocity.x * rightX + currentVelocity.z * rightZ;
 
     const desiredForwardSpeed = player.motion.speed;
-    const deltaForward = desiredForwardSpeed - currentForwardSpeed;
+    const rawDelta = desiredForwardSpeed - currentForwardSpeed;
+    const maxDelta = vehicleClass.physics.acceleration * multipliers.movementMultiplier * dtSeconds * MAX_IMPULSE_ACCELERATION_FACTOR;
+    const deltaForward = clamp(rawDelta, -maxDelta, maxDelta);
     const impulseForward = deltaForward * rigidBody.mass();
 
     const lateralDamping = currentLateralSpeed * rigidBody.mass() * 0.65;
@@ -134,12 +139,24 @@ export const applyDriveStep = ({ dtSeconds, player, rigidBody }: DriveStepArgs) 
     );
 };
 
-export const syncPlayerMotionFromRigidBody = (player: SimPlayerState, rigidBody: RigidBody) => {
+export const syncPlayerMotionFromRigidBody = (
+    player: SimPlayerState,
+    rigidBody: RigidBody,
+    trackBoundaryX?: number,
+) => {
     const position = rigidBody.translation();
     const rotation = rigidBody.rotation();
     const yawRadians = getYawFromQuaternion(rotation.x, rotation.y, rotation.z, rotation.w);
 
-    player.motion.positionX = position.x;
+    let x = position.x;
+    if (trackBoundaryX !== undefined && Math.abs(x) > trackBoundaryX) {
+        x = clamp(x, -trackBoundaryX, trackBoundaryX);
+        rigidBody.setTranslation({ x, y: position.y, z: position.z }, true);
+        rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        player.motion.speed = 0;
+    }
+
+    player.motion.positionX = x;
     player.motion.positionZ = position.z;
     player.motion.rotationY = yawRadians;
 };

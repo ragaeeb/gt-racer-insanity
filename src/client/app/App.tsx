@@ -84,30 +84,45 @@ const THREE_CLOCK_DEPRECATION_WARNING =
 const RAPIER_DEPRECATION_WARNING =
     'using deprecated parameters for the initialization function; pass a single object instead';
 
-const suppressThreeDeprecationWarnings = () => {
-    // three@0.183.x and rapier init currently emit these exact warnings repeatedly in devtools.
-    const originalWarn = console.warn.bind(console);
-    const suppressedWarnings = new Set<string>();
-    const wrappedWarn: typeof console.warn = (...args: unknown[]) => {
-        const firstArg = args[0];
-        if (
-            typeof firstArg === 'string' &&
-            (firstArg === THREE_CLOCK_DEPRECATION_WARNING || firstArg === RAPIER_DEPRECATION_WARNING)
-        ) {
-            if (!suppressedWarnings.has(firstArg)) {
-                suppressedWarnings.add(firstArg);
-                originalWarn(`[GT Racer] Suppressing repeated warning until dependency upgrade: ${firstArg}`);
-            }
-            return;
-        }
+const SUPPRESSED_PATTERNS = [
+    THREE_CLOCK_DEPRECATION_WARNING,
+    RAPIER_DEPRECATION_WARNING,
+    'THREE.WebGLRenderer: Context Lost.',
+];
 
-        originalWarn(...args);
-    };
+const matchesSuppressedPattern = (value: unknown): boolean =>
+    typeof value === 'string' && SUPPRESSED_PATTERNS.some((p) => value.includes(p));
+
+const suppressThreeDeprecationWarnings = () => {
+    const originalWarn = console.warn.bind(console);
+    const originalError = console.error.bind(console);
+    const suppressedMessages = new Set<string>();
+
+    const wrapLogger = (original: typeof console.warn): typeof console.warn =>
+        (...args: unknown[]) => {
+            const firstArg = args[0];
+            if (matchesSuppressedPattern(firstArg)) {
+                const key = firstArg as string;
+                if (!suppressedMessages.has(key)) {
+                    suppressedMessages.add(key);
+                    original(`[GT Racer] Suppressing repeated message until dependency upgrade: ${key}`);
+                }
+                return;
+            }
+            original(...args);
+        };
+
+    const wrappedWarn = wrapLogger(originalWarn);
+    const wrappedError = wrapLogger(originalError);
     console.warn = wrappedWarn;
+    console.error = wrappedError;
 
     return () => {
         if (console.warn === wrappedWarn) {
             console.warn = originalWarn;
+        }
+        if (console.error === wrappedError) {
+            console.error = originalError;
         }
     };
 };

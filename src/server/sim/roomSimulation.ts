@@ -1,6 +1,6 @@
 import type { Collider, RigidBody } from '@dimforge/rapier3d-compat';
 import { advanceRaceProgress, createInitialRaceProgress } from '@/shared/game/track/raceProgress';
-import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
 import { getHazardManifestById } from '@/shared/game/hazard/hazardManifest';
 import { getPowerupManifestById } from '@/shared/game/powerup/powerupManifest';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
@@ -74,6 +74,7 @@ export class RoomSimulation {
     private readonly obstacleStunCooldownByPlayerId = new Map<string, number>();
     private readonly powerupTriggerQueue: PowerupTrigger[] = [];
     private readonly trackManifest;
+    private readonly trackBoundaryX: number;
     private readonly totalTrackLengthMeters: number;
     private obstacleColliderHandles = new Set<number>();
 
@@ -81,6 +82,7 @@ export class RoomSimulation {
         this.dtSeconds = 1 / Math.max(options.tickHz, 1);
         this.rapierContext = createRapierWorld(this.dtSeconds);
         this.trackManifest = getTrackManifestById(options.trackId);
+        this.trackBoundaryX = DEFAULT_TRACK_WIDTH_METERS * 0.5 - 1.1;
 
         const trackColliders = buildTrackColliders(this.rapierContext.rapier, this.rapierContext.world, {
             seed: options.seed,
@@ -412,7 +414,7 @@ export class RoomSimulation {
         };
 
         if (rigidBody) {
-            syncPlayerMotionFromRigidBody(initialPlayer, rigidBody);
+            syncPlayerMotionFromRigidBody(initialPlayer, rigidBody, this.trackBoundaryX);
         }
 
         this.state.players.set(playerId, initialPlayer);
@@ -496,7 +498,7 @@ export class RoomSimulation {
                 );
                 rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
                 rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
-                syncPlayerMotionFromRigidBody(player, rigidBody);
+                syncPlayerMotionFromRigidBody(player, rigidBody, this.trackBoundaryX);
             }
 
             this.inputQueue.clearPlayer(player.id);
@@ -558,7 +560,7 @@ export class RoomSimulation {
                 continue;
             }
 
-            syncPlayerMotionFromRigidBody(player, rigidBody);
+            syncPlayerMotionFromRigidBody(player, rigidBody, this.trackBoundaryX);
             this.updateRaceProgress(player, nowMs);
         }
 

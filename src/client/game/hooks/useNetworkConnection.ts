@@ -318,12 +318,6 @@ export const useNetworkConnection = ({
                 useHudStore
                     .getState()
                     .setActiveEffectIds(localSnapshotPlayer.activeEffects.map((effect) => effect.effectType));
-
-                // #region agent log
-                if (localSnapshotPlayer.activeEffects.length > 0) {
-                    fetch('http://127.0.0.1:7864/ingest/8933f922-e1d0-4caa-9723-1bd57a8f2bd5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'86c492'},body:JSON.stringify({sessionId:'86c492',location:'useNetworkConnection.ts:321',message:'snapshot-with-active-effects',data:{effects:localSnapshotPlayer.activeEffects,serverSpeed:localSnapshotPlayer.speed,raceStatus:snapshot.raceState.status},timestamp:Date.now()})}).catch(()=>{});
-                }
-                // #endregion
             }
 
             if (snapshot.raceState.status === 'finished' && session.isRunning) {
@@ -333,9 +327,6 @@ export const useNetworkConnection = ({
                 for (const [, opponent] of session.opponents) {
                     opponent.fadeOutAudio();
                 }
-                // #region agent log
-                fetch('http://127.0.0.1:7864/ingest/8933f922-e1d0-4caa-9723-1bd57a8f2bd5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'86c492'},body:JSON.stringify({sessionId:'86c492',location:'useNetworkConnection.ts:330',message:'race-finished-fadeout-triggered',data:{raceStatus:'finished',localCarExists:!!session.localCar,opponentCount:session.opponents.size},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
             }
         });
 

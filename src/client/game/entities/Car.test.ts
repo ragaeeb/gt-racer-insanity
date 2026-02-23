@@ -120,35 +120,6 @@ describe('car visual enhancements', () => {
         });
     });
 
-    describe('wheel rotation', () => {
-        it('should rotate wheels proportional to speed and dt', () => {
-            const scene = buildMockCarScene();
-            const wheels = collectWheelMeshes(scene);
-            const speed = 20;
-            const dt = 0.016;
-            const expectedRotation = speed * dt * 2;
-
-            for (const wheel of wheels) {
-                wheel.rotation.x += speed * dt * 2;
-            }
-
-            for (const wheel of wheels) {
-                expect(Math.abs(wheel.rotation.x - expectedRotation)).toBeLessThan(0.001);
-            }
-        });
-
-        it('should not rotate when speed is zero', () => {
-            const scene = buildMockCarScene();
-            const wheels = collectWheelMeshes(scene);
-            for (const wheel of wheels) {
-                wheel.rotation.x += 0 * 0.016 * 2;
-            }
-            for (const wheel of wheels) {
-                expect(wheel.rotation.x).toBe(0);
-            }
-        });
-    });
-
     describe('suspension bounce', () => {
         it('should produce zero bounce at zero speed', () => {
             const normalizedSpeed = 0;

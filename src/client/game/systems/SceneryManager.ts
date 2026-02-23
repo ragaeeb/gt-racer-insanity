@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { canUseDOM } from '@/lib/canUseDOM';
 import type { TrackThemeId } from '@/shared/game/track/trackManifest';
+
+const canUseDOM = typeof document !== 'undefined';
 
 type SceneryThemePalette = {
     buildingColors: number[];
@@ -9,6 +10,7 @@ type SceneryThemePalette = {
     lightEmissive: number;
     decorationPrimary: number;
     decorationSecondary: number;
+    rockColor: number;
 };
 
 const SCENERY_THEME_PALETTES: Record<TrackThemeId, SceneryThemePalette> = {
@@ -19,6 +21,7 @@ const SCENERY_THEME_PALETTES: Record<TrackThemeId, SceneryThemePalette> = {
         lightEmissive: 0xffcc88,
         decorationPrimary: 0xff6600,
         decorationSecondary: 0xcccccc,
+        rockColor: 0x888888,
     },
     'canyon-dusk': {
         buildingColors: [0x8b6b4a, 0x9a7a5a, 0x7a5b3a],
@@ -27,6 +30,7 @@ const SCENERY_THEME_PALETTES: Record<TrackThemeId, SceneryThemePalette> = {
         lightEmissive: 0xff8844,
         decorationPrimary: 0x6b8b3a,
         decorationSecondary: 0xaa8866,
+        rockColor: 0x8b6b4a,
     },
 };
 
@@ -74,47 +78,67 @@ export class SceneryManager {
         return this.objects.length;
     };
 
-    private createBuildingTexture = (
-        width: number,
-        height: number,
-        baseColor: number,
-        windowColor: number,
-    ): THREE.CanvasTexture | null => {
-        if (!canUseDOM) return null;
-        const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 128;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
+    private buildingMaterials: THREE.MeshStandardMaterial[] = [];
 
-        const base = new THREE.Color(baseColor);
-        ctx.fillStyle = `#${base.getHexString()}`;
-        ctx.fillRect(0, 0, 64, 128);
+    private createSharedBuildingMaterials = () => {
+        const colors = this.palette.buildingColors;
+        const windowColor = this.palette.buildingWindow;
 
-        const win = new THREE.Color(windowColor);
-        const cols = Math.max(2, Math.round(width / 4));
-        const rows = Math.max(3, Math.round(height / 6));
-        const cellW = 64 / cols;
-        const cellH = 128 / rows;
+        let texSeed = 0.6180339887;
+        const texRandom = () => {
+            texSeed = (texSeed * 16807 + 0.5) % 1;
+            return texSeed;
+        };
 
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-                const lit = this.random() > 0.3;
-                const brightness = lit ? 0.8 + this.random() * 0.2 : 0.15 + this.random() * 0.1;
-                const wc = win.clone().multiplyScalar(brightness);
-                ctx.fillStyle = `#${wc.getHexString()}`;
-                const pad = 2;
-                ctx.fillRect(c * cellW + pad, r * cellH + pad, cellW - pad * 2, cellH - pad * 2);
+        for (const baseColor of colors) {
+            let tex: THREE.CanvasTexture | null = null;
+            if (canUseDOM) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 64;
+                canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    const base = new THREE.Color(baseColor);
+                    ctx.fillStyle = `#${base.getHexString()}`;
+                    ctx.fillRect(0, 0, 64, 128);
+
+                    const win = new THREE.Color(windowColor);
+                    const cols = 4;
+                    const rows = 8;
+                    const cellW = 64 / cols;
+                    const cellH = 128 / rows;
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const lit = texRandom() > 0.3;
+                            const brightness = lit ? 0.7 + texRandom() * 0.3 : 0.1 + texRandom() * 0.1;
+                            const wc = win.clone().multiplyScalar(brightness);
+                            ctx.fillStyle = `#${wc.getHexString()}`;
+                            const pad = 2;
+                            ctx.fillRect(c * cellW + pad, r * cellH + pad, cellW - pad * 2, cellH - pad * 2);
+                        }
+                    }
+                    tex = new THREE.CanvasTexture(canvas);
+                    tex.wrapS = THREE.RepeatWrapping;
+                    tex.wrapT = THREE.RepeatWrapping;
+                }
             }
-        }
 
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        return tex;
+            const mat = new THREE.MeshStandardMaterial({
+                color: baseColor,
+                map: tex,
+                metalness: 0.15,
+                roughness: 0.7,
+            });
+            this.buildingMaterials.push(mat);
+            this.materials.push(mat);
+        }
     };
 
     private placeCityBuildings = () => {
+        if (this.buildingMaterials.length === 0) {
+            this.createSharedBuildingMaterials();
+        }
+
         const buildings: BuildingDescriptor[] = [];
         const zones = Math.floor(this.trackLength / BUILDING_ZONE_INTERVAL);
         const halfWidth = this.trackWidth / 2;
@@ -130,24 +154,16 @@ export class SceneryManager {
 
         if (buildings.length === 0) return;
 
-        const colors = this.palette.buildingColors;
+        const unitGeo = new THREE.BoxGeometry(1, 1, 1);
+        this.geometries.push(unitGeo);
+
         for (const b of buildings) {
-            const geo = new THREE.BoxGeometry(b.width, b.height, b.depth);
-            this.geometries.push(geo);
+            const matIdx = Math.floor(this.random() * this.buildingMaterials.length);
+            const mat = this.buildingMaterials[matIdx];
 
-            const colorIdx = Math.floor(this.random() * colors.length);
-            const tex = this.createBuildingTexture(b.width, b.height, colors[colorIdx], this.palette.buildingWindow);
-
-            const mat = new THREE.MeshStandardMaterial({
-                color: colors[colorIdx],
-                map: tex,
-                metalness: 0.15,
-                roughness: 0.7,
-            });
-            this.materials.push(mat);
-
-            const mesh = new THREE.Mesh(geo, mat);
+            const mesh = new THREE.Mesh(unitGeo, mat);
             mesh.position.set(b.x, b.height / 2, b.z);
+            mesh.scale.set(b.width, b.height, b.depth);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             this.scene.add(mesh);
@@ -240,7 +256,7 @@ export class SceneryManager {
         const halfWidth = this.trackWidth / 2;
         const pillarGeo = new THREE.CylinderGeometry(1.5, 2.5, 1, 8);
         const pillarMat = new THREE.MeshStandardMaterial({
-            color: this.palette.buildingBase,
+            color: this.palette.rockColor,
             roughness: 0.9,
             metalness: 0.05,
         });
