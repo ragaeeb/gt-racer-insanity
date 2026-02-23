@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.9.0...v1.10.0) (2026-02-23)
+
+
+### Features
+
+* **power:** Add power ups, spikes, city buildings ([#19](https://github.com/ragaeeb/gt-racer-insanity/issues/19)) ([87aa715](https://github.com/ragaeeb/gt-racer-insanity/commit/87aa715480e4608a89359b8f86ee6e3e257dcaae))
+
 # [1.9.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.8.0...v1.9.0) (2026-02-23)
 
 
