@@ -1,6 +1,8 @@
 import type { Collider, RigidBody } from '@dimforge/rapier3d-compat';
 import { advanceRaceProgress, createInitialRaceProgress } from '@/shared/game/track/raceProgress';
-import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { getHazardManifestById } from '@/shared/game/hazard/hazardManifest';
+import { getPowerupManifestById } from '@/shared/game/powerup/powerupManifest';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
 import { getVehicleClassManifestById, type VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { AbilityActivatePayload, RaceEventPayload } from '@/shared/network/types';
@@ -15,7 +17,8 @@ import { applyPowerupTriggers, type PowerupTrigger } from '@/server/sim/powerupS
 import { createRapierWorld } from '@/server/sim/rapierWorld';
 import { buildServerSnapshot } from '@/server/sim/snapshotBuilder';
 import { buildTrackColliders } from '@/server/sim/trackColliderBuilder';
-import type { SimPlayerState, SimRoomState } from '@/server/sim/types';
+import type { ActiveHazard, ActivePowerup, SimPlayerState, SimRoomState } from '@/server/sim/types';
+import { PLAYER_COLLIDER_HALF_LENGTH_METERS, PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 
 type RoomSimulationOptions = {
     roomId: string;
@@ -39,6 +42,8 @@ const getSpawnPositionZ = (playerIndex: number) => {
 };
 
 const PLAYER_PROGRESS_FORWARD_OFFSET_METERS = 2.2;
+const POWERUP_PICKUP_RADIUS = 4;
+const HAZARD_CAR_HALF_LENGTH = 2;
 
 const toRaceEvent = (
     roomId: string,
@@ -70,6 +75,7 @@ export class RoomSimulation {
     private readonly obstacleStunCooldownByPlayerId = new Map<string, number>();
     private readonly powerupTriggerQueue: PowerupTrigger[] = [];
     private readonly trackManifest;
+    private readonly trackBoundaryX: number;
     private readonly totalTrackLengthMeters: number;
     private obstacleColliderHandles = new Set<number>();
 
@@ -77,6 +83,7 @@ export class RoomSimulation {
         this.dtSeconds = 1 / Math.max(options.tickHz, 1);
         this.rapierContext = createRapierWorld(this.dtSeconds);
         this.trackManifest = getTrackManifestById(options.trackId);
+        this.trackBoundaryX = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
 
         const trackColliders = buildTrackColliders(this.rapierContext.rapier, this.rapierContext.world, {
             seed: options.seed,
@@ -86,7 +93,12 @@ export class RoomSimulation {
         this.totalTrackLengthMeters = trackColliders.totalTrackLengthMeters;
         this.obstacleColliderHandles = trackColliders.obstacleColliderHandles;
 
+        const activePowerups = this.buildActivePowerups(options.totalLaps);
+        const hazards = this.buildHazards(options.totalLaps);
+
         this.state = {
+            activePowerups,
+            hazards,
             players: new Map(),
             raceEvents: [],
             raceState: {
@@ -119,7 +131,7 @@ export class RoomSimulation {
         rigidBody.setEnabledTranslations(true, false, true, true);
         rigidBody.setAdditionalMass(Math.max(vehicleClass.physics.collisionMass, 1), true);
 
-        const colliderDesc = this.rapierContext.rapier.ColliderDesc.cuboid(1.1, 0.5, 2.2)
+        const colliderDesc = this.rapierContext.rapier.ColliderDesc.cuboid(PLAYER_COLLIDER_HALF_WIDTH_METERS, 0.5, PLAYER_COLLIDER_HALF_LENGTH_METERS)
             .setActiveEvents(this.rapierContext.rapier.ActiveEvents.COLLISION_EVENTS)
             .setFriction(1.25)
             .setRestitution(0.05);
@@ -144,6 +156,102 @@ export class RoomSimulation {
 
         this.playerColliderById.delete(playerId);
         this.playerRigidBodyById.delete(playerId);
+    };
+
+    private buildActivePowerups = (totalLaps: number): ActivePowerup[] => {
+        const powerups: ActivePowerup[] = [];
+        const lapLength = this.trackManifest.lengthMeters;
+        for (let lap = 0; lap < totalLaps; lap++) {
+            const zOffset = lap * lapLength;
+            for (const spawn of this.trackManifest.powerupSpawns) {
+                powerups.push({
+                    collectedAtMs: null,
+                    id: `${spawn.id}-lap${lap}`,
+                    position: { x: spawn.x, z: spawn.z + zOffset },
+                    powerupId: spawn.powerupId,
+                    respawnAtMs: null,
+                });
+            }
+        }
+        return powerups;
+    };
+
+    private buildHazards = (totalLaps: number): ActiveHazard[] => {
+        const hazards: ActiveHazard[] = [];
+        const lapLength = this.trackManifest.lengthMeters;
+        for (let lap = 0; lap < totalLaps; lap++) {
+            const zOffset = lap * lapLength;
+            for (const spawn of this.trackManifest.hazardSpawns) {
+                hazards.push({
+                    hazardId: spawn.hazardId,
+                    id: `${spawn.id}-lap${lap}`,
+                    position: { x: spawn.x, z: spawn.z + zOffset },
+                });
+            }
+        }
+        return hazards;
+    };
+
+    private checkPowerupCollisions = (nowMs: number) => {
+        for (const powerup of this.state.activePowerups) {
+            if (powerup.collectedAtMs !== null) {
+                if (powerup.respawnAtMs !== null && nowMs >= powerup.respawnAtMs) {
+                    powerup.collectedAtMs = null;
+                    powerup.respawnAtMs = null;
+                }
+                continue;
+            }
+
+            const manifest = getPowerupManifestById(powerup.powerupId);
+            if (!manifest) {
+                continue;
+            }
+
+            for (const player of this.state.players.values()) {
+                const dx = player.motion.positionX - powerup.position.x;
+                const dz = player.motion.positionZ - powerup.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+
+                if (distance < POWERUP_PICKUP_RADIUS) {
+                    powerup.collectedAtMs = nowMs;
+                    powerup.respawnAtMs = nowMs + manifest.respawnMs;
+                    this.powerupTriggerQueue.push({
+                        playerId: player.id,
+                        powerupType: manifest.type,
+                    });
+                    break;
+                }
+            }
+        }
+    };
+
+    private checkHazardCollisions = (_nowMs: number) => {
+        for (const hazard of this.state.hazards) {
+            const manifest = getHazardManifestById(hazard.hazardId);
+            if (!manifest) {
+                continue;
+            }
+
+            for (const player of this.state.players.values()) {
+                const hasEffect = player.activeEffects.some(
+                    (e) => e.effectType === manifest.statusEffectId,
+                );
+                if (hasEffect) {
+                    continue;
+                }
+
+                const dx = player.motion.positionX - hazard.position.x;
+                const dz = player.motion.positionZ - hazard.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+
+                if (distance < manifest.collisionRadius + HAZARD_CAR_HALF_LENGTH) {
+                    this.hazardTriggerQueue.push({
+                        effectType: manifest.statusEffectId,
+                        playerId: player.id,
+                    });
+                }
+            }
+        }
     };
 
     private pushRaceEvent = (event: RaceEventPayload) => {
@@ -307,7 +415,7 @@ export class RoomSimulation {
         };
 
         if (rigidBody) {
-            syncPlayerMotionFromRigidBody(initialPlayer, rigidBody);
+            syncPlayerMotionFromRigidBody(initialPlayer, rigidBody, this.trackBoundaryX);
         }
 
         this.state.players.set(playerId, initialPlayer);
@@ -391,7 +499,7 @@ export class RoomSimulation {
                 );
                 rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
                 rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
-                syncPlayerMotionFromRigidBody(player, rigidBody);
+                syncPlayerMotionFromRigidBody(player, rigidBody, this.trackBoundaryX);
             }
 
             this.inputQueue.clearPlayer(player.id);
@@ -404,6 +512,9 @@ export class RoomSimulation {
         this.powerupTriggerQueue.length = 0;
         this.cooldownStore.clear();
         this.state.raceEvents.length = 0;
+
+        this.state.activePowerups = this.buildActivePowerups(this.state.raceState.totalLaps);
+        this.state.hazards = this.buildHazards(this.state.raceState.totalLaps);
 
         this.state.raceState.status = 'running';
         this.state.raceState.winnerPlayerId = null;
@@ -450,7 +561,7 @@ export class RoomSimulation {
                 continue;
             }
 
-            syncPlayerMotionFromRigidBody(player, rigidBody);
+            syncPlayerMotionFromRigidBody(player, rigidBody, this.trackBoundaryX);
             this.updateRaceProgress(player, nowMs);
         }
 
@@ -478,6 +589,9 @@ export class RoomSimulation {
             // 500ms grace period after stun expires before another obstacle can re-stun
             this.obstacleStunCooldownByPlayerId.set(hit.playerId, nowMs + stunDurationMs + 500);
         }
+
+        this.checkHazardCollisions(nowMs);
+        this.checkPowerupCollisions(nowMs);
 
         this.processAbilityQueue(nowMs);
         this.processHazardQueue(nowMs);

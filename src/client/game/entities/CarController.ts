@@ -13,10 +13,15 @@ export class CarController {
     private cruiseLatchActive = false;
     private isBrakingInputActive = false;
     private isAcceleratingInputActive = false;
+    private _movementMultiplier = 1;
 
     constructor(physicsConfig?: CarPhysicsConfig) {
         this.physicsConfig = physicsConfig ?? DEFAULT_CAR_PHYSICS_CONFIG;
     }
+
+    public setMovementMultiplier = (multiplier: number) => {
+        this._movementMultiplier = Math.max(0, multiplier);
+    };
 
     public updateLocal = (
         state: CarControllerState,
@@ -33,7 +38,9 @@ export class CarController {
             inputManager.isKeyPressed('KeyD') || inputManager.isKeyPressed('ArrowRight');
         const isCruiseEnabled = inputManager.isCruiseControlEnabled();
         const isPrecisionOverrideActive = inputManager.isPrecisionOverrideActive();
-        const topSpeedLatchThreshold = this.physicsConfig.maxForwardSpeed * 0.98;
+        const m = this._movementMultiplier;
+        const effectiveMaxForward = this.physicsConfig.maxForwardSpeed * m;
+        const topSpeedLatchThreshold = effectiveMaxForward * 0.98;
         this.isBrakingInputActive = isDownPressed;
         this.isAcceleratingInputActive = isUpPressed;
 
@@ -55,6 +62,13 @@ export class CarController {
             this.cruiseLatchActive &&
             !isDownPressed;
 
+        const scaledConfig = m === 1 ? this.physicsConfig : {
+            ...this.physicsConfig,
+            maxForwardSpeed: effectiveMaxForward,
+            maxReverseSpeed: this.physicsConfig.maxReverseSpeed * m,
+            acceleration: this.physicsConfig.acceleration * m,
+        };
+
         const movement = stepCarMotion(
             {
                 speed: this.speed,
@@ -69,7 +83,7 @@ export class CarController {
                 isRight: isRightPressed,
             },
             dt,
-            this.physicsConfig,
+            scaledConfig,
         );
 
         this.speed = movement.speed;
@@ -108,7 +122,7 @@ export class CarController {
     };
 
     public getMaxSpeed = () => {
-        return this.physicsConfig.maxForwardSpeed;
+        return this.physicsConfig.maxForwardSpeed * this._movementMultiplier;
     };
 
     public isBraking = () => {

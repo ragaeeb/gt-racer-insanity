@@ -1,9 +1,13 @@
 import * as THREE from 'three';
-import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
-import { InputManager } from '@/client/game/systems/InputManager';
 import { CarController } from '@/client/game/entities/CarController';
 import { CarVisual } from '@/client/game/entities/CarVisual';
 import { applyCarPaint } from '@/client/game/paintSystem';
+import type { InputManager } from '@/client/game/systems/InputManager';
+import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
+
+const BRAKE_LIGHT_MATERIAL_RE = /^(BrakeLight|TailLights?)$/i;
+export const SUSPENSION_BOUNCE_AMPLITUDE = 0.015;
+const AUDIO_FADE_RATE = 1.2;
 
 export type CarAssets = {
     engine?: AudioBuffer;
@@ -32,11 +36,16 @@ export class Car {
     private brakeSound?: THREE.PositionalAudio;
     private previousAudioSpeed = 0;
     private lastBrakeTriggerAtMs = 0;
+    private audioFadeMultiplier = 1;
+    private isAudioFadingOut = false;
 
     private hasLoadedGLTF: boolean = false;
     private fallbackMeshes: THREE.Object3D[] = [];
     private readonly clonedMaterials = new Set<THREE.Material>();
     private readonly carColor = new THREE.Color(0xff0055);
+    private readonly brakeLightMaterials: THREE.MeshStandardMaterial[] = [];
+    private suspensionTime = 0;
+    private gltfWrapper: THREE.Group | null = null;
     private nameTagSprite?: THREE.Sprite;
     private nameTagTexture?: THREE.CanvasTexture;
     private nameTagMaterial?: THREE.SpriteMaterial;
@@ -66,7 +75,9 @@ export class Car {
         nameTextureCanvas.width = 512;
         nameTextureCanvas.height = 128;
         const context = nameTextureCanvas.getContext('2d');
-        if (!context) return;
+        if (!context) {
+            return;
+        }
 
         context.clearRect(0, 0, nameTextureCanvas.width, nameTextureCanvas.height);
         context.fillStyle = 'rgba(10, 20, 30, 0.75)';
@@ -98,7 +109,9 @@ export class Car {
     }
 
     private setupAudio() {
-        if (!this.listener || !this.assets) return;
+        if (!this.listener || !this.assets) {
+            return;
+        }
 
         if (this.assets.engine && !this.engineSound) {
             this.engineSound = new THREE.PositionalAudio(this.listener);
@@ -144,7 +157,9 @@ export class Car {
         for (const fallbackMesh of this.fallbackMeshes) {
             this.mesh.remove(fallbackMesh);
 
-            if (!(fallbackMesh instanceof THREE.Mesh)) continue;
+            if (!(fallbackMesh instanceof THREE.Mesh)) {
+                continue;
+            }
 
             fallbackMesh.geometry.dispose();
 
@@ -188,39 +203,48 @@ export class Car {
     }
 
     private setupGLTFVisuals() {
-        if (!this.carModelTemplate || this.hasLoadedGLTF) return;
+        if (!this.carModelTemplate || this.hasLoadedGLTF) {
+            return;
+        }
 
         this.disposeFallbackVisuals();
 
-        // Clone the original loaded GLTF scene
         const model = this.carModelTemplate.clone();
-
         const wrapper = new THREE.Group();
 
-        // 1. Center the raw model data to its absolute geometry center
         const bbox = new THREE.Box3().setFromObject(model);
         const center = bbox.getCenter(new THREE.Vector3());
         const size = bbox.getSize(new THREE.Vector3());
-        // Translate model so its bottom rests exactly at wrapper's Y=0 and is centered on X/Z
         model.position.set(-center.x, -bbox.min.y, -center.z);
         wrapper.add(model);
 
-        // 2. Scale the wrapper to precisely match the target game physics scale (length of 4)
         const maxDim = Math.max(size.x, size.z);
         const scaleFactor = 4.0 / maxDim;
         wrapper.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-        // 3. Set orientation. If it's sideways, align it.
-        // Usually if size.x > size.z, the car is lying along the X-axis which means it needs a 90 deg rotation.
         if (size.x > size.z) {
             wrapper.rotation.y = -Math.PI / 2 + this.carModelYawOffsetRadians;
         } else {
-            // If size.z > size.x, it's along Z, we might just need to flip it if it faces backwards.
             wrapper.rotation.y = Math.PI + this.carModelYawOffsetRadians;
         }
 
         applyCarPaint(wrapper, this.carColor, this.clonedMaterials);
 
+        this.brakeLightMaterials.length = 0;
+        wrapper.traverse((child) => {
+            if (!(child as THREE.Mesh).isMesh) {
+                return;
+            }
+            const mesh = child as THREE.Mesh;
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            for (const mat of materials) {
+                if (mat instanceof THREE.MeshStandardMaterial && BRAKE_LIGHT_MATERIAL_RE.test(mat.name)) {
+                    this.brakeLightMaterials.push(mat);
+                }
+            }
+        });
+
+        this.gltfWrapper = wrapper;
         this.mesh.add(wrapper);
         this.hasLoadedGLTF = true;
     }
@@ -233,19 +257,54 @@ export class Car {
         }
 
         this.setupGLTFVisuals();
-        this.updateAudio();
+        this.updateBrakeLights();
+        this.updateSuspensionBounce(dt);
+        this.updateAudio(dt);
     }
 
-    private updateAudio() {
-        // Try lazy initializing if audio buffers loaded after car was created
+    private updateBrakeLights() {
+        const isBraking = this.controller.isBraking() && Math.abs(this.controller.getSpeed()) > 1;
+        const intensity = isBraking ? 2.0 : 0;
+        for (const mat of this.brakeLightMaterials) {
+            mat.emissiveIntensity = intensity;
+        }
+    }
+
+    private updateSuspensionBounce(dt: number) {
+        if (!this.gltfWrapper) {
+            return;
+        }
+        const maxSpeed = this.controller.getMaxSpeed();
+        if (maxSpeed <= 0) {
+            return;
+        }
+        this.suspensionTime += dt;
+        const normalizedSpeed = Math.min(1, Math.abs(this.controller.getSpeed()) / maxSpeed);
+        const targetBounce = Math.sin(this.suspensionTime * 5) * SUSPENSION_BOUNCE_AMPLITUDE * normalizedSpeed;
+        this.gltfWrapper.position.y = THREE.MathUtils.lerp(this.gltfWrapper.position.y, targetBounce, 0.05);
+    }
+
+    private updateAudio(dt: number) {
         if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) {
             this.setupAudio();
         }
 
-        if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) return;
+        if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) {
+            return;
+        }
 
-        // Estimate current true speed for remote and local
-        // For local it's exact, for remote we can approximate based on distance to target
+        if (this.isAudioFadingOut) {
+            this.audioFadeMultiplier = Math.max(0, this.audioFadeMultiplier - dt * AUDIO_FADE_RATE);
+            if (this.audioFadeMultiplier <= 0) {
+                for (const sound of [this.engineSound, this.accelSound, this.drivingSound, this.brakeSound]) {
+                    if (sound.isPlaying) {
+                        sound.stop();
+                    }
+                }
+                return;
+            }
+        }
+
         let currentSpeed = Math.abs(this.controller.getSpeed());
         if (!this.isLocalPlayer) {
             currentSpeed = this.position.distanceTo(this.targetPosition) * 10;
@@ -255,17 +314,19 @@ export class Car {
         const speedDelta = currentSpeed - this.previousAudioSpeed;
         const accelerationFactor = THREE.MathUtils.clamp(speedDelta / 8, 0, 1);
         const decelerationFactor = THREE.MathUtils.clamp(-speedDelta / 8, 0, 1);
+        const fade = this.audioFadeMultiplier;
 
-        const idleVolume = Math.max(0, 0.7 - normalizedSpeed * 0.9);
-        const drivingVolume = THREE.MathUtils.smoothstep(normalizedSpeed, 0.08, 0.95) * 0.8;
+        const idleVolume = Math.max(0, 0.7 - normalizedSpeed * 0.9) * fade;
+        const drivingVolume = THREE.MathUtils.smoothstep(normalizedSpeed, 0.08, 0.95) * 0.8 * fade;
         const throttleWeight = this.isLocalPlayer
-            ? (this.controller.isAccelerating() ? 1 : 0)
-            : (speedDelta > 0.2 ? 1 : 0);
-        const accelVolume = THREE.MathUtils.clamp(
-            normalizedSpeed * 0.3 + throttleWeight * 0.5 + accelerationFactor * 0.5,
-            0,
-            1
-        );
+            ? this.controller.isAccelerating()
+                ? 1
+                : 0
+            : speedDelta > 0.2
+              ? 1
+              : 0;
+        const accelVolume =
+            THREE.MathUtils.clamp(normalizedSpeed * 0.3 + throttleWeight * 0.5 + accelerationFactor * 0.5, 0, 1) * fade;
 
         this.engineSound.setVolume(idleVolume);
         this.drivingSound.setVolume(drivingVolume);
@@ -278,11 +339,11 @@ export class Car {
             ? this.controller.isBraking() && currentSpeed > 1.5
             : decelerationFactor > 0.25 && currentSpeed > 3;
         const nowMs = performance.now();
-        if (shouldTriggerBrake && nowMs - this.lastBrakeTriggerAtMs > 450) {
+        if (shouldTriggerBrake && nowMs - this.lastBrakeTriggerAtMs > 450 && fade > 0.1) {
             if (this.brakeSound.isPlaying) {
                 this.brakeSound.stop();
             }
-            this.brakeSound.setVolume(THREE.MathUtils.clamp(0.65 + normalizedSpeed * 0.45, 0.65, 1.0));
+            this.brakeSound.setVolume(THREE.MathUtils.clamp(0.65 + normalizedSpeed * 0.45, 0.65, 1.0) * fade);
             this.brakeSound.setPlaybackRate(THREE.MathUtils.clamp(0.95 + normalizedSpeed * 0.35, 0.95, 1.25));
             this.brakeSound.play();
             this.lastBrakeTriggerAtMs = nowMs;
@@ -295,7 +356,7 @@ export class Car {
         const nextState = this.controller.updateRemote(
             { position: this.position, rotationY: this.rotationY },
             this.targetPosition,
-            this.targetRotationY
+            this.targetRotationY,
         );
 
         this.position.copy(nextState.position);
@@ -304,12 +365,14 @@ export class Car {
     }
 
     private handleLocalMovement(dt: number) {
-        if (!this.inputManager) return;
+        if (!this.inputManager) {
+            return;
+        }
 
         const nextState = this.controller.updateLocal(
             { position: this.position, rotationY: this.rotationY },
             this.inputManager,
-            dt
+            dt,
         );
 
         this.position.copy(nextState.position);
@@ -323,15 +386,31 @@ export class Car {
         this.controller.reset();
         this.previousAudioSpeed = 0;
         this.lastBrakeTriggerAtMs = 0;
+        this.audioFadeMultiplier = 1;
+        this.isAudioFadingOut = false;
         this.visual.applyTransform(this.mesh, this.position, this.rotationY);
 
-        if (this.engineSound && !this.engineSound.isPlaying) this.engineSound.play();
-        if (this.accelSound && !this.accelSound.isPlaying) this.accelSound.play();
-        if (this.drivingSound && !this.drivingSound.isPlaying) this.drivingSound.play();
+        if (this.engineSound && !this.engineSound.isPlaying) {
+            this.engineSound.play();
+        }
+        if (this.accelSound && !this.accelSound.isPlaying) {
+            this.accelSound.play();
+        }
+        if (this.drivingSound && !this.drivingSound.isPlaying) {
+            this.drivingSound.play();
+        }
     }
 
     public getSpeed = () => {
         return this.controller.getSpeed();
+    };
+
+    public setMovementMultiplier = (multiplier: number) => {
+        this.controller.setMovementMultiplier(multiplier);
+    };
+
+    public fadeOutAudio = () => {
+        this.isAudioFadingOut = true;
     };
 
     public dispose() {

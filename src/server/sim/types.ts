@@ -16,7 +16,23 @@ export type SimPlayerState = {
     vehicleId: VehicleClassId;
 };
 
+export type ActivePowerup = {
+    collectedAtMs: number | null;
+    id: string;
+    position: { x: number; z: number };
+    powerupId: string;
+    respawnAtMs: number | null;
+};
+
+export type ActiveHazard = {
+    hazardId: string;
+    id: string;
+    position: { x: number; z: number };
+};
+
 export type SimRoomState = {
+    activePowerups: ActivePowerup[];
+    hazards: ActiveHazard[];
     players: Map<string, SimPlayerState>;
     raceEvents: RaceEventPayload[];
     raceState: RaceState;

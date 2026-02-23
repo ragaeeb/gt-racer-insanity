@@ -14,11 +14,27 @@ export type TrackSegmentManifest = {
     lengthMeters: number;
 };
 
+export type TrackPowerupSpawn = {
+    id: string;
+    powerupId: string;
+    x: number;
+    z: number;
+};
+
+export type TrackHazardSpawn = {
+    hazardId: string;
+    id: string;
+    x: number;
+    z: number;
+};
+
 export type TrackManifest = {
     checkpoints: TrackCheckpointManifest[];
+    hazardSpawns: TrackHazardSpawn[];
     id: TrackId;
     label: string;
     lengthMeters: number;
+    powerupSpawns: TrackPowerupSpawn[];
     segments: TrackSegmentManifest[];
     themeId: TrackThemeId;
     totalLaps: number;
@@ -31,9 +47,19 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
             { id: 'cp-2', x: 20, z: 520 },
             { id: 'cp-3', x: -10, z: 760 },
         ],
+        hazardSpawns: [
+            { hazardId: 'spike-strip', id: 'hz-1', x: -12, z: 280 },
+            { hazardId: 'spike-strip', id: 'hz-2', x: 8, z: 550 },
+            { hazardId: 'spike-strip', id: 'hz-3', x: -5, z: 800 },
+        ],
         id: 'sunset-loop',
         label: 'Sunset Loop',
         lengthMeters: 900,
+        powerupSpawns: [
+            { id: 'pu-1', powerupId: 'powerup-speed', x: -10, z: 150 },
+            { id: 'pu-2', powerupId: 'powerup-speed', x: 15, z: 420 },
+            { id: 'pu-3', powerupId: 'powerup-speed', x: -5, z: 680 },
+        ],
         segments: [
             { frictionMultiplier: 1, id: 'seg-a', lengthMeters: 300 },
             { frictionMultiplier: 0.95, id: 'seg-b', lengthMeters: 300 },
@@ -49,9 +75,19 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
             { id: 'cp-3', x: 0, z: 740 },
             { id: 'cp-4', x: -12, z: 980 },
         ],
+        hazardSpawns: [
+            { hazardId: 'spike-strip', id: 'hz-1', x: 10, z: 260 },
+            { hazardId: 'spike-strip', id: 'hz-2', x: -8, z: 520 },
+            { hazardId: 'spike-strip', id: 'hz-3', x: 5, z: 850 },
+        ],
         id: 'canyon-sprint',
         label: 'Canyon Sprint',
         lengthMeters: 1_100,
+        powerupSpawns: [
+            { id: 'pu-1', powerupId: 'powerup-speed', x: 12, z: 200 },
+            { id: 'pu-2', powerupId: 'powerup-speed', x: -10, z: 500 },
+            { id: 'pu-3', powerupId: 'powerup-speed', x: 8, z: 780 },
+        ],
         segments: [
             { frictionMultiplier: 1, id: 'seg-a', lengthMeters: 275 },
             { frictionMultiplier: 0.92, id: 'seg-b', lengthMeters: 275 },

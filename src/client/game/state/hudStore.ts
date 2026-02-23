@@ -1,10 +1,15 @@
 import { create } from 'zustand';
 import { TRACK_DEFAULT_LABEL } from '@/shared/game/track/trackManifest';
 
+export type ToastVariant = 'success' | 'warning' | 'error';
+
+export type Toast = { message: string; variant: ToastVariant };
+
 export type HudStoreState = {
     activeEffectIds: string[];
     cooldownMsByAbilityId: Record<string, number>;
     lap: number;
+    pendingToasts: Toast[];
     position: number;
     setActiveEffectIds: (effectIds: string[]) => void;
     setCooldownMsByAbilityId: (cooldownMsByAbilityId: Record<string, number>) => void;
@@ -12,6 +17,8 @@ export type HudStoreState = {
     setPosition: (position: number) => void;
     setSpeedKph: (speedKph: number) => void;
     setTrackLabel: (trackLabel: string) => void;
+    showToast: (message: string, variant: ToastVariant) => void;
+    clearPendingToast: () => void;
     speedKph: number;
     trackLabel: string;
 };
@@ -20,6 +27,7 @@ export const useHudStore = create<HudStoreState>((set) => ({
     activeEffectIds: [],
     cooldownMsByAbilityId: {},
     lap: 1,
+    pendingToasts: [],
     position: 1,
     setActiveEffectIds: (activeEffectIds) =>
         set((state) => {
@@ -41,6 +49,8 @@ export const useHudStore = create<HudStoreState>((set) => ({
             return state.speedKph === nextSpeedKph ? state : { speedKph: nextSpeedKph };
         }),
     setTrackLabel: (trackLabel) => set((state) => (state.trackLabel === trackLabel ? state : { trackLabel })),
+    showToast: (message, variant) => set((state) => ({ pendingToasts: [...state.pendingToasts, { message, variant }] })),
+    clearPendingToast: () => set((state) => ({ pendingToasts: state.pendingToasts.slice(1) })),
     speedKph: 0,
     trackLabel: TRACK_DEFAULT_LABEL,
 }));

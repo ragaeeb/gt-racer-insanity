@@ -5,6 +5,7 @@ import {
     type TrackId,
     type TrackThemeId,
 } from '@/shared/game/track/trackManifest';
+import type { SnapshotHazardState, SnapshotPowerupState } from '@/shared/network/snapshot';
 import { generateTrackObstacles, type ObstacleDescriptor } from '@/shared/game/track/trackObstacles';
 
 type TrackSegment = {
@@ -103,6 +104,8 @@ export class TrackManager {
     private seed: number = 12345;
     private readonly activeObstacles: THREE.Mesh[] = [];
     private readonly flags: THREE.Mesh[] = [];
+    private readonly hazardVisuals = new Map<string, THREE.Group>();
+    private readonly powerupVisuals = new Map<string, THREE.Group>();
     private trackId: TrackId = 'sunset-loop';
     private totalLaps = 1;
 
@@ -344,6 +347,126 @@ export class TrackManager {
         this.flags.push(flag);
     };
 
+    private createSpikeStrip = (x: number, z: number): THREE.Group => {
+        const group = new THREE.Group();
+        group.position.set(x, 0.01, z);
+        group.name = 'spike-strip';
+
+        const stripGeo = new THREE.BoxGeometry(5, 0.1, 2);
+        const stripMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7, roughness: 0.3 });
+        const strip = new THREE.Mesh(stripGeo, stripMat);
+        strip.position.y = 0.05;
+        group.add(strip);
+
+        const spikeGeo = new THREE.ConeGeometry(0.12, 0.4, 4);
+        const spikeMat = new THREE.MeshStandardMaterial({
+            color: 0xcccccc,
+            emissive: 0x331111,
+            emissiveIntensity: 0.5,
+            metalness: 0.9,
+            roughness: 0.2,
+        });
+
+        for (let row = -1; row <= 1; row++) {
+            for (let col = -5; col <= 5; col++) {
+                const spike = new THREE.Mesh(spikeGeo, spikeMat);
+                spike.position.set(col * 0.4, 0.3, row * 0.5);
+                group.add(spike);
+            }
+        }
+
+        const warningGeo = new THREE.PlaneGeometry(5, 1);
+        const warningMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.9 });
+        const warning = new THREE.Mesh(warningGeo, warningMat);
+        warning.rotation.x = -Math.PI / 2;
+        warning.position.set(0, 0.03, -2.5);
+        group.add(warning);
+
+        return group;
+    };
+
+    private createPowerupOrb = (x: number, z: number): THREE.Group => {
+        const group = new THREE.Group();
+        group.position.set(x, 1.5, z);
+        group.name = 'powerup-orb';
+
+        const orbGeo = new THREE.SphereGeometry(0.8, 16, 16);
+        const orbMat = new THREE.MeshStandardMaterial({
+            color: 0x00aaff,
+            emissive: 0x0055ff,
+            emissiveIntensity: 2,
+            toneMapped: false,
+        });
+        const orb = new THREE.Mesh(orbGeo, orbMat);
+        group.add(orb);
+
+        const ringGeo = new THREE.TorusGeometry(1.2, 0.08, 8, 32);
+        const ringMat = new THREE.MeshStandardMaterial({
+            color: 0x00ccff,
+            emissive: 0x0088ff,
+            emissiveIntensity: 1.5,
+            opacity: 0.6,
+            toneMapped: false,
+            transparent: true,
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        group.add(ring);
+
+        return group;
+    };
+
+    public syncPowerups = (powerups: SnapshotPowerupState[]) => {
+        for (const powerup of powerups) {
+            let visual = this.powerupVisuals.get(powerup.id);
+            if (!visual) {
+                visual = this.createPowerupOrb(powerup.x, powerup.z);
+                this.scene.add(visual);
+                this.powerupVisuals.set(powerup.id, visual);
+            }
+            visual.visible = powerup.isActive;
+        }
+    };
+
+    public syncHazards = (hazards: SnapshotHazardState[]) => {
+        for (const hazard of hazards) {
+            if (this.hazardVisuals.has(hazard.id)) {
+                continue;
+            }
+            const visual = this.createSpikeStrip(hazard.x, hazard.z);
+            this.scene.add(visual);
+            this.hazardVisuals.set(hazard.id, visual);
+        }
+    };
+
+    private disposePowerupsAndHazards = () => {
+        for (const visual of this.powerupVisuals.values()) {
+            this.scene.remove(visual);
+            visual.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    child.geometry.dispose();
+                    if (child.material instanceof THREE.Material) {
+                        child.material.dispose();
+                    }
+                }
+            });
+        }
+        this.powerupVisuals.clear();
+
+        for (const visual of this.hazardVisuals.values()) {
+            this.scene.remove(visual);
+            visual.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    child.geometry.dispose();
+                    if (child.material instanceof THREE.Material) {
+                        child.material.dispose();
+                    }
+                }
+            });
+        }
+        this.hazardVisuals.clear();
+    };
+
     public setSeed = (seed: number) => {
         this.seed = seed;
         this.reset();
@@ -354,7 +477,7 @@ export class TrackManager {
         this.reset();
     };
 
-    public update = (_carZ: number) => {
+    public update = (_carZ: number, dt = 1 / 60) => {
         const time = performance.now() * 0.003;
         for (const flag of this.flags) {
             const positions = flag.geometry.attributes.position;
@@ -363,6 +486,14 @@ export class TrackManager {
                 positions.setZ(i, Math.sin(x * 2 + time) * 0.3);
             }
             positions.needsUpdate = true;
+        }
+
+        for (const visual of this.powerupVisuals.values()) {
+            if (!visual.visible) {
+                continue;
+            }
+            visual.rotation.y += 2 * dt;
+            visual.position.y = 1.5 + Math.sin(time) * 0.3;
         }
     };
 
@@ -418,6 +549,7 @@ export class TrackManager {
             this.disposeSegment(segment);
         }
         this.disposeFinishLine();
+        this.disposePowerupsAndHazards();
         this.segments = [];
         this.buildFiniteTrack();
     };
@@ -427,6 +559,7 @@ export class TrackManager {
             this.disposeSegment(segment);
         }
         this.disposeFinishLine();
+        this.disposePowerupsAndHazards();
         this.segments = [];
         this.activeObstacles.length = 0;
         this.disposeSharedMaterials();

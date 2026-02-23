@@ -7,13 +7,15 @@ import {
     createInterpolationBuffer,
     pushInterpolationSample,
 } from '@/client/game/systems/interpolationSystem';
+import { SceneryManager } from '@/client/game/systems/SceneryManager';
 import { TrackManager } from '@/client/game/systems/TrackManager';
 import { NetworkManager } from '@/client/network/NetworkManager';
 import { playerIdToHue } from '@/shared/game/playerColor';
 import { playerIdToVehicleIndex } from '@/shared/game/playerVehicle';
 import { colorIdToHSL, vehicleClassToModelIndex } from '@/client/game/vehicleSelections';
 import { DEFAULT_CAR_PHYSICS_CONFIG } from '@/shared/game/carPhysics';
-import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { seededRandom } from '@/shared/utils/prng';
 import { getVehicleClassManifestById, vehicleManifestToPhysicsConfig } from '@/shared/game/vehicle/vehicleClassManifest';
 import {
     DEFAULT_SCENE_ENVIRONMENT_ID,
@@ -151,11 +153,24 @@ export const useNetworkConnection = ({
         });
 
         networkManager.onRoomJoined((seed, players, roomJoinedPayload) => {
+            session.roomSeed = seed;
             session.shakeSpikeGraceUntilMs = Date.now() + SHAKE_SPIKE_GRACE_PERIOD_MS;
             const snapshotTrackId = roomJoinedPayload.snapshot?.raceState.trackId ?? session.activeTrackId;
             const selectedTrackId = applyTrackPresentation(snapshotTrackId);
             session.trackManager?.dispose();
             session.trackManager = new TrackManager(scene, seed, selectedTrackId);
+
+            session.sceneryManager?.dispose();
+            const trackManifest = getTrackManifestById(selectedTrackId);
+            const totalTrackLength = trackManifest.lengthMeters * trackManifest.totalLaps;
+            session.sceneryManager = new SceneryManager(
+                scene,
+                seededRandom(seed + 7919),
+                DEFAULT_TRACK_WIDTH_METERS,
+                totalTrackLength,
+                trackManifest.themeId,
+            );
+            session.sceneryManager.build();
 
             clearCars();
 
@@ -214,6 +229,26 @@ export const useNetworkConnection = ({
             removeOpponent(playerId);
         });
 
+        const unsubscribeRaceEvent = networkManager.onRaceEvent((event) => {
+            const localPlayerId = useRuntimeStore.getState().localPlayerId;
+            if (event.playerId !== localPlayerId) {
+                return;
+            }
+
+            if (event.kind === 'powerup_collected') {
+                useHudStore.getState().showToast('SPEED BOOST!', 'success');
+            } else if (event.kind === 'hazard_triggered') {
+                const effectType = event.metadata?.effectType;
+                if (effectType === 'flat_tire') {
+                    useHudStore.getState().showToast('FLAT TIRE!', 'error');
+                } else if (effectType === 'stunned') {
+                    useHudStore.getState().showToast('STUNNED!', 'warning');
+                } else if (effectType === 'slowed') {
+                    useHudStore.getState().showToast('SLOWED!', 'warning');
+                }
+            }
+        });
+
         networkManager.onServerSnapshot((snapshot) => {
             useRuntimeStore.getState().applySnapshot(snapshot);
             callbacks.onRaceStateChange(snapshot.raceState);
@@ -223,6 +258,21 @@ export const useNetworkConnection = ({
                 if (session.trackManager) {
                     session.trackManager.setTrack(nextTrackId);
                 }
+                session.sceneryManager?.dispose();
+                const nextManifest = getTrackManifestById(nextTrackId);
+                session.sceneryManager = new SceneryManager(
+                    scene,
+                    seededRandom(session.roomSeed + 7919),
+                    DEFAULT_TRACK_WIDTH_METERS,
+                    nextManifest.lengthMeters * nextManifest.totalLaps,
+                    nextManifest.themeId,
+                );
+                session.sceneryManager.build();
+            }
+
+            if (session.trackManager) {
+                session.trackManager.syncPowerups(snapshot.powerups);
+                session.trackManager.syncHazards(snapshot.hazards);
             }
 
             const localPlayerId = useRuntimeStore.getState().localPlayerId;
@@ -286,6 +336,10 @@ export const useNetworkConnection = ({
             if (snapshot.raceState.status === 'finished' && session.isRunning) {
                 session.isRunning = false;
                 callbacks.onGameOverChange(true);
+                session.localCar?.fadeOutAudio();
+                for (const [, opponent] of session.opponents) {
+                    opponent.fadeOutAudio();
+                }
             }
         });
 
@@ -293,8 +347,11 @@ export const useNetworkConnection = ({
             session.isRunning = false;
             session.trackManager?.dispose();
             session.trackManager = null;
+            session.sceneryManager?.dispose();
+            session.sceneryManager = null;
             clearCars();
             unsubscribeConnectionStatus();
+            unsubscribeRaceEvent();
             session.connectionStatus = 'disconnected';
             callbacks.onConnectionStatusChange('disconnected');
             callbacks.onRaceStateChange(null);

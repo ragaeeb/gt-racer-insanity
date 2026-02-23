@@ -33,10 +33,10 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - `src/client/app`: React app shell, entrypoint, global styles
 - `src/components`: reusable UI components
 - `src/lib`: shared client utility helpers
-- `src/client/game`: runtime gameplay systems and scene
+- `src/client/game`: runtime gameplay systems and scene (entities, hooks, state, systems such as TrackManager, SceneryManager, correction/interpolation)
 - `src/client/network`: client realtime networking
-- `src/server`: Bun Socket.IO server and room management
-- `src/shared`: shared domain logic/types used by client and server (with colocated unit tests)
+- `src/server`: Bun Socket.IO server and room lifecycle; authoritative simulation lives in `src/server/sim` (Rapier world, colliders, input queue, race progression, effects, powerups, hazards)
+- `src/shared`: shared domain logic, manifests, validators, and types used by client and server (with colocated unit tests); protocol types in `src/shared/network/types.ts`, snapshot validators in `src/shared/network/snapshot.ts`; shared physics constants in `src/shared/physics/constants.ts`
 - `testing`: opt-in end-to-end tests
 - `public/branding`: icons and branding assets (`icon.svg`, `icon.png`)
 - `.github/workflows`: CI and release automation
@@ -44,11 +44,12 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 ## Architecture Notes
 - Keep rendering concerns in `src/client/game`.
 - Keep deterministic/testable logic in `src/shared`.
-- Keep room lifecycle and server state handling in `src/server/roomStore.ts`.
-- Networking protocol shapes should live in `src/shared/network/types.ts`.
+- Room lifecycle and room store live in `src/server/roomStore.ts`; authoritative simulation (physics, collision, track boundary, effects, powerups, hazards) lives in `src/server/sim/` (e.g. `roomSimulation.ts`, `collisionSystem.ts`).
+- Networking protocol shapes in `src/shared/network/types.ts`; snapshot and payload validators (including powerup/hazard item shapes) in `src/shared/network/snapshot.ts`.
+- Shared physics constants (e.g. player collider half-width) live in `src/shared/physics/constants.ts` and are used by client boundary clamping, server colliders, and tests.
 - Realtime room events are owned in `src/server/index.ts` and mirrored by `src/client/network/NetworkManager.ts` (including `restart_race`).
 - Player identity is part of shared network player state (`name` on `PlayerState`).
-- Scene presentation should be defined through environment profiles in `src/client/game/scene/environment/sceneEnvironmentProfiles.ts`.
+- Scene presentation is defined through environment profiles in `src/client/game/scene/environment/sceneEnvironmentProfiles.ts`; scenery is rebuilt when the track changes (useNetworkConnection).
 - E2E tests are intentionally gated and should not run in default `bun test` flows.
 
 ## UI/Asset Notes
