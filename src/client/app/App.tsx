@@ -82,8 +82,7 @@ const suppressThreeDeprecationWarnings = () => {
     // three@0.183.x and rapier init currently emit these exact warnings repeatedly in devtools.
     const originalWarn = console.warn.bind(console);
     const suppressedWarnings = new Set<string>();
-
-    console.warn = (...args: unknown[]) => {
+    const wrappedWarn: typeof console.warn = (...args: unknown[]) => {
         const firstArg = args[0];
         if (
             typeof firstArg === 'string' &&
@@ -98,9 +97,12 @@ const suppressThreeDeprecationWarnings = () => {
 
         originalWarn(...args);
     };
+    console.warn = wrappedWarn;
 
     return () => {
-        console.warn = originalWarn;
+        if (console.warn === wrappedWarn) {
+            console.warn = originalWarn;
+        }
     };
 };
 

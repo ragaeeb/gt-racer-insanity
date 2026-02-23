@@ -129,6 +129,9 @@ e2eDescribe('e2e smoke', () => {
     let clientProcess: Bun.Subprocess | null = null;
 
     beforeAll(async () => {
+        await cleanupListeningPort(CLIENT_PORT);
+        await cleanupListeningPort(SERVER_PORT);
+
         serverProcess = startProcess(['bun', 'src/server/index.ts']);
         clientProcess = startProcess([
             'bun',

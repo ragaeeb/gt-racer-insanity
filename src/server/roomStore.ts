@@ -108,7 +108,18 @@ export class RoomStore {
         }
 
         if (configuredTrackId.length > 0 && configuredTrackId !== 'auto' && configuredTrackId !== 'rotation') {
-            return getTrackManifestById(configuredTrackId).id;
+            const trackIds = getTrackManifestIds();
+            const manifest = getTrackManifestById(configuredTrackId);
+            if (!manifest || trackIds.length === 0) {
+                console.warn(
+                    `[RoomStore] Unknown defaultTrackId "${configuredTrackId}" and no track manifests available; falling back to "sunset-loop"`
+                );
+                return 'sunset-loop';
+            }
+            console.warn(
+                `[RoomStore] Unknown defaultTrackId "${configuredTrackId}"; falling back to "${manifest.id}"`
+            );
+            return manifest.id;
         }
 
         const trackIds = getTrackManifestIds();
@@ -117,7 +128,7 @@ export class RoomStore {
         }
 
         const selectedIndex = Math.abs(seed) % trackIds.length;
-        return trackIds[selectedIndex] ?? trackIds[0];
+        return trackIds[selectedIndex];
     };
 
     private syncRoomPlayersFromSnapshot = (room: Room, snapshot: ServerSnapshotPayload) => {

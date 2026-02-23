@@ -34,6 +34,6 @@ export const STATUS_EFFECT_MANIFESTS: StatusEffectManifest[] = [
     },
 ];
 
-export const getStatusEffectManifestById = (effectId: string): StatusEffectManifest | undefined => {
+export const getStatusEffectManifestById = (effectId: StatusEffectType): StatusEffectManifest | undefined => {
     return STATUS_EFFECT_MANIFESTS.find((effect) => effect.id === effectId);
 };

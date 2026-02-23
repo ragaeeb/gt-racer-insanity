@@ -146,12 +146,12 @@ export class RoomSimulation {
     };
 
     private processAbilityQueue = (nowMs: number) => {
-        while (this.abilityActivationQueue.length > 0) {
-            const queuedActivation = this.abilityActivationQueue.shift();
-            if (!queuedActivation) {
-                continue;
-            }
+        if (this.abilityActivationQueue.length === 0) {
+            return;
+        }
 
+        const queuedActivations = this.abilityActivationQueue.splice(0, this.abilityActivationQueue.length);
+        for (const queuedActivation of queuedActivations) {
             const resolved = applyAbilityActivation(
                 this.state.players,
                 queuedActivation.playerId,

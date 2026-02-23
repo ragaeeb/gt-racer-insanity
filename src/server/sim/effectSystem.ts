@@ -13,12 +13,28 @@ export const applyStatusEffectToPlayer = (
         return;
     }
 
-    const existingEffectIndex = player.activeEffects.findIndex((effect) => effect.effectType === effectType);
     const existingEffectIndexes: number[] = [];
     for (let index = 0; index < player.activeEffects.length; index += 1) {
         if (player.activeEffects[index]?.effectType === effectType) {
             existingEffectIndexes.push(index);
         }
+    }
+
+    const existingEffectIndex = existingEffectIndexes[0] ?? -1;
+
+    if (existingEffectIndex < 0) {
+        player.activeEffects.push({
+            appliedAtMs: nowMs,
+            effectType,
+            expiresAtMs: nowMs + manifest.defaultDurationMs,
+            intensity: Math.max(0, intensity),
+        });
+        return;
+    }
+
+    const existingEffect = player.activeEffects[existingEffectIndex];
+    if (!existingEffect) {
+        return;
     }
 
     const nextEffect = {
@@ -28,12 +44,6 @@ export const applyStatusEffectToPlayer = (
         intensity: Math.max(0, intensity),
     };
 
-    if (existingEffectIndex < 0) {
-        player.activeEffects.push(nextEffect);
-        return;
-    }
-
-    const existingEffect = player.activeEffects[existingEffectIndex];
     let mergedExpiresAtMs = Math.max(existingEffect.expiresAtMs, nextEffect.expiresAtMs);
     let mergedIntensity = Math.max(existingEffect.intensity, nextEffect.intensity);
     for (const effectIndex of existingEffectIndexes) {

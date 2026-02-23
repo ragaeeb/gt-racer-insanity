@@ -143,6 +143,11 @@ const createDiagCaptureState = (): DiagCaptureState => {
     };
 };
 
+const lerpAngle = (from: number, to: number, alpha: number) => {
+    const delta = Math.atan2(Math.sin(to - from), Math.cos(to - from));
+    return from + delta * alpha;
+};
+
 export const RaceWorld = ({
     cruiseControlEnabled,
     onConnectionStatusChange,
@@ -732,12 +737,13 @@ export const RaceWorld = ({
 
         const localSnapshot = latestLocalSnapshotRef.current;
         const nowMs = Date.now();
+        const instantaneousFps = dt > 0 ? Math.round(1 / dt) : 0;
 
         const localInterpolatedState = sampleInterpolationBuffer(
             localInterpolationBufferRef.current,
             nowMs - clientConfig.interpolationDelayMs,
             (from, to, alpha) => ({
-                rotationY: from.rotationY + (to.rotationY - from.rotationY) * alpha,
+                rotationY: lerpAngle(from.rotationY, to.rotationY, alpha),
                 x: from.x + (to.x - from.x) * alpha,
                 y: from.y + (to.y - from.y) * alpha,
                 z: from.z + (to.z - from.z) * alpha,
@@ -776,7 +782,7 @@ export const RaceWorld = ({
                 interpolationBuffer,
                 nowMs - clientConfig.interpolationDelayMs,
                 (from, to, alpha) => ({
-                    rotationY: from.rotationY + (to.rotationY - from.rotationY) * alpha,
+                    rotationY: lerpAngle(from.rotationY, to.rotationY, alpha),
                     x: from.x + (to.x - from.x) * alpha,
                     y: from.y + (to.y - from.y) * alpha,
                     z: from.z + (to.z - from.z) * alpha,
@@ -930,7 +936,6 @@ export const RaceWorld = ({
                     ? null
                     : now - lastSnapshotReceivedAtMsRef.current;
             const correction = lastCorrectionRef.current;
-            const instantaneousFps = dt > 0 ? Math.round(1 / dt) : 0;
             diagnosticsRef.current.lastFps = instantaneousFps;
             const localSpeedKph = Math.round(
                 Math.max(
@@ -1011,7 +1016,6 @@ export const RaceWorld = ({
             }
         }
 
-        const instantaneousFps = dt > 0 ? Math.round(1 / dt) : 0;
         const isShakeSpike =
             diagnosticsRef.current.lastCameraJumpMeters >= SHAKE_SPIKE_CAMERA_JUMP_METERS ||
             instantaneousFps <= SHAKE_SPIKE_FPS_THRESHOLD;

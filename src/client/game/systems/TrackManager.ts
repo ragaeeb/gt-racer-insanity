@@ -62,7 +62,7 @@ export class TrackManager {
     constructor(
         private scene: THREE.Scene,
         seed: number,
-        trackId = 'sunset-loop'
+        trackId: TrackId = 'sunset-loop'
     ) {
         this.trackId = getTrackManifestById(trackId).id;
         this.setSeed(seed);

@@ -7,6 +7,8 @@
 ## Event Contract
 
 ### Client -> Server
+- `restart_race`
+  - payload: `{ roomId }`
 - `join_room`
   - payload: `{ roomId, playerName, protocolVersion?, selectedVehicleId?, selectedColorId? }`
 - `input_frame`
@@ -28,6 +30,16 @@
   - payload: `{ roomId, snapshot }`
 - `race_event`
   - payload: `{ roomId, kind, playerId, serverTimeMs, metadata? }`
+  - `kind` values:
+    - `countdown_started`: `metadata` omitted
+    - `race_started`: `metadata` omitted
+    - `lap_completed`: `metadata.lap` (number)
+    - `player_finished`: `metadata.lap` (number)
+    - `race_finished`: `metadata` omitted
+    - `collision_bump`: `metadata.otherPlayerId` (string)
+    - `ability_activated`: `metadata.abilityId` (string), `metadata.targetPlayerId` (string | null)
+    - `hazard_triggered`: `metadata.effectType` (string)
+    - `powerup_collected`: `metadata.powerupType` (string)
 
 ## Snapshot Semantics
 `server_snapshot` is the authoritative state transport and includes:
@@ -45,7 +57,7 @@
 ## Reliability Model
 - Input and ability intents are validated server-side.
 - Snapshot stream uses frequent updates; clients interpolate remote motion with a short delay buffer.
-- `race_event` carries discrete authoritative events (lap complete, finish, collision bump, ability/hazard/powerup events).
+- `race_event` carries discrete authoritative events (lap complete, finish, collision bump, ability/hazard/power-up events).
 
 ## Validation and Limits
 - Join/input payload size limits are enforced server-side.

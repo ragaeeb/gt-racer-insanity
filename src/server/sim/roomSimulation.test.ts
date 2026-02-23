@@ -19,7 +19,7 @@ const createInputFrame = (
             steering,
             throttle,
         },
-        cruiseControlEnabled: false,
+        cruiseControlEnabled: true,
         precisionOverrideActive: false,
         protocolVersion: PROTOCOL_V2,
         roomId,

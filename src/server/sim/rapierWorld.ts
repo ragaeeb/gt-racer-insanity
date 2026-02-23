@@ -1,9 +1,29 @@
 import RAPIER, { EventQueue, World, type Vector } from '@dimforge/rapier3d-compat';
 
-await RAPIER.init().catch((error) => {
-    console.error('RAPIER.init failed:', error);
-    throw new Error(`Failed to initialize Rapier physics: ${String(error)}`);
-});
+const RAPIER_INIT_DEPRECATION_WARNING =
+    'using deprecated parameters for the initialization function; pass a single object instead';
+
+const initializeRapier = async () => {
+    const originalWarn = console.warn.bind(console);
+
+    console.warn = (...args: unknown[]) => {
+        if (args[0] === RAPIER_INIT_DEPRECATION_WARNING) {
+            return;
+        }
+        originalWarn(...args);
+    };
+
+    try {
+        await RAPIER.init();
+    } catch (error) {
+        console.error('RAPIER.init failed:', error);
+        throw new Error(`Failed to initialize Rapier physics: ${String(error)}`);
+    } finally {
+        console.warn = originalWarn;
+    }
+};
+
+await initializeRapier();
 
 type RapierWorldContext = {
     eventQueue: EventQueue;
