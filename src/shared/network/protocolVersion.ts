@@ -7,6 +7,11 @@ export const isProtocolVersion = (value: unknown): value is ProtocolVersion => {
     return value === PROTOCOL_V2;
 };
 
+// Intentionally kept as a coercion hook for future protocol versions; runtime is currently V2-only.
 export const coerceProtocolVersion = (value: unknown): ProtocolVersion => {
-    return isProtocolVersion(value) ? PROTOCOL_V2 : LATEST_PROTOCOL_VERSION;
+    if (isProtocolVersion(value)) {
+        return value;
+    }
+
+    return LATEST_PROTOCOL_VERSION;
 };

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { TRACK_DEFAULT_LABEL } from '@/shared/game/track/trackManifest';
 
 export type HudStoreState = {
     activeEffectIds: string[];
@@ -41,5 +42,5 @@ export const useHudStore = create<HudStoreState>((set) => ({
         }),
     setTrackLabel: (trackLabel) => set((state) => (state.trackLabel === trackLabel ? state : { trackLabel })),
     speedKph: 0,
-    trackLabel: 'Sunset Loop',
+    trackLabel: TRACK_DEFAULT_LABEL,
 }));

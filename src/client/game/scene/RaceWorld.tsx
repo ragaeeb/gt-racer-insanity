@@ -384,7 +384,7 @@ export const RaceWorld = ({
                 link.href = url;
                 link.download = `gt-diag-${new Date(nowMs).toISOString().replace(/[:.]/g, '-')}.log`;
                 link.click();
-                URL.revokeObjectURL(url);
+                setTimeout(() => URL.revokeObjectURL(url), 1_000);
             },
             enable: () => {
                 diagnosticsEnabledRef.current = true;
@@ -652,7 +652,7 @@ export const RaceWorld = ({
                     .setActiveEffectIds(localSnapshotPlayer.activeEffects.map((effect) => effect.effectType));
             }
 
-            if (snapshot.raceState.status === 'finished') {
+            if (snapshot.raceState.status === 'finished' && isRunningRef.current) {
                 isRunningRef.current = false;
                 onGameOverChange(true);
             }
@@ -766,8 +766,6 @@ export const RaceWorld = ({
             }
         }
 
-        opponentsRef.current.forEach((opponentCar) => opponentCar.update(dt));
-
         for (const [playerId, opponentCar] of opponentsRef.current) {
             const interpolationBuffer = opponentInterpolationBuffersRef.current.get(playerId);
             if (!interpolationBuffer) {
@@ -792,6 +790,8 @@ export const RaceWorld = ({
             opponentCar.targetPosition.set(interpolatedState.x, interpolatedState.y, interpolatedState.z);
             opponentCar.targetRotationY = interpolatedState.rotationY;
         }
+
+        opponentsRef.current.forEach((opponentCar) => opponentCar.update(dt));
 
         if (localSnapshot) {
             const snapshotSeq = latestLocalSnapshotSeqRef.current;

@@ -13,7 +13,6 @@ type GTDebugState = {
     isRunning: boolean;
     localCarZ: number | null;
     roomId: string | null;
-    score: number;
 };
 
 const waitForHttpOk = async (url: string, timeoutMs: number) => {
@@ -207,7 +206,7 @@ e2eDescribe('e2e smoke', () => {
             await page.waitForURL(new RegExp(`/race\\?room=${roomId}$`), { timeout: STARTUP_TIMEOUT_MS });
 
             await page.waitForSelector('canvas', { timeout: STARTUP_TIMEOUT_MS });
-            await page.waitForSelector('#score', { timeout: STARTUP_TIMEOUT_MS });
+            await page.waitForSelector('#speed', { timeout: STARTUP_TIMEOUT_MS });
             await page.waitForTimeout(1200);
 
             const readDebugState = async (targetPage: Page) => {
@@ -268,7 +267,7 @@ e2eDescribe('e2e smoke', () => {
             });
 
             const speedLabelText = await page.textContent('#speed');
-            const speedValue = Number((speedLabelText ?? '').replace(/[^0-9.-]/g, ''));
+            const speedValue = parseFloat((speedLabelText ?? '').replace(/[^0-9.]/g, ''));
             expect(speedValue).toBeGreaterThan(0);
 
             let updatedCarZ = initialCarZ;

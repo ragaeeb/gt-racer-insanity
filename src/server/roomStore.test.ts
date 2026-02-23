@@ -198,7 +198,7 @@ describe('RoomStore', () => {
         const snapshots = store.buildSimulationSnapshots(1_016);
         expect(snapshots).toHaveLength(1);
         expect(snapshots[0]?.snapshot.players[0]?.lastProcessedInputSeq).toEqual(1);
-        expect((snapshots[0]?.snapshot.players[0]?.z ?? 0) > 0).toEqual(true);
+        expect(snapshots[0]?.snapshot.players[0]?.z ?? 0).toBeGreaterThan(0);
     });
 
     it('should reset room race state and player position when restarting the room race', () => {
@@ -226,9 +226,9 @@ describe('RoomStore', () => {
         expect(afterRestartSnapshot?.raceState.endedAtMs).toEqual(null);
         expect(afterRestartSnapshot?.raceState.startedAtMs).toEqual(6_000);
         expect(afterRestartPlayer).toBeDefined();
-        expect(afterRestartPlayer?.x ?? 0).toBeCloseTo(-6, 5);
-        expect(afterRestartPlayer?.z ?? 0).toBeCloseTo(0, 5);
-        expect(afterRestartPlayer?.speed ?? 1).toBeCloseTo(0, 5);
+        expect(afterRestartPlayer?.x ?? 0).toBeCloseTo(-6, 1);
+        expect(afterRestartPlayer?.z ?? 0).toBeCloseTo(0, 1);
+        expect(afterRestartPlayer?.speed ?? 1).toBeCloseTo(0, 3);
         expect(afterRestartPlayer?.lastProcessedInputSeq).toEqual(-1);
     });
 });

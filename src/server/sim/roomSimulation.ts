@@ -263,7 +263,13 @@ export class RoomSimulation {
         }
     };
 
-    public joinPlayer = (playerId: string, playerName: string, vehicleId: string, colorId: string) => {
+    public joinPlayer = (
+        playerId: string,
+        playerName: string,
+        vehicleId: string,
+        colorId: string,
+        nowMs = Date.now()
+    ) => {
         const playerIndex = this.state.players.size;
         const normalizedVehicleId = (vehicleId || 'sport') as VehicleClassId;
 
@@ -302,7 +308,7 @@ export class RoomSimulation {
         this.state.players.set(playerId, initialPlayer);
 
         if (this.state.players.size >= 2 && this.state.raceState.playerOrder.length === 0) {
-            this.pushRaceEvent(toRaceEvent(this.state.roomId, 'race_started', Date.now(), null));
+            this.pushRaceEvent(toRaceEvent(this.state.roomId, 'race_started', nowMs, null));
         }
 
         return initialPlayer;

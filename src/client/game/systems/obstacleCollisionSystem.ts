@@ -38,7 +38,7 @@ export const createBoundsFromCenterAndSize = (
     };
 };
 
-export const intersectsAxisAlignedBounds = (a: AxisAlignedBounds, b: AxisAlignedBounds) => {
+export const intersectsAxisAlignedBounds = (a: AxisAlignedBounds, b: AxisAlignedBounds): boolean => {
     return !(
         a.maxX < b.minX ||
         a.minX > b.maxX ||
@@ -48,4 +48,3 @@ export const intersectsAxisAlignedBounds = (a: AxisAlignedBounds, b: AxisAligned
         a.minZ > b.maxZ
     );
 };
-

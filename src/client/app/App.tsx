@@ -1,5 +1,16 @@
 import { Canvas, type RootState } from '@react-three/fiber';
-import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+    Suspense,
+    lazy,
+    memo,
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+    type Dispatch,
+    type FormEvent,
+    type SetStateAction,
+} from 'react';
 import * as THREE from 'three';
 import { clientConfig } from '@/client/app/config';
 import { useHudStore } from '@/client/game/state/hudStore';
@@ -62,6 +73,36 @@ type RaceSceneCanvasProps = {
 
 const RACE_CANVAS_CAMERA = { fov: 60, near: 0.1, far: 1000, position: [0, 30, -30] as [number, number, number] };
 const RACE_CANVAS_SHADOWS = { type: THREE.PCFShadowMap as THREE.ShadowMapType };
+const THREE_CLOCK_DEPRECATION_WARNING =
+    'THREE.THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.';
+const RAPIER_DEPRECATION_WARNING =
+    'using deprecated parameters for the initialization function; pass a single object instead';
+
+const suppressThreeDeprecationWarnings = () => {
+    // three@0.183.x and rapier init currently emit these exact warnings repeatedly in devtools.
+    const originalWarn = console.warn.bind(console);
+    const suppressedWarnings = new Set<string>();
+
+    console.warn = (...args: unknown[]) => {
+        const firstArg = args[0];
+        if (
+            typeof firstArg === 'string' &&
+            (firstArg === THREE_CLOCK_DEPRECATION_WARNING || firstArg === RAPIER_DEPRECATION_WARNING)
+        ) {
+            if (!suppressedWarnings.has(firstArg)) {
+                suppressedWarnings.add(firstArg);
+                originalWarn(`[GT Racer] Suppressing repeated warning until dependency upgrade: ${firstArg}`);
+            }
+            return;
+        }
+
+        originalWarn(...args);
+    };
+
+    return () => {
+        console.warn = originalWarn;
+    };
+};
 
 const RaceSceneCanvas = memo(
     ({
@@ -75,8 +116,11 @@ const RaceSceneCanvas = memo(
     }: RaceSceneCanvasProps) => {
         const handleCreated = useCallback(({ gl }: RootState) => {
             gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            gl.shadowMap.enabled = true;
-            gl.shadowMap.type = THREE.PCFShadowMap;
+        }, []);
+
+        useEffect(() => {
+            // TODO(gt-212): Remove this temporary suppression after upgrading Three.js/Rapier.
+            return suppressThreeDeprecationWarnings();
         }, []);
 
         return (
@@ -106,6 +150,17 @@ const RaceSceneCanvas = memo(
 
 RaceSceneCanvas.displayName = 'RaceSceneCanvas';
 
+type LandingHeroProps = {
+    handleCreateNewGame: () => Promise<void>;
+    handleJoinExistingGame: () => void;
+    handleJoinSubmit: (event: FormEvent<HTMLFormElement>) => void;
+    homeError: string;
+    isCheckingServer: boolean;
+    joinRoomInput: string;
+    setJoinRoomInput: Dispatch<SetStateAction<string>>;
+    showJoinPrompt: boolean;
+};
+
 const LandingHero = ({
     isCheckingServer,
     handleCreateNewGame,
@@ -115,7 +170,7 @@ const LandingHero = ({
     setJoinRoomInput,
     handleJoinSubmit,
     homeError
-}: any) => {
+}: LandingHeroProps) => {
     const [scrollY, setScrollY] = useState(0);
 
     useEffect(() => {
@@ -448,27 +503,6 @@ export const App = () => {
             navigateTo('/race', roomIdFromUrl);
         }
     };
-
-    useEffect(() => {
-        const originalWarn = console.warn.bind(console);
-        console.warn = (...args: unknown[]) => {
-            const firstArg = args[0];
-            if (typeof firstArg === 'string') {
-                if (firstArg.includes('THREE.THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.')) {
-                    return;
-                }
-                if (firstArg.includes('using deprecated parameters for the initialization function; pass a single object instead')) {
-                    return;
-                }
-            }
-
-            originalWarn(...args);
-        };
-
-        return () => {
-            console.warn = originalWarn;
-        };
-    }, []);
 
     const handleGenerateDebugLog = useCallback(() => {
         const debugWindow = window as Window & {

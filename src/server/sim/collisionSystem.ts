@@ -39,6 +39,9 @@ const getMotionMultipliers = (player: SimPlayerState): MotionMultipliers => {
 
     for (const effect of player.activeEffects) {
         const manifest = getStatusEffectManifestById(effect.effectType);
+        if (!manifest) {
+            continue;
+        }
         movementMultiplier *= manifest.movementMultiplier;
         steeringMultiplier *= manifest.steeringMultiplier;
     }

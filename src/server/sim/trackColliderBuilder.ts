@@ -85,6 +85,11 @@ export const buildTrackColliders = (
     options: TrackColliderBuildOptions
 ): TrackColliderBuildResult => {
     const trackManifest = getTrackManifestById(options.trackId);
+    if (trackManifest.id !== options.trackId) {
+        console.warn(
+            `[TrackColliderBuilder] Requested track "${options.trackId}" resolved to "${trackManifest.id}" fallback`
+        );
+    }
     const totalLaps = Math.max(1, options.totalLaps);
     const totalTrackLengthMeters = trackManifest.lengthMeters * totalLaps;
     const trackWidthMeters = options.trackWidthMeters ?? DEFAULT_TRACK_WIDTH_METERS;

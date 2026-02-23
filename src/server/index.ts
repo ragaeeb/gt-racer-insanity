@@ -220,12 +220,18 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const restarted = roomStore.restartRoomRace(roomId, Date.now());
+        const nowMs = Date.now();
+        const roomSnapshot = roomStore.buildRoomSnapshot(roomId, nowMs);
+        if (!roomSnapshot || roomSnapshot.raceState.status !== 'finished') {
+            return;
+        }
+
+        const restarted = roomStore.restartRoomRace(roomId, nowMs);
         if (!restarted) {
             return;
         }
 
-        const snapshot = roomStore.buildRoomSnapshot(roomId, Date.now());
+        const snapshot = roomStore.buildRoomSnapshot(roomId, nowMs);
         if (snapshot) {
             io.to(roomId).emit('server_snapshot', {
                 roomId,

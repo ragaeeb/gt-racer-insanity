@@ -9,7 +9,18 @@ export const applyStatusEffectToPlayer = (
     intensity = 1
 ) => {
     const manifest = getStatusEffectManifestById(effectType);
+    if (!manifest) {
+        return;
+    }
+
     const existingEffectIndex = player.activeEffects.findIndex((effect) => effect.effectType === effectType);
+    const existingEffectIndexes: number[] = [];
+    for (let index = 0; index < player.activeEffects.length; index += 1) {
+        if (player.activeEffects[index]?.effectType === effectType) {
+            existingEffectIndexes.push(index);
+        }
+    }
+
     const nextEffect = {
         appliedAtMs: nowMs,
         effectType,
@@ -23,12 +34,36 @@ export const applyStatusEffectToPlayer = (
     }
 
     const existingEffect = player.activeEffects[existingEffectIndex];
+    let mergedExpiresAtMs = Math.max(existingEffect.expiresAtMs, nextEffect.expiresAtMs);
+    let mergedIntensity = Math.max(existingEffect.intensity, nextEffect.intensity);
+    for (const effectIndex of existingEffectIndexes) {
+        if (effectIndex === existingEffectIndex) {
+            continue;
+        }
+
+        const duplicateEffect = player.activeEffects[effectIndex];
+        if (!duplicateEffect) {
+            continue;
+        }
+
+        mergedExpiresAtMs = Math.max(mergedExpiresAtMs, duplicateEffect.expiresAtMs);
+        mergedIntensity = Math.max(mergedIntensity, duplicateEffect.intensity);
+    }
+
     player.activeEffects[existingEffectIndex] = {
         ...existingEffect,
         appliedAtMs: nowMs,
-        expiresAtMs: Math.max(existingEffect.expiresAtMs, nextEffect.expiresAtMs),
-        intensity: Math.max(existingEffect.intensity, nextEffect.intensity),
+        expiresAtMs: mergedExpiresAtMs,
+        intensity: mergedIntensity,
     };
+
+    for (let index = existingEffectIndexes.length - 1; index >= 0; index -= 1) {
+        const duplicateIndex = existingEffectIndexes[index];
+        if (duplicateIndex === existingEffectIndex) {
+            continue;
+        }
+        player.activeEffects.splice(duplicateIndex, 1);
+    }
 };
 
 export const tickStatusEffects = (player: SimPlayerState, nowMs: number) => {

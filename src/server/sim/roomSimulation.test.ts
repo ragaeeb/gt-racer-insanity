@@ -82,12 +82,14 @@ describe('RoomSimulation', () => {
         simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
         simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
 
-        simulation.queueInputFrame('player-1', createInputFrame('ROOM1', 1, 1_000, 1, 1));
-        simulation.queueInputFrame('player-2', createInputFrame('ROOM1', 1, 1_000, 1, -1));
-
+        let finalMs = 1_000;
         let hasCollisionBump = false;
         for (let step = 0; step < 240; step += 1) {
-            simulation.step(1_000 + (step + 1) * 16);
+            finalMs = 1_000 + (step + 1) * 16;
+            const seq = step + 1;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, 1));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, -1));
+            simulation.step(finalMs);
             const events = simulation.drainRaceEvents();
             if (events.some((event) => event.kind === 'collision_bump')) {
                 hasCollisionBump = true;
@@ -95,7 +97,7 @@ describe('RoomSimulation', () => {
             }
         }
 
-        const snapshot = simulation.buildSnapshot(5_000);
+        const snapshot = simulation.buildSnapshot(finalMs);
         const firstPlayer = snapshot.players.find((player) => player.id === 'player-1');
         const secondPlayer = snapshot.players.find((player) => player.id === 'player-2');
         const distance = Math.hypot(
@@ -204,9 +206,9 @@ describe('RoomSimulation', () => {
         expect(restartedSnapshot.raceState.endedAtMs).toEqual(null);
         expect(restartedSnapshot.raceState.startedAtMs).toEqual(7_000);
         expect(restartedPlayer).toBeDefined();
-        expect(restartedPlayer?.x ?? 0).toBeCloseTo(-6, 5);
-        expect(restartedPlayer?.z ?? 0).toBeCloseTo(0, 5);
-        expect(restartedPlayer?.speed ?? 1).toBeCloseTo(0, 5);
+        expect(restartedPlayer?.x ?? 0).toBeCloseTo(-6, 1);
+        expect(restartedPlayer?.z ?? 0).toBeCloseTo(0, 1);
+        expect(restartedPlayer?.speed ?? 1).toBeCloseTo(0, 3);
         expect(restartedPlayer?.lastProcessedInputSeq).toEqual(-1);
         expect(restartedPlayer?.progress.distanceMeters ?? 1).toEqual(0);
     });

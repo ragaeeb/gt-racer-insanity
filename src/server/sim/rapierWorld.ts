@@ -1,6 +1,9 @@
 import RAPIER, { EventQueue, World, type Vector } from '@dimforge/rapier3d-compat';
 
-await RAPIER.init();
+await RAPIER.init().catch((error) => {
+    console.error('RAPIER.init failed:', error);
+    throw new Error(`Failed to initialize Rapier physics: ${String(error)}`);
+});
 
 type RapierWorldContext = {
     eventQueue: EventQueue;

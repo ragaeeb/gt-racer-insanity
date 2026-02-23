@@ -90,7 +90,7 @@ export class TrackManager {
     };
 
     private applyTrackPalette = (trackThemeId: TrackThemeId) => {
-        const palette = TRACK_THEME_PALETTES[trackThemeId] ?? TRACK_THEME_PALETTES['sunny-day'];
+        const palette = TRACK_THEME_PALETTES[trackThemeId];
         this.roadMat.color.setHex(palette.road);
         this.lineMat.color.setHex(palette.line);
         this.wallMat.color.setHex(palette.wall);

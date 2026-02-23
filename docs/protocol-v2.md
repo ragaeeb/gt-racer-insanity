@@ -12,12 +12,14 @@
 - `input_frame`
   - payload: `{ roomId, frame }`
   - `frame`: `{ roomId, protocolVersion, seq, timestampMs, ackSnapshotSeq, controls, cruiseControlEnabled, precisionOverrideActive }`
+  - note: `roomId` is intentionally duplicated in both payload and frame so frame objects stay self-contained for diagnostics/replay logs.
 - `ability_activate`
   - payload: `{ roomId, abilityId, seq, targetPlayerId }`
 
 ### Server -> Client
 - `room_joined`
-  - payload: `{ localPlayerId, protocolVersion, seed, players, snapshot? }`
+  - payload: `{ localPlayerId, protocolVersion, seed, players, snapshot }`
+  - note: `snapshot?` is legacy notation; `room_joined` now always includes a fresh `snapshot`.
 - `player_joined`
   - payload: `PlayerState`
 - `player_left`

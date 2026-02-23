@@ -151,7 +151,8 @@ export class RoomStore {
             playerId,
             sanitizedName,
             joinOptions.selectedVehicleId ?? 'sport',
-            joinOptions.selectedColorId ?? 'red'
+            joinOptions.selectedColorId ?? 'red',
+            Date.now()
         );
 
         const player = {
@@ -179,11 +180,12 @@ export class RoomStore {
 
         const removed = room.players.delete(playerId);
         room.playerSelections.delete(playerId);
-        room.simulation.removePlayer(playerId);
 
         if (!removed) {
             return { removed: false, roomDeleted: false };
         }
+
+        room.simulation.removePlayer(playerId);
 
         if (room.players.size === 0) {
             this.rooms.delete(roomId);
@@ -266,9 +268,6 @@ export class RoomStore {
 
         for (const room of this.rooms.values()) {
             room.simulation.step(nowMs);
-
-            const snapshot = room.simulation.buildSnapshot(nowMs);
-            this.syncRoomPlayersFromSnapshot(room, snapshot);
 
             const roomEvents = room.simulation.drainRaceEvents();
             for (const event of roomEvents) {

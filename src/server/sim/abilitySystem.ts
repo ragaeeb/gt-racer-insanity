@@ -88,22 +88,26 @@ const resolveTarget = (
     requestedTargetPlayerId: string | null,
     targeting: AbilityTargeting
 ): SimPlayerState | null => {
-    if (targeting === 'self') {
-        return sourcePlayer;
-    }
-
-    if (requestedTargetPlayerId) {
-        const requestedTarget = players.get(requestedTargetPlayerId);
-        if (requestedTarget && requestedTarget.id !== sourcePlayer.id) {
-            return requestedTarget;
+    switch (targeting) {
+        case 'self':
+            return sourcePlayer;
+        case 'nearby-enemy': {
+            if (requestedTargetPlayerId) {
+                const requestedTarget = players.get(requestedTargetPlayerId);
+                if (requestedTarget && requestedTarget.id !== sourcePlayer.id) {
+                    return requestedTarget;
+                }
+            }
+            return findNearestOpponent(players, sourcePlayer);
+        }
+        case 'forward-cone':
+            return findNearestForwardOpponent(players, sourcePlayer);
+        default: {
+            const exhaustiveTargeting: never = targeting;
+            console.warn(`[AbilitySystem] Unknown targeting mode: ${String(exhaustiveTargeting)}`);
+            return null;
         }
     }
-
-    if (targeting === 'nearby-enemy') {
-        return findNearestOpponent(players, sourcePlayer);
-    }
-
-    return findNearestForwardOpponent(players, sourcePlayer);
 };
 
 export const applyAbilityActivation = (
@@ -159,12 +163,7 @@ export const applyAbilityActivation = (
     }
 
     cooldownStore.set(cooldownKey, nowMs + ability.baseCooldownMs);
-    applyStatusEffectToPlayer(
-        targetPlayer,
-        ability.effectId as 'boosted' | 'flat_tire' | 'slowed' | 'stunned',
-        nowMs,
-        1
-    );
+    applyStatusEffectToPlayer(targetPlayer, ability.effectId, nowMs, 1);
 
     return {
         abilityId: ability.id,

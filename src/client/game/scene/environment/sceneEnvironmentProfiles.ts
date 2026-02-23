@@ -151,5 +151,5 @@ export const getSceneEnvironmentProfile = (
 export const getSceneEnvironmentProfileIdForTrackTheme = (
     trackThemeId: TrackThemeId
 ): SceneEnvironmentProfileId => {
-    return TRACK_THEME_TO_SCENE_ENVIRONMENT[trackThemeId] ?? DEFAULT_SCENE_ENVIRONMENT_ID;
+    return TRACK_THEME_TO_SCENE_ENVIRONMENT[trackThemeId];
 };

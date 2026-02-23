@@ -33,6 +33,19 @@ describe('obstacleCollisionSystem', () => {
         expect(intersectsAxisAlignedBounds(carBounds, obstacleBounds)).toEqual(false);
     });
 
+    it('should detect touching bounds as intersecting', () => {
+        const a = createBoundsFromCenterAndSize(
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(2, 2, 2)
+        );
+        const b = createBoundsFromCenterAndSize(
+            new THREE.Vector3(2, 0, 0),
+            new THREE.Vector3(2, 2, 2)
+        );
+
+        expect(intersectsAxisAlignedBounds(a, b)).toEqual(true);
+    });
+
     it('should convert a THREE.Box3 into comparable bounds', () => {
         const box = new THREE.Box3(
             new THREE.Vector3(-1, -2, -3),
@@ -48,4 +61,3 @@ describe('obstacleCollisionSystem', () => {
         expect(bounds.maxZ).toEqual(6);
     });
 });
-

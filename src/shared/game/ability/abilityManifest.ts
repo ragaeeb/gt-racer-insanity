@@ -1,9 +1,11 @@
+import type { StatusEffectType } from '@/shared/network/snapshot';
+
 export type AbilityTargeting = 'self' | 'forward-cone' | 'nearby-enemy';
 
 export type AbilityManifest = {
     baseCooldownMs: number;
     description: string;
-    effectId: string;
+    effectId: StatusEffectType;
     id: string;
     label: string;
     targeting: AbilityTargeting;
