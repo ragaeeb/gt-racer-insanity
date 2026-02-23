@@ -18,8 +18,6 @@ export type PlayerState = {
     z: number;
 };
 
-export type PlayerStateUpdate = Pick<PlayerState, 'x' | 'y' | 'z' | 'rotationY'>;
-
 export type JoinRoomPayload = {
     playerName: string;
     protocolVersion?: ProtocolVersion;
@@ -36,11 +34,6 @@ export type RoomJoinedPayload = {
     snapshot?: ServerSnapshotPayload;
 };
 
-export type UpdateStatePayload = {
-    roomId: string;
-    state: PlayerStateUpdate;
-};
-
 export type AbilityActivatePayload = {
     abilityId: string;
     roomId: string;
@@ -53,10 +46,15 @@ export type RaceEventKind =
     | 'race_started'
     | 'lap_completed'
     | 'player_finished'
-    | 'race_finished';
+    | 'race_finished'
+    | 'ability_activated'
+    | 'hazard_triggered'
+    | 'powerup_collected'
+    | 'collision_bump';
 
 export type RaceEventPayload = {
     kind: RaceEventKind;
+    metadata?: Record<string, number | string | null>;
     playerId: string | null;
     roomId: string;
     serverTimeMs: number;

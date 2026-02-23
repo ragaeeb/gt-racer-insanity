@@ -1,5 +1,9 @@
 import * as THREE from 'three';
-import { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import {
+    getTrackManifestById,
+    type TrackId,
+    type TrackThemeId,
+} from '@/shared/game/track/trackManifest';
 import { seededRandom } from '@/shared/utils/prng';
 
 type TrackSegment = {
@@ -9,13 +13,41 @@ type TrackSegment = {
     zStart: number;
 };
 
+type TrackPalette = {
+    line: number;
+    obstacle: number;
+    obstacleEmissive: number;
+    road: number;
+    wall: number;
+    wallEmissive: number;
+};
+
+const TRACK_THEME_PALETTES: Record<TrackThemeId, TrackPalette> = {
+    'canyon-dusk': {
+        line: 0xffd8a8,
+        obstacle: 0xc04c35,
+        obstacleEmissive: 0x4d1f14,
+        road: 0x473541,
+        wall: 0xbe6d45,
+        wallEmissive: 0x542d1e,
+    },
+    'sunny-day': {
+        line: 0xf9f4dc,
+        obstacle: 0xff6f5d,
+        obstacleEmissive: 0x5a1f16,
+        road: 0x4f5f6d,
+        wall: 0x0dc2d4,
+        wallEmissive: 0x084a51,
+    },
+};
+
 export class TrackManager {
     public segments: TrackSegment[] = [];
-    private trackWidth = 80;
+    private trackWidth = 76;
     private seed: number = 12345;
     private random: () => number = Math.random;
     private readonly activeObstacles: THREE.Mesh[] = [];
-    private trackId = 'sunset-loop';
+    private trackId: TrackId = 'sunset-loop';
     private totalLaps = 1;
 
     private roadMat = new THREE.MeshStandardMaterial({
@@ -30,9 +62,9 @@ export class TrackManager {
     constructor(
         private scene: THREE.Scene,
         seed: number,
-        trackId = 'sunset-loop'
+        trackId: TrackId = 'sunset-loop'
     ) {
-        this.trackId = trackId;
+        this.trackId = getTrackManifestById(trackId).id;
         this.setSeed(seed);
     }
 
@@ -57,11 +89,17 @@ export class TrackManager {
         this.obstacleMat.dispose();
     };
 
-    private createSegment = (
-        segmentLength: number,
-        zStart: number,
-        safe: boolean
-    ): TrackSegment => {
+    private applyTrackPalette = (trackThemeId: TrackThemeId) => {
+        const palette = TRACK_THEME_PALETTES[trackThemeId];
+        this.roadMat.color.setHex(palette.road);
+        this.lineMat.color.setHex(palette.line);
+        this.wallMat.color.setHex(palette.wall);
+        this.wallMat.emissive.setHex(palette.wallEmissive);
+        this.obstacleMat.color.setHex(palette.obstacle);
+        this.obstacleMat.emissive.setHex(palette.obstacleEmissive);
+    };
+
+    private createSegment = (segmentLength: number, zStart: number, safe: boolean): TrackSegment => {
         const group = new THREE.Group();
         group.position.z = zStart + segmentLength / 2;
 
@@ -125,13 +163,23 @@ export class TrackManager {
 
     private buildFiniteTrack = () => {
         const trackManifest = getTrackManifestById(this.trackId);
+        this.applyTrackPalette(trackManifest.themeId);
         this.totalLaps = trackManifest.totalLaps;
         let zCursor = 0;
-        this.segments = trackManifest.segments.map((segment, index) => {
-            const builtSegment = this.createSegment(segment.lengthMeters, zCursor, index === 0);
-            zCursor += segment.lengthMeters;
-            return builtSegment;
-        });
+        this.segments = [];
+
+        for (let lapIndex = 0; lapIndex < this.totalLaps; lapIndex += 1) {
+            for (let segmentIndex = 0; segmentIndex < trackManifest.segments.length; segmentIndex += 1) {
+                const segment = trackManifest.segments[segmentIndex];
+                const builtSegment = this.createSegment(
+                    segment.lengthMeters,
+                    zCursor,
+                    lapIndex === 0 && segmentIndex === 0
+                );
+                this.segments.push(builtSegment);
+                zCursor += segment.lengthMeters;
+            }
+        }
 
         const lastSegment = this.segments[this.segments.length - 1];
         if (lastSegment) {
@@ -152,7 +200,7 @@ export class TrackManager {
     };
 
     public setTrack = (trackId: string) => {
-        this.trackId = trackId;
+        this.trackId = getTrackManifestById(trackId).id;
         this.reset();
     };
 

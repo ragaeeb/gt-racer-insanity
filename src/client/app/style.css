@@ -32,37 +32,43 @@ canvas {
     z-index: 10;
 }
 
-#score {
-    color: #00ffcc;
-    font-family: monospace;
-    font-size: 2rem;
-    font-weight: bold;
+#hud-panel {
+    background: rgba(6, 18, 30, 0.46);
+    border: 1px solid rgba(173, 224, 255, 0.35);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    left: 20px;
+    min-width: 220px;
+    padding: 12px;
     position: absolute;
-    right: 20px;
-    text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc;
     top: 20px;
 }
 
 #speed {
     color: #f4f6ff;
     font-family: monospace;
-    font-size: 1.1rem;
-    left: 20px;
+    font-size: 1.15rem;
+    font-weight: 700;
     letter-spacing: 0.04em;
-    position: absolute;
     text-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
-    top: 20px;
 }
 
 #lap-position {
     color: #f4f6ff;
     font-family: monospace;
     font-size: 1rem;
-    left: 20px;
     letter-spacing: 0.04em;
-    position: absolute;
     text-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
-    top: 44px;
+}
+
+#track-name {
+    color: #ffd2a2;
+    font-family: monospace;
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
 }
 
 #connection-status {
@@ -72,12 +78,10 @@ canvas {
     color: #f4f6ff;
     font-family: monospace;
     font-size: 0.85rem;
-    left: 20px;
     letter-spacing: 0.04em;
     padding: 6px 10px;
-    position: absolute;
     text-transform: uppercase;
-    top: 74px;
+    width: fit-content;
 }
 
 #connection-status[data-status='connected'] {
@@ -106,17 +110,35 @@ canvas {
     font-family: monospace;
     font-size: 0.85rem;
     gap: 8px;
-    left: 20px;
     letter-spacing: 0.04em;
     padding: 6px 10px;
     pointer-events: auto;
-    position: absolute;
-    top: 116px;
     user-select: none;
+    width: fit-content;
 }
 
 #control-mode-toggle input {
     margin: 0;
+}
+
+#generate-debug-log-btn {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 8px;
+    color: #f4f6ff;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    padding: 6px 10px;
+    pointer-events: auto;
+    text-transform: uppercase;
+    transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+#generate-debug-log-btn:hover {
+    border-color: rgba(77, 226, 255, 0.55);
+    color: #9dfde9;
 }
 
 #app-version {
@@ -140,15 +162,13 @@ canvas {
     color: #9dfde9;
     font-family: monospace;
     font-size: 0.85rem;
-    left: 20px;
     letter-spacing: 0.04em;
     max-width: 240px;
     overflow: hidden;
     padding: 6px 10px;
-    position: absolute;
     text-overflow: ellipsis;
-    top: 158px;
     white-space: nowrap;
+    width: fit-content;
 }
 
 #game-over {
@@ -167,8 +187,18 @@ canvas {
 
 #game-over h1 {
     color: #ff0055;
+    margin-bottom: 12px;
     margin-top: 0;
     text-shadow: 0 0 10px #ff0055;
+}
+
+#race-result-summary,
+#race-result-position,
+#race-result-laps,
+#race-result-track {
+    color: #f4f6ff;
+    font-family: monospace;
+    margin: 6px 0;
 }
 
 #game-over button {

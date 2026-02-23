@@ -8,14 +8,11 @@ type ServerRuntimeConfig = {
     defaultTrackId: string;
     maxJoinRoomPayloadBytes: number;
     maxInputFramePayloadBytes: number;
-    maxUpdateStatePayloadBytes: number;
     maxInboundTickRateHz: number;
     maxInputRateHz: number;
     maxPositionDeltaPerTick: number;
     maxRotationDeltaPerTick: number;
     maxMovementSpeedPerSecond: number;
-    protocolV2Required: boolean;
-    serverSimV2: boolean;
     simulationTickHz: number;
     snapshotTickHz: number;
 };
@@ -24,13 +21,6 @@ const parseNumber = (value: string | undefined, fallback: number) => {
     if (!value) return fallback;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const parseBoolean = (value: string | undefined, fallback: boolean) => {
-    if (!value) return fallback;
-    if (value === '1' || value.toLowerCase() === 'true') return true;
-    if (value === '0' || value.toLowerCase() === 'false') return false;
-    return fallback;
 };
 
 const toNodeEnvironment = (value: string | undefined): NodeEnvironment => {
@@ -52,7 +42,7 @@ const parseAllowedOrigins = (value: string | undefined) => {
 export const serverConfig: ServerRuntimeConfig = {
     allowedOrigins: parseAllowedOrigins(Bun.env.ALLOWED_ORIGINS),
     defaultTotalLaps: Math.max(1, Math.floor(parseNumber(Bun.env.DEFAULT_TOTAL_LAPS, 3))),
-    defaultTrackId: Bun.env.DEFAULT_TRACK_ID?.trim() || 'sunset-loop',
+    defaultTrackId: Bun.env.DEFAULT_TRACK_ID?.trim() || 'rotation',
     maxInboundTickRateHz: parseNumber(Bun.env.MAX_INBOUND_TICK_RATE_HZ, 30),
     maxInputFramePayloadBytes: parseNumber(Bun.env.MAX_INPUT_FRAME_PAYLOAD_BYTES, 512),
     maxInputRateHz: Math.max(1, parseNumber(Bun.env.MAX_INPUT_RATE_HZ, 30)),
@@ -60,11 +50,8 @@ export const serverConfig: ServerRuntimeConfig = {
     maxMovementSpeedPerSecond: parseNumber(Bun.env.MAX_MOVEMENT_SPEED_PER_SECOND, 55),
     maxPositionDeltaPerTick: parseNumber(Bun.env.MAX_POSITION_DELTA_PER_TICK, 4.5),
     maxRotationDeltaPerTick: parseNumber(Bun.env.MAX_ROTATION_DELTA_PER_TICK, 0.9),
-    maxUpdateStatePayloadBytes: parseNumber(Bun.env.MAX_UPDATE_STATE_PAYLOAD_BYTES, 256),
     nodeEnv: toNodeEnvironment(Bun.env.NODE_ENV),
     port: parseNumber(Bun.env.SERVER_PORT, 3001),
-    protocolV2Required: parseBoolean(Bun.env.PROTOCOL_V2_REQUIRED, false),
-    serverSimV2: parseBoolean(Bun.env.SERVER_SIM_V2, false),
     simulationTickHz: Math.max(1, parseNumber(Bun.env.SIM_TICK_HZ, 60)),
     snapshotTickHz: Math.max(1, parseNumber(Bun.env.SNAPSHOT_HZ, 20)),
 };

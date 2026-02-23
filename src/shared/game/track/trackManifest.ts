@@ -1,3 +1,7 @@
+export type TrackId = 'sunset-loop' | 'canyon-sprint';
+
+export type TrackThemeId = 'sunny-day' | 'canyon-dusk';
+
 export type TrackCheckpointManifest = {
     id: string;
     x: number;
@@ -12,11 +16,11 @@ export type TrackSegmentManifest = {
 
 export type TrackManifest = {
     checkpoints: TrackCheckpointManifest[];
-    id: string;
+    id: TrackId;
     label: string;
     lengthMeters: number;
     segments: TrackSegmentManifest[];
-    themeId: string;
+    themeId: TrackThemeId;
     totalLaps: number;
 };
 
@@ -54,11 +58,21 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
             { frictionMultiplier: 1.08, id: 'seg-c', lengthMeters: 275 },
             { frictionMultiplier: 1, id: 'seg-d', lengthMeters: 275 },
         ],
-        themeId: 'sunny-day',
+        themeId: 'canyon-dusk',
         totalLaps: 3,
     },
 ];
 
+export const TRACK_DEFAULT_LABEL = TRACK_MANIFESTS[0]?.label ?? 'Track';
+
 export const getTrackManifestById = (trackId: string): TrackManifest => {
     return TRACK_MANIFESTS.find((track) => track.id === trackId) ?? TRACK_MANIFESTS[0];
+};
+
+export const getTrackManifestIds = (): TrackId[] => {
+    return TRACK_MANIFESTS.map((track) => track.id);
+};
+
+export const isTrackId = (trackId: string): trackId is TrackId => {
+    return TRACK_MANIFESTS.some((track) => track.id === trackId);
 };

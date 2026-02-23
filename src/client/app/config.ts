@@ -1,34 +1,16 @@
 type ClientRuntimeConfig = {
-    gameplayV2: boolean;
     inputFrameRateHz: number;
     interpolationDelayMs: number;
-    serverUrl: string;
-    outboundTickRateHz: number;
-    protocolV2Required: boolean;
     reconciliationPositionThreshold: number;
     reconciliationYawThresholdRadians: number;
+    serverUrl: string;
 };
 
 const DEFAULT_SERVER_PORT = '3001';
-const MAX_OUTBOUND_TICK_RATE_HZ = 20;
 const MAX_INPUT_FRAME_RATE_HZ = 30;
 
 const clamp = (value: number, min: number, max: number) => {
     return Math.max(min, Math.min(value, max));
-};
-
-const parseTickRate = () => {
-    const rawTickRate = import.meta.env.VITE_NETWORK_TICK_RATE_HZ;
-    if (!rawTickRate) {
-        return MAX_OUTBOUND_TICK_RATE_HZ;
-    }
-
-    const parsed = Number(rawTickRate);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-        return MAX_OUTBOUND_TICK_RATE_HZ;
-    }
-
-    return clamp(parsed, 1, MAX_OUTBOUND_TICK_RATE_HZ);
 };
 
 const resolveServerUrl = () => {
@@ -42,13 +24,6 @@ const resolveServerUrl = () => {
     }
 
     return `${window.location.protocol}//${window.location.hostname}:${DEFAULT_SERVER_PORT}`;
-};
-
-const parseBoolean = (value: string | undefined, fallback: boolean) => {
-    if (!value) return fallback;
-    if (value === '1' || value.toLowerCase() === 'true') return true;
-    if (value === '0' || value.toLowerCase() === 'false') return false;
-    return fallback;
 };
 
 const parseInputFrameRate = () => {
@@ -90,11 +65,8 @@ const parseYawThreshold = () => {
 };
 
 export const clientConfig: ClientRuntimeConfig = {
-    gameplayV2: parseBoolean(import.meta.env.VITE_GAMEPLAY_V2, false),
     inputFrameRateHz: parseInputFrameRate(),
     interpolationDelayMs: parseInterpolationDelayMs(),
-    outboundTickRateHz: parseTickRate(),
-    protocolV2Required: parseBoolean(import.meta.env.VITE_PROTOCOL_V2_REQUIRED, false),
     reconciliationPositionThreshold: parsePositionThreshold(),
     reconciliationYawThresholdRadians: parseYawThreshold(),
     serverUrl: resolveServerUrl(),

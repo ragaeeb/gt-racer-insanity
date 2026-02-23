@@ -4,7 +4,7 @@ import {
     isInputFramePayload,
     sanitizeClientInputFrame,
 } from '@/shared/network/inputFrame';
-import { coerceProtocolVersion, PROTOCOL_V1, PROTOCOL_V2 } from '@/shared/network/protocolVersion';
+import { coerceProtocolVersion, PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 import { isServerSnapshotPayload } from '@/shared/network/snapshot';
 
 describe('network v2 validators', () => {
@@ -120,7 +120,6 @@ describe('network v2 validators', () => {
     });
 
     it('should coerce unsupported protocol versions to latest', () => {
-        expect(coerceProtocolVersion(PROTOCOL_V1)).toEqual(PROTOCOL_V1);
         expect(coerceProtocolVersion(PROTOCOL_V2)).toEqual(PROTOCOL_V2);
         expect(coerceProtocolVersion('3')).toEqual(PROTOCOL_V2);
     });

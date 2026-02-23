@@ -1,0 +1,69 @@
+# Protocol V2
+
+## Versioning
+- Active protocol version: `2`
+- The runtime is V2-only; unsupported/legacy versions are coerced/rejected at join boundaries.
+
+## Event Contract
+
+### Client -> Server
+- `restart_race`
+  - payload: `{ roomId }`
+- `join_room`
+  - payload: `{ roomId, playerName, protocolVersion?, selectedVehicleId?, selectedColorId? }`
+- `input_frame`
+  - payload: `{ roomId, frame }`
+  - `frame`: `{ roomId, protocolVersion, seq, timestampMs, ackSnapshotSeq, controls, cruiseControlEnabled, precisionOverrideActive }`
+  - note: `roomId` is intentionally duplicated in both payload and frame so frame objects stay self-contained for diagnostics/replay logs.
+- `ability_activate`
+  - payload: `{ roomId, abilityId, seq, targetPlayerId }`
+
+### Server -> Client
+- `room_joined`
+  - payload: `{ localPlayerId, protocolVersion, seed, players, snapshot }`
+  - note: `snapshot?` is legacy notation; `room_joined` now always includes a fresh `snapshot`.
+- `player_joined`
+  - payload: `PlayerState`
+- `player_left`
+  - payload: `playerId`
+- `server_snapshot`
+  - payload: `{ roomId, snapshot }`
+- `race_event`
+  - payload: `{ roomId, kind, playerId, serverTimeMs, metadata? }`
+  - `kind` values:
+    - `countdown_started`: `metadata` omitted
+    - `race_started`: `metadata` omitted
+    - `lap_completed`: `metadata.lap` (number)
+    - `player_finished`: `metadata.lap` (number)
+    - `race_finished`: `metadata` omitted
+    - `collision_bump`: `metadata.otherPlayerId` (string)
+    - `ability_activated`: `metadata.abilityId` (string), `metadata.targetPlayerId` (string | null)
+    - `hazard_triggered`: `metadata.effectType` (string)
+    - `powerup_collected`: `metadata.powerupType` (string)
+
+## Snapshot Semantics
+`server_snapshot` is the authoritative state transport and includes:
+- `seq`: authoritative snapshot sequence
+- `serverTimeMs`: server clock timestamp
+- `players[]`: transforms, speed, active effects, race progress, last processed input sequence
+- `raceState`: status, ordering, winner, started/ended timestamps, laps, track id
+
+## Sequencing and Reconciliation
+- Client `input_frame.seq` increases monotonically.
+- Client sends `ackSnapshotSeq` from latest applied snapshot.
+- Server records `lastProcessedInputSeq` per player in snapshots.
+- Client reconciles local predicted state against authoritative snapshot when thresholds are exceeded.
+
+## Reliability Model
+- Input and ability intents are validated server-side.
+- Snapshot stream uses frequent updates; clients interpolate remote motion with a short delay buffer.
+- `race_event` carries discrete authoritative events (lap complete, finish, collision bump, ability/hazard/power-up events).
+
+## Validation and Limits
+- Join/input payload size limits are enforced server-side.
+- Input frame rate is clamped on both client and server.
+- Unknown/invalid payload shapes are ignored.
+
+## Late Join Behavior
+- On join, server generates a fresh simulation snapshot and includes it in `room_joined`.
+- This prevents stale spawn-side positions for players already racing.
