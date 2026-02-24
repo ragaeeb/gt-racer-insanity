@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.10.0...v1.11.0) (2026-02-24)
+
+
+### Features
+
+* **bump:** Add prop collision animations and stun ([#21](https://github.com/ragaeeb/gt-racer-insanity/issues/21)) ([d17a246](https://github.com/ragaeeb/gt-racer-insanity/commit/d17a24679acd20d9d3ce936c326359ecdc32e192))
+
 # [1.10.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.9.0...v1.10.0) (2026-02-23)
 
 
