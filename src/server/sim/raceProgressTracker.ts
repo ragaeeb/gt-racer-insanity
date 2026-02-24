@@ -1,6 +1,7 @@
 import type { SimPlayerState } from '@/server/sim/types';
 import { advanceRaceProgress } from '@/shared/game/track/raceProgress';
 import type { getTrackManifestById } from '@/shared/game/track/trackManifest';
+import type { RaceState } from '@/shared/network/snapshot';
 import type { RaceEventPayload } from '@/shared/network/types';
 
 type TrackManifest = ReturnType<typeof getTrackManifestById>;
@@ -8,7 +9,7 @@ type TrackManifest = ReturnType<typeof getTrackManifestById>;
 /** Minimal slice of race state that updateProgress reads and may mutate. */
 export type MutableRaceState = {
     endedAtMs: number | null;
-    status: 'running' | 'finished';
+    status: RaceState['status'];
     totalLaps: number;
     winnerPlayerId: string | null;
 };
