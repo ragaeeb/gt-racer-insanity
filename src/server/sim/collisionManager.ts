@@ -175,7 +175,8 @@ export class CollisionManager {
         this.bumpDriveRecoveryByPlayerId.set(slowerPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_BUMPED);
 
         const flipCooldownUntil = this.bumpFlipCooldownByPlayerId.get(slowerPlayer.id) ?? 0;
-        if (nowMs >= flipCooldownUntil) {
+        const didFlip = nowMs >= flipCooldownUntil;
+        if (didFlip) {
             applyStatusEffectToPlayer(slowerPlayer, 'flipped', nowMs);
             this.bumpFlipCooldownByPlayerId.set(slowerPlayer.id, nowMs + BUMP_FLIP_COOLDOWN_MS);
         }
@@ -190,7 +191,7 @@ export class CollisionManager {
             kind: 'collision_bump',
             metadata: {
                 againstPlayerId: pair.secondPlayerId,
-                flippedPlayerId: slowerPlayer.id,
+                flippedPlayerId: didFlip ? slowerPlayer.id : null,
                 rammerDriveLockMs: BUMP_DRIVE_RECOVERY_MS_RAMMER,
                 rammerPlayerId: fasterPlayer.id,
                 stunnedPlayerId,

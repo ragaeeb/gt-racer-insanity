@@ -468,14 +468,19 @@ describe('RoomSimulation', () => {
         const snapshot = simulation.buildSnapshot(finalMs);
         const stunnedPlayers = snapshot.players.filter((p) => p.activeEffects.some((e) => e.effectType === 'stunned'));
         const flippedPlayers = snapshot.players.filter((p) => p.activeEffects.some((e) => e.effectType === 'flipped'));
+        const rammerPlayer = snapshot.players.find((player) => player.name === 'Bob');
         expect(stunnedPlayers.length).toBeGreaterThanOrEqual(1);
         expect(flippedPlayers.length).toBeGreaterThanOrEqual(1);
         for (const stunnedPlayer of stunnedPlayers) {
             expect(stunnedPlayer.activeEffects.some((e) => e.effectType === 'flipped')).toEqual(true);
         }
+        expect(rammerPlayer).toBeDefined();
+        expect(
+            rammerPlayer?.activeEffects.every((effect) => effect.effectType !== 'stunned' && effect.effectType !== 'flipped'),
+        ).toEqual(true);
     });
 
-    it('should keep rammer speed at zero while stunned even with throttle input', () => {
+    it('should keep rammer speed at zero during drive-lock window even with throttle input', () => {
         const simulation = new RoomSimulation({
             roomId: 'ROOM1',
             seed: 1,
@@ -506,7 +511,7 @@ describe('RoomSimulation', () => {
 
         expect(bumpOccurred).toEqual(true);
 
-        for (let i = 0; i < 30; i += 1) {
+        for (let i = 0; i < 18; i += 1) {
             finalMs = bumpMs + (i + 1) * 16;
             simulation.queueInputFrame('player-1', createInputFrame('ROOM1', 400 + i, finalMs, 1, 0));
             simulation.queueInputFrame('player-2', createInputFrame('ROOM1', 400 + i, finalMs, 1, 0));
@@ -514,11 +519,9 @@ describe('RoomSimulation', () => {
         }
 
         const snapshot = simulation.buildSnapshot(finalMs);
-        const player1 = snapshot.players.find((p) => p.id === 'player-1');
-        const player2 = snapshot.players.find((p) => p.id === 'player-2');
-
-        const bothSpeeds = [player1?.speed ?? 99, player2?.speed ?? 99];
-        expect(Math.min(...bothSpeeds)).toEqual(0);
+        const rammerPlayer = snapshot.players.find((player) => player.id === 'player-2');
+        expect(rammerPlayer).toBeDefined();
+        expect(rammerPlayer?.speed ?? 99).toEqual(0);
     });
 
     it('should not apply bump response more than once per pair within cooldown', () => {
