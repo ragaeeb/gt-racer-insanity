@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'bun:test';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
+import { generateTrackObstacles } from '@/shared/game/track/trackObstacles';
 import { getVehicleClassManifestById } from '@/shared/game/vehicle/vehicleClassManifest';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
-const createInputFrame = (
-    roomId: string,
-    seq: number,
-    timestampMs: number,
-    throttle = 1,
-    steering = 0
-) => {
+type TestRigidBody = {
+    setLinvel: (velocity: { x: number; y: number; z: number }, wakeUp: boolean) => void;
+    setTranslation: (translation: { x: number; y: number; z: number }, wakeUp: boolean) => void;
+};
+
+const getPlayerRigidBodies = (simulation: RoomSimulation) => {
+    const internals = simulation as unknown as {
+        playerRigidBodyById: Map<string, TestRigidBody>;
+    };
+    return internals.playerRigidBodyById;
+};
+
+const createInputFrame = (roomId: string, seq: number, timestampMs: number, throttle = 1, steering = 0) => {
     return {
         ackSnapshotSeq: null,
         controls: {
@@ -102,7 +109,7 @@ describe('RoomSimulation', () => {
         const secondPlayer = snapshot.players.find((player) => player.id === 'player-2');
         const distance = Math.hypot(
             (firstPlayer?.x ?? 0) - (secondPlayer?.x ?? 0),
-            (firstPlayer?.z ?? 0) - (secondPlayer?.z ?? 0)
+            (firstPlayer?.z ?? 0) - (secondPlayer?.z ?? 0),
         );
 
         expect(hasCollisionBump).toEqual(true);
@@ -337,15 +344,9 @@ describe('RoomSimulation', () => {
         simulation.joinPlayer('player-1', 'Victim', 'sport', 'red');
         simulation.joinPlayer('player-2', 'Rammer', 'sport', 'blue');
 
-        const internals = simulation as unknown as {
-            playerRigidBodyById: Map<string, {
-                setLinvel: (velocity: { x: number; y: number; z: number }, wakeUp: boolean) => void;
-                setTranslation: (translation: { x: number; y: number; z: number }, wakeUp: boolean) => void;
-            }>;
-        };
-
-        const victimRigidBody = internals.playerRigidBodyById.get('player-1');
-        const rammerRigidBody = internals.playerRigidBodyById.get('player-2');
+        const rigidBodies = getPlayerRigidBodies(simulation);
+        const victimRigidBody = rigidBodies.get('player-1');
+        const rammerRigidBody = rigidBodies.get('player-2');
         expect(victimRigidBody).toBeDefined();
         expect(rammerRigidBody).toBeDefined();
 
@@ -465,12 +466,8 @@ describe('RoomSimulation', () => {
         expect(bumpOccurred).toEqual(true);
 
         const snapshot = simulation.buildSnapshot(finalMs);
-        const stunnedPlayers = snapshot.players.filter((p) =>
-            p.activeEffects.some((e) => e.effectType === 'stunned')
-        );
-        const flippedPlayers = snapshot.players.filter((p) =>
-            p.activeEffects.some((e) => e.effectType === 'flipped')
-        );
+        const stunnedPlayers = snapshot.players.filter((p) => p.activeEffects.some((e) => e.effectType === 'stunned'));
+        const flippedPlayers = snapshot.players.filter((p) => p.activeEffects.some((e) => e.effectType === 'flipped'));
         expect(stunnedPlayers.length).toBeGreaterThanOrEqual(1);
         expect(flippedPlayers.length).toBeGreaterThanOrEqual(1);
         for (const stunnedPlayer of stunnedPlayers) {
@@ -564,15 +561,9 @@ describe('RoomSimulation', () => {
         simulation.joinPlayer('player-1', 'Victim', 'sport', 'red');
         simulation.joinPlayer('player-2', 'Rammer', 'sport', 'blue');
 
-        const internals = simulation as unknown as {
-            playerRigidBodyById: Map<string, {
-                setLinvel: (velocity: { x: number; y: number; z: number }, wakeUp: boolean) => void;
-                setTranslation: (translation: { x: number; y: number; z: number }, wakeUp: boolean) => void;
-            }>;
-        };
-
-        const victimRigidBody = internals.playerRigidBodyById.get('player-1');
-        const rammerRigidBody = internals.playerRigidBodyById.get('player-2');
+        const rigidBodies = getPlayerRigidBodies(simulation);
+        const victimRigidBody = rigidBodies.get('player-1');
+        const rammerRigidBody = rigidBodies.get('player-2');
         expect(victimRigidBody).toBeDefined();
         expect(rammerRigidBody).toBeDefined();
 
@@ -658,15 +649,9 @@ describe('RoomSimulation', () => {
         simulation.joinPlayer('player-1', 'Victim', 'sport', 'red');
         simulation.joinPlayer('player-2', 'Rammer', 'sport', 'blue');
 
-        const internals = simulation as unknown as {
-            playerRigidBodyById: Map<string, {
-                setLinvel: (velocity: { x: number; y: number; z: number }, wakeUp: boolean) => void;
-                setTranslation: (translation: { x: number; y: number; z: number }, wakeUp: boolean) => void;
-            }>;
-        };
-
-        const victimRigidBody = internals.playerRigidBodyById.get('player-1');
-        const rammerRigidBody = internals.playerRigidBodyById.get('player-2');
+        const rigidBodies = getPlayerRigidBodies(simulation);
+        const victimRigidBody = rigidBodies.get('player-1');
+        const rammerRigidBody = rigidBodies.get('player-2');
         expect(victimRigidBody).toBeDefined();
         expect(rammerRigidBody).toBeDefined();
 
@@ -731,10 +716,32 @@ describe('RoomSimulation', () => {
         });
 
         simulation.joinPlayer('player-1', 'Driver', 'sport', 'red');
+        const firstObstacle = generateTrackObstacles('sunset-loop', 1, 3).obstacles[0];
+        expect(firstObstacle).toBeDefined();
+
+        const rigidBodies = getPlayerRigidBodies(simulation);
+        const driverRigidBody = rigidBodies.get('player-1');
+        expect(driverRigidBody).toBeDefined();
+        driverRigidBody?.setTranslation(
+            {
+                x: firstObstacle!.positionX,
+                y: 0.45,
+                z: firstObstacle!.positionZ - 5,
+            },
+            true,
+        );
+        driverRigidBody?.setLinvel({ x: 0, y: 0, z: 0 }, true);
+
+        const driverState = simulation.getPlayers().get('player-1');
+        if (driverState) {
+            driverState.motion.positionX = firstObstacle!.positionX;
+            driverState.motion.positionZ = firstObstacle!.positionZ - 5;
+            driverState.motion.speed = 0;
+        }
 
         let nowMs = 1_000;
         let stunned = false;
-        for (let step = 1; step <= 600; step += 1) {
+        for (let step = 1; step <= 240; step += 1) {
             nowMs = 1_000 + step * 16;
             simulation.queueInputFrame('player-1', createInputFrame('ROOM1', step, nowMs, 1, 0));
             simulation.step(nowMs);
@@ -745,11 +752,10 @@ describe('RoomSimulation', () => {
             }
         }
 
-        if (stunned) {
-            const snapshot = simulation.buildSnapshot(nowMs);
-            const driver = snapshot.players.find((p) => p.id === 'player-1');
-            expect(driver?.activeEffects.some((e) => e.effectType === 'stunned')).toEqual(true);
-        }
+        expect(stunned).toBeTrue();
+        const snapshot = simulation.buildSnapshot(nowMs);
+        const driver = snapshot.players.find((p) => p.id === 'player-1');
+        expect(driver?.activeEffects.some((e) => e.effectType === 'stunned')).toEqual(true);
     });
 
     it('should reset player state to spawn when restarting the race', () => {

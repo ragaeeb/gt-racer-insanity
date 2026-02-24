@@ -14,6 +14,7 @@ const createTexturedMaterial = (name: string, colorHex: number) => {
 describe('paintSystem', () => {
     it('should clone texture instances before assigning to cloned materials', () => {
         const sourceTexture = new THREE.Texture();
+        sourceTexture.image = { width: 1, height: 1 } as unknown as HTMLImageElement;
         const cloned = cloneTextureForPaint(sourceTexture);
         expect(cloned).not.toBe(sourceTexture);
         expect(cloned.image).toBe(sourceTexture.image);

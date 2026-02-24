@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import {
-    HARD_SNAP_THRESHOLD_METERS,
-    MIN_CORRECTION_THRESHOLD,
-    PER_FRAME_BASE_ALPHA,
     classifyCorrection,
     computeCameraLerpAlpha,
     computeCorrectionAlpha,
+    HARD_SNAP_THRESHOLD_METERS,
     lerpAngle,
+    MIN_CORRECTION_THRESHOLD,
+    PER_FRAME_BASE_ALPHA,
 } from './correctionSystem';
 
 describe('correctionSystem', () => {
@@ -59,7 +59,7 @@ describe('correctionSystem', () => {
             for (let frame = 0; frame < 120; frame++) {
                 expect(error).toBeLessThan(HARD_SNAP_THRESHOLD_METERS);
                 const alpha = computeCorrectionAlpha(error);
-                error *= (1 - alpha);
+                error *= 1 - alpha;
             }
             expect(error).toBeLessThan(MIN_CORRECTION_THRESHOLD);
         });
@@ -69,7 +69,7 @@ describe('correctionSystem', () => {
             for (let frame = 0; frame < 180; frame++) {
                 expect(error).toBeLessThan(HARD_SNAP_THRESHOLD_METERS);
                 const alpha = computeCorrectionAlpha(error);
-                error *= (1 - alpha);
+                error *= 1 - alpha;
             }
             expect(error).toBeLessThan(MIN_CORRECTION_THRESHOLD);
         });
@@ -98,7 +98,7 @@ describe('correctionSystem', () => {
                 }
                 if (error >= MIN_CORRECTION_THRESHOLD) {
                     const alpha = computeCorrectionAlpha(error);
-                    error *= (1 - alpha);
+                    error *= 1 - alpha;
                 }
                 maxError = Math.max(maxError, error);
             }
@@ -119,7 +119,7 @@ describe('correctionSystem', () => {
                 }
                 if (error >= MIN_CORRECTION_THRESHOLD) {
                     const alpha = computeCorrectionAlpha(error);
-                    error *= (1 - alpha);
+                    error *= 1 - alpha;
                 }
                 maxError = Math.max(maxError, error);
             }
@@ -161,7 +161,7 @@ describe('correctionSystem', () => {
         it('should decrease monotonically as speed increases', () => {
             const alphas = [0, 10, 20, 30, 40].map((s) => computeCameraLerpAlpha(s));
             for (let i = 1; i < alphas.length; i++) {
-                expect(alphas[i] <= alphas[i - 1]).toBe(true);
+                expect(alphas[i] <= alphas[i - 1]).toBeTrue();
             }
         });
 

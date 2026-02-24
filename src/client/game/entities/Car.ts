@@ -4,17 +4,17 @@ import { CarVisual } from '@/client/game/entities/CarVisual';
 import { applyCarPaint } from '@/client/game/paintSystem';
 import type { InputManager } from '@/client/game/systems/InputManager';
 import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
+import { FLIPPED_DURATION_MS } from '@/shared/game/effects/statusEffectManifest';
 
 const BRAKE_LIGHT_MATERIAL_RE = /^(BrakeLight|TailLights?)$/i;
 export const SUSPENSION_BOUNCE_AMPLITUDE = 0.015;
 const AUDIO_FADE_RATE = 1.2;
-const FLIP_DURATION_MS = 1_500;
 const FLIP_PROGRESS_DT_CAP_MS = 120;
 const FLIP_TOTAL_ROTATIONS = 1;
 
 export const advanceFlipElapsedMs = (elapsedMs: number, dt: number) => {
     const frameStepMs = Math.min(Math.max(dt * 1000, 0), FLIP_PROGRESS_DT_CAP_MS);
-    return Math.min(FLIP_DURATION_MS, elapsedMs + frameStepMs);
+    return Math.min(FLIPPED_DURATION_MS, elapsedMs + frameStepMs);
 };
 
 const finiteOr = (value: number, fallback: number) => (Number.isFinite(value) ? value : fallback);
@@ -320,16 +320,12 @@ export class Car {
 
     private updateFlipAnimation(dt: number) {
         if (this.flipElapsedMs === null) {
-            if (this.gltfWrapper) {
-                this.gltfWrapper.rotation.x = 0;
-                this.gltfWrapper.position.y = 0;
-            }
             return;
         }
 
         this.flipElapsedMs = advanceFlipElapsedMs(this.flipElapsedMs, dt);
 
-        if (this.flipElapsedMs >= FLIP_DURATION_MS) {
+        if (this.flipElapsedMs >= FLIPPED_DURATION_MS) {
             this.flipElapsedMs = null;
             if (this.gltfWrapper) {
                 this.gltfWrapper.rotation.x = 0;
@@ -338,7 +334,7 @@ export class Car {
             return;
         }
 
-        const t = this.flipElapsedMs / FLIP_DURATION_MS;
+        const t = this.flipElapsedMs / FLIPPED_DURATION_MS;
         const eased = 1 - (1 - t) * (1 - t);
         const flipRotationX = eased * Math.PI * 2 * FLIP_TOTAL_ROTATIONS;
 

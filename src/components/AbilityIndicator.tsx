@@ -6,12 +6,13 @@ import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 
 export const AbilityIndicator = () => {
     const cooldownMsByAbilityId = useHudStore((s) => s.cooldownMsByAbilityId);
-    const latestSnapshot = useRuntimeStore((s) => s.latestSnapshot);
-    const localPlayerId = useRuntimeStore((s) => s.localPlayerId);
+    const vehicleId = useRuntimeStore((state) => {
+        const snapshot = state.latestSnapshot;
+        const localPlayer = snapshot?.players.find((player) => player.id === state.localPlayerId);
+        return localPlayer?.vehicleId ?? 'sport';
+    });
     const [remainingMs, setRemainingMs] = useState(0);
 
-    const localPlayer = latestSnapshot?.players.find((p) => p.id === localPlayerId);
-    const vehicleId = localPlayer?.vehicleId ?? 'sport';
     const vehicleClass = getVehicleClassManifestById(vehicleId);
     const ability = getAbilityManifestById(vehicleClass.abilityId);
     const readyAtMs = ability ? (cooldownMsByAbilityId[ability.id] ?? 0) : 0;

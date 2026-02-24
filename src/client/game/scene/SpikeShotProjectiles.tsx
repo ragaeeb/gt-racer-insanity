@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useAbilityFxStore } from '@/client/game/state/abilityFxStore';
 
@@ -23,15 +23,22 @@ export const SpikeShotProjectiles = () => {
         [],
     );
 
+    useEffect(() => {
+        return () => {
+            geometry.dispose();
+            material.dispose();
+        };
+    }, [geometry, material]);
+
     useFrame(() => {
+        const nowMs = Date.now();
         const store = useAbilityFxStore.getState();
         const pending = store.pendingSpikeShots;
 
         if (pending.length > 0) {
-            store.removeExpiredSpikeShots(Date.now());
+            store.removeExpiredSpikeShots(nowMs);
         }
 
-        const nowMs = Date.now();
         for (let i = 0; i < POOL_SIZE; i++) {
             const mesh = meshRefs.current[i];
             if (!mesh) {

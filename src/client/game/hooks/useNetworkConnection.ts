@@ -32,11 +32,11 @@ import {
     CLIENT_DRIVE_LOCK_FLIPPED_MS,
     CLIENT_DRIVE_LOCK_STUNNED_MS,
     CLIENT_HARD_SNAP_MS,
+    LOCAL_COLLISION_HARD_SNAP_WINDOW_MS,
 } from '@/shared/game/collisionConfig';
 import type { PendingSpikeShot } from '@/client/game/state/abilityFxStore';
 
 const SHAKE_SPIKE_GRACE_PERIOD_MS = 1800;
-const LOCAL_COLLISION_HARD_SNAP_WINDOW_MS = 3_500;
 
 export const buildSpikeShotFxPayload = (
     snapshot: ServerSnapshotPayload | null,
@@ -265,12 +265,6 @@ export const useNetworkConnection = ({
             useHudStore.getState().setSpeedKph(0);
         });
 
-        networkManager.onPlayerJoined((player) => {
-            if (player.id === networkManager.getSocketId()) {
-                return;
-            }
-        });
-
         networkManager.onPlayerLeft((playerId) => {
             removeOpponent(playerId);
         });
@@ -296,16 +290,18 @@ export const useNetworkConnection = ({
                         const snapshot = useRuntimeStore.getState().latestSnapshot;
                         const sourcePlayerId = event.playerId;
                         const targetPlayerId = event.metadata?.targetPlayerId;
+                        const narrowedTargetPlayerId =
+                            typeof targetPlayerId === 'string' ? targetPlayerId : null;
                         const pendingSpikeShot = buildSpikeShotFxPayload(
                             snapshot,
                             typeof sourcePlayerId === 'string' ? sourcePlayerId : null,
-                            typeof targetPlayerId === 'string' ? targetPlayerId : null,
+                            narrowedTargetPlayerId,
                             Date.now(),
                         );
                         if (pendingSpikeShot) {
                             useAbilityFxStore.getState().addPendingSpikeShot(pendingSpikeShot);
                         }
-                        if (targetPlayerId === localPlayerId) {
+                        if (narrowedTargetPlayerId !== null && narrowedTargetPlayerId === localPlayerId) {
                             useHudStore.getState().showToast('SLOWED!', 'warning');
                         }
                     }
@@ -353,7 +349,7 @@ export const useNetworkConnection = ({
                 );
                 const localCollisionHardSnapMs =
                     localIsFlipped || localIsStunned
-                        ? Math.max(CLIENT_HARD_SNAP_MS, LOCAL_COLLISION_HARD_SNAP_WINDOW_MS)
+                        ? LOCAL_COLLISION_HARD_SNAP_WINDOW_MS
                         : CLIENT_HARD_SNAP_MS;
 
                 const nowMs = Date.now();

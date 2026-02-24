@@ -80,6 +80,8 @@ const planarSpeed = (rigidBody: RigidBody) => {
     return Math.hypot(velocity.x, velocity.z);
 };
 
+const FLOAT_EPSILON = 1e-9;
+
 describe('applyPlayerBumpResponse', () => {
     it('should impart more knockback velocity to the lighter car', () => {
         const lightPlayer = createPlayer('light', 'sport', 6);
@@ -120,8 +122,8 @@ describe('applyPlayerBumpResponse', () => {
 
         applyPlayerBumpResponse(playerA, playerB, rigidBodyMap);
 
-        expect(planarSpeed(bodyA)).toBeLessThanOrEqual(4.5);
-        expect(planarSpeed(bodyB)).toBeLessThanOrEqual(4.5);
+        expect(planarSpeed(bodyA)).toBeLessThanOrEqual(4.5 + FLOAT_EPSILON);
+        expect(planarSpeed(bodyB)).toBeLessThanOrEqual(4.5 + FLOAT_EPSILON);
     });
 
     it('should reset scalar motion speed so recovery logic cannot reuse stale pre-impact speed', () => {

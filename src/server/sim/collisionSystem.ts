@@ -165,6 +165,7 @@ const BUMP_IMPULSE_STRENGTH = 25;
 const BUMP_LATERAL_IMPULSE_FACTOR = 0.35;
 const MAX_POST_BUMP_SPEED_MPS = 4.5;
 const POST_BUMP_VELOCITY_DAMPING = 0.45;
+const POST_BUMP_ANGULAR_DAMPING = 0.35;
 const IMPULSE_SPEED_SCALE_CEILING_MPS = 30;
 
 export const applyPlayerBumpResponse = (
@@ -197,31 +198,30 @@ export const applyPlayerBumpResponse = (
     const massA = rbA.mass();
     const massB = rbB.mass();
     const totalMass = massA + massB;
-    const ratioA = massB / totalMass;
-    const ratioB = massA / totalMass;
+    const reducedMass = (massA * massB) / totalMass;
 
     const impactSpeed = Math.max(Math.abs(playerA.motion.speed), Math.abs(playerB.motion.speed));
     const speedFactor = clamp(impactSpeed / IMPULSE_SPEED_SCALE_CEILING_MPS, 0.12, 1);
     const scaledStrength = BUMP_IMPULSE_STRENGTH * speedFactor;
 
-    const impulseA = scaledStrength * ratioA * massA;
-    const impulseB = scaledStrength * ratioB * massB;
-    const lateralImpulseA = impulseA * BUMP_LATERAL_IMPULSE_FACTOR;
-    const lateralImpulseB = impulseB * BUMP_LATERAL_IMPULSE_FACTOR;
+    // Reduced-mass impulse: same magnitude in opposite directions.
+    // Lighter cars receive a larger velocity delta (impulse / mass).
+    const impulse = scaledStrength * reducedMass;
+    const lateralImpulse = impulse * BUMP_LATERAL_IMPULSE_FACTOR;
 
     rbA.applyImpulse(
         {
-            x: -dx * impulseA + lateralX * lateralImpulseA * lateralSign,
+            x: -dx * impulse + lateralX * lateralImpulse * lateralSign,
             y: 0,
-            z: -dz * impulseA + lateralZ * lateralImpulseA * lateralSign,
+            z: -dz * impulse + lateralZ * lateralImpulse * lateralSign,
         },
         true,
     );
     rbB.applyImpulse(
         {
-            x: dx * impulseB - lateralX * lateralImpulseB * lateralSign,
+            x: dx * impulse - lateralX * lateralImpulse * lateralSign,
             y: 0,
-            z: dz * impulseB - lateralZ * lateralImpulseB * lateralSign,
+            z: dz * impulse - lateralZ * lateralImpulse * lateralSign,
         },
         true,
     );
@@ -257,7 +257,7 @@ export const applyPlayerBumpResponse = (
         rigidBody.setAngvel(
             {
                 x: 0,
-                y: currentAngVel.y * 0.35,
+                y: currentAngVel.y * POST_BUMP_ANGULAR_DAMPING,
                 z: 0,
             },
             true,

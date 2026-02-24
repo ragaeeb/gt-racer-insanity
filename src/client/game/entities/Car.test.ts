@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import * as THREE from 'three';
-import { SUSPENSION_BOUNCE_AMPLITUDE, advanceFlipElapsedMs, canTriggerFlip, normalizeAudioSpeed } from './Car';
+import { advanceFlipElapsedMs, canTriggerFlip, normalizeAudioSpeed, SUSPENSION_BOUNCE_AMPLITUDE } from './Car';
 
 const BRAKE_LIGHT_MATERIAL_RE = /^(BrakeLight|TailLights?)$/i;
 
@@ -79,7 +79,7 @@ describe('car visual enhancements', () => {
             for (const mat of mats) {
                 mat.emissiveIntensity = 2.0;
             }
-            expect(mats.every((m) => m.emissiveIntensity === 2.0)).toBe(true);
+            expect(mats.every((m) => m.emissiveIntensity === 2.0)).toBeTrue();
         });
     });
 
@@ -104,12 +104,12 @@ describe('car visual enhancements', () => {
 
     describe('flip progression', () => {
         it('should prevent flip restarts while an existing flip is active', () => {
-            expect(canTriggerFlip(0)).toBe(false);
-            expect(canTriggerFlip(350)).toBe(false);
+            expect(canTriggerFlip(0)).toBeFalse();
+            expect(canTriggerFlip(350)).toBeFalse();
         });
 
         it('should allow a new flip when no flip is active', () => {
-            expect(canTriggerFlip(null)).toBe(true);
+            expect(canTriggerFlip(null)).toBeTrue();
         });
 
         it('should clamp a large frame step so flip animation does not instantly finish', () => {

@@ -26,7 +26,7 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Build: `bun run build`
 - Unit tests: `bun run test`
 - Watch tests: `bun run test:watch`
-- E2E tests: `bun run e2e` (opt-in, runs with `RUN_E2E=true`)
+- E2E tests: `bun run e2e` (launches Playwright Test via `bun x playwright test`, requires `bun x playwright install chromium` once)
 - Full check: `bun run check`
 
 ## Repository Layout

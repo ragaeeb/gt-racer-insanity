@@ -1,17 +1,18 @@
-import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { useRef } from 'react';
 import * as THREE from 'three';
 import { clientConfig } from '@/client/app/config';
 import type { InterpolationState, RaceSession } from '@/client/game/hooks/types';
+import { useHudStore } from '@/client/game/state/hudStore';
 import {
+    COLLISION_YAW_CORRECTION_ALPHA,
+    computeCorrectionAlpha,
     HARD_SNAP_THRESHOLD_METERS,
+    lerpAngle,
     MIN_CORRECTION_THRESHOLD,
     YAW_PER_FRAME_ALPHA,
-    computeCorrectionAlpha,
-    lerpAngle,
 } from '@/client/game/systems/correctionSystem';
 import { sampleInterpolationBuffer } from '@/client/game/systems/interpolationSystem';
-import { useHudStore } from '@/client/game/state/hudStore';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
 import { DEFAULT_TRACK_WIDTH_METERS } from '@/shared/game/track/trackManifest';
 import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
@@ -91,7 +92,7 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
             }
         }
         if (localIsFlipped && !previousLocalFlippedRef.current) {
-            session.lastCollisionSnapshotFlipSeenAtMs = Date.now();
+            session.lastCollisionSnapshotFlipSeenAtMs = nowMs;
         }
         previousLocalFlippedRef.current = localIsFlipped;
 
@@ -99,7 +100,7 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
         if (localFlipAppliedAtMs !== null && localFlipAppliedAtMs !== lastLocalFlipAppliedAtMsRef.current) {
             const startedFlip = localCar.triggerFlip();
             if (startedFlip) {
-                session.lastCollisionFlipStartedAtMs = Date.now();
+                session.lastCollisionFlipStartedAtMs = nowMs;
             }
             lastLocalFlipAppliedAtMsRef.current = localFlipAppliedAtMs;
         } else if (localFlipAppliedAtMs === null) {
@@ -199,7 +200,7 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
             }
 
             if (yawError >= clientConfig.reconciliationYawThresholdRadians) {
-                const yawAlpha = shouldForceCollisionSnap ? 0.18 : YAW_PER_FRAME_ALPHA;
+                const yawAlpha = shouldForceCollisionSnap ? COLLISION_YAW_CORRECTION_ALPHA : YAW_PER_FRAME_ALPHA;
                 localCar.rotationY = lerpAngle(localCar.rotationY, localSnapshot.rotationY, yawAlpha);
                 localCar.mesh.rotation.y = localCar.rotationY;
             }
@@ -222,9 +223,7 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
 
             useHudStore.getState().setSpeedKph(Math.max(0, localSnapshot.speed * 3.6));
         } else {
-            useHudStore
-                .getState()
-                .setSpeedKph(Math.max(0, localCar.getSpeed() * 3.6));
+            useHudStore.getState().setSpeedKph(Math.max(0, localCar.getSpeed() * 3.6));
         }
 
         if (session.isRunning) {
@@ -246,11 +245,7 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
                 continue;
             }
 
-            const interpolatedState = sampleInterpolationBuffer(
-                interpolationBuffer,
-                renderTimeMs,
-                interpolate,
-            );
+            const interpolatedState = sampleInterpolationBuffer(interpolationBuffer, renderTimeMs, interpolate);
 
             if (!interpolatedState) {
                 continue;

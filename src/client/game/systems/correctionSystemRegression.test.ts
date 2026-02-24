@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import {
-    HARD_SNAP_THRESHOLD_METERS,
-    MIN_CORRECTION_THRESHOLD,
-    computeCorrectionAlpha,
-} from './correctionSystem';
+import { computeCorrectionAlpha, HARD_SNAP_THRESHOLD_METERS, MIN_CORRECTION_THRESHOLD } from './correctionSystem';
 
 describe('correction system regression tests', () => {
     describe('wall-adjacent correction stability', () => {
@@ -45,7 +41,7 @@ describe('correction system regression tests', () => {
                 }
             }
 
-            expect(correctionApplied).toBe(true);
+            expect(correctionApplied).toBeTrue();
             expect(Math.abs(localZ - serverZ)).toBeLessThan(MIN_CORRECTION_THRESHOLD);
         });
 
@@ -103,7 +99,7 @@ describe('correction system regression tests', () => {
                     error = 0;
                 } else if (error >= MIN_CORRECTION_THRESHOLD) {
                     const alpha = computeCorrectionAlpha(error);
-                    error *= (1 - alpha);
+                    error *= 1 - alpha;
                 }
 
                 maxError = Math.max(maxError, error);

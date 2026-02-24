@@ -47,6 +47,13 @@ type BumpPair = {
     secondPlayerId: string;
 };
 
+export const toPairKey = (firstPlayerId: string, secondPlayerId: string) => {
+    const [a, b] = firstPlayerId < secondPlayerId
+        ? [firstPlayerId, secondPlayerId]
+        : [secondPlayerId, firstPlayerId];
+    return `${a}:${b}`;
+};
+
 const getSpawnPositionX = (playerIndex: number) => {
     return playerIndex * 4 - 6;
 };
@@ -97,13 +104,6 @@ export class RoomSimulation {
     private readonly trackBoundaryX: number;
     private readonly totalTrackLengthMeters: number;
     private obstacleColliderHandles = new Set<number>();
-
-    private toPairKey = (firstPlayerId: string, secondPlayerId: string) => {
-        const [a, b] = firstPlayerId < secondPlayerId
-            ? [firstPlayerId, secondPlayerId]
-            : [secondPlayerId, firstPlayerId];
-        return `${a}:${b}`;
-    };
 
     constructor(options: RoomSimulationOptions) {
         this.dtSeconds = 1 / Math.max(options.tickHz, 1);
@@ -307,7 +307,7 @@ export class RoomSimulation {
     };
 
     private applyBumpForPair = (pair: BumpPair, nowMs: number) => {
-        const pairKey = this.toPairKey(pair.firstPlayerId, pair.secondPlayerId);
+        const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
         const playerA = this.state.players.get(pair.firstPlayerId);
         const playerB = this.state.players.get(pair.secondPlayerId);
         if (!playerA || !playerB) {
@@ -682,13 +682,13 @@ export class RoomSimulation {
         );
 
         for (const pair of collisionResult.endedPlayerPairs) {
-            const pairKey = this.toPairKey(pair.firstPlayerId, pair.secondPlayerId);
+            const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
             this.activeBumpPairKeys.delete(pairKey);
             this.pendingBumpPairByKey.delete(pairKey);
         }
 
         for (const pair of collisionResult.startedPlayerPairs) {
-            const pairKey = this.toPairKey(pair.firstPlayerId, pair.secondPlayerId);
+            const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
             this.activeBumpPairKeys.add(pairKey);
 
             const pairCooldownUntil = this.bumpPairCooldown.get(pairKey) ?? 0;

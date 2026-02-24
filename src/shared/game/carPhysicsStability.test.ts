@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import {
-    DEFAULT_CAR_PHYSICS_CONFIG,
-    stepCarMotion,
-    type CarControlState,
-    type CarMotionState,
-} from './carPhysics';
+import { type CarControlState, type CarMotionState, DEFAULT_CAR_PHYSICS_CONFIG, stepCarMotion } from './carPhysics';
 import { VEHICLE_CLASS_MANIFESTS, vehicleManifestToPhysicsConfig } from './vehicle/vehicleClassManifest';
 
 const noInput: CarControlState = { isUp: false, isDown: false, isLeft: false, isRight: false };
@@ -26,10 +21,10 @@ describe('car physics stability', () => {
 
         for (const { state, controls, dt } of edgeCases) {
             const result = stepCarMotion(state, controls, dt, DEFAULT_CAR_PHYSICS_CONFIG);
-            expect(Number.isFinite(result.speed)).toBe(true);
-            expect(Number.isFinite(result.rotationY)).toBe(true);
-            expect(Number.isFinite(result.positionX)).toBe(true);
-            expect(Number.isFinite(result.positionZ)).toBe(true);
+            expect(Number.isFinite(result.speed)).toBeTrue();
+            expect(Number.isFinite(result.rotationY)).toBeTrue();
+            expect(Number.isFinite(result.positionX)).toBeTrue();
+            expect(Number.isFinite(result.positionZ)).toBeTrue();
         }
     });
 
@@ -88,10 +83,7 @@ describe('car physics stability', () => {
         const state: CarMotionState = { ...origin, speed: 20 };
         const dt = 1 / 60;
         const result = stepCarMotion(state, noInput, dt);
-        const distanceMoved = Math.hypot(
-            result.positionX - state.positionX,
-            result.positionZ - state.positionZ,
-        );
+        const distanceMoved = Math.hypot(result.positionX - state.positionX, result.positionZ - state.positionZ);
         const expectedMaxDistance = state.speed * dt * 1.1;
         expect(distanceMoved).toBeLessThanOrEqual(expectedMaxDistance);
     });

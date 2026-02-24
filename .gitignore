@@ -22,3 +22,6 @@ coverage/
 
 # Bun
 .bun/
+
+test-results
+playwright-report

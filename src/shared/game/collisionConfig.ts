@@ -34,3 +34,6 @@ export const CLIENT_DRIVE_LOCK_STUNNED_MS = 2_000;
 
 /** Client-side duration for hard-snapping position after a collision event. */
 export const CLIENT_HARD_SNAP_MS = 160;
+
+/** Extended local hard-snap window for flipped/stunned collision recovery. */
+export const LOCAL_COLLISION_HARD_SNAP_WINDOW_MS = 3_500;

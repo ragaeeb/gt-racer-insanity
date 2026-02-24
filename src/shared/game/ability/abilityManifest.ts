@@ -41,7 +41,7 @@ export const ABILITY_MANIFESTS: AbilityManifest[] = [
     },
     {
         baseCooldownMs: 10_000,
-        description: 'Drops spikes behind the car to flatten tires.',
+        description: 'Launches spikes in a forward cone to flatten tires.',
         effectId: 'flat_tire',
         id: 'spike-burst',
         label: 'Spike Burst',

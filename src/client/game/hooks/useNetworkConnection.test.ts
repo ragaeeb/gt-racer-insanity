@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import type { ServerSnapshotPayload, SnapshotPlayerState } from '@/shared/network/types';
 import { buildSpikeShotFxPayload } from '@/client/game/hooks/useNetworkConnection';
+import type { ServerSnapshotPayload, SnapshotPlayerState } from '@/shared/network/types';
 
 const createSnapshotPlayer = (id: string, x: number, z: number): SnapshotPlayerState => ({
     activeEffects: [],
@@ -57,10 +57,17 @@ describe('buildSpikeShotFxPayload', () => {
         const snapshot = createSnapshot([createSnapshotPlayer('source', 1, 2)]);
         const payload = buildSpikeShotFxPayload(snapshot, 'source', 'target', 1234);
         expect(payload).toBeNull();
+
+        const snapshotWithTargetOnly = createSnapshot([createSnapshotPlayer('target', 3, 4)]);
+        const payload2 = buildSpikeShotFxPayload(snapshotWithTargetOnly, 'source', 'target', 1234);
+        expect(payload2).toBeNull();
     });
 
     it('should build a pending spike-shot payload when both players exist', () => {
-        const snapshot = createSnapshot([createSnapshotPlayer('source', 4.5, 8.75), createSnapshotPlayer('target', -2, 16)]);
+        const snapshot = createSnapshot([
+            createSnapshotPlayer('source', 4.5, 8.75),
+            createSnapshotPlayer('target', -2, 16),
+        ]);
         const payload = buildSpikeShotFxPayload(snapshot, 'source', 'target', 4321);
 
         expect(payload).toEqual({

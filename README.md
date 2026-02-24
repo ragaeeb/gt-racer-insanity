@@ -35,7 +35,7 @@ Multiplayer racing game with a server-authoritative V2 simulation stack, finite 
 - Better car graphics: wheels rotate with speed, brake-light emissives pulse while braking, and suspension subtly bounces as speed changes.
 - Deterministic scenery builds alongside tracks via `SceneryManager`, with instanced buildings, street lights, and hazards that depend on track themes.
 - Diagnostic instrumentation (`useDiagnostics`) exposes `__GT_DEBUG__`/`__GT_DIAG__`, toggleable via `?diag=1` or localStorage `gt-diag`, so we can capture long-task/frame-gap data during freeze investigations.
-- E2E coverage includes smoke plus multiplayer non-overlap scenario (`RUN_E2E=true`).
+- E2E coverage includes smoke plus multiplayer non-overlap scenarios (run via `bun run e2e` after `bun x playwright install chromium`).
 
 ## Tech Stack
 - `bun` runtime and package manager
@@ -63,9 +63,9 @@ Server health:
 ## Scripts
 - `bun run dev` -> start Vite dev client
 - `bun run server` -> start Bun Socket.IO server
-- `bun run test` -> run all tests (`e2e` suite is skipped unless `RUN_E2E=true`)
+- `bun run test` -> run all deterministic/unit tests (browser suites run via `bun run e2e`)
 - `bun run test:watch` -> run tests in watch mode
-- `bun run test:e2e:install` -> install Chromium for Playwright smoke tests
+- `bun run test:e2e:install` -> `bun x playwright install chromium`
 - `bun run e2e` -> run all browser tests in `testing/` (smoke + multiplayer collision)
 - `bun run build` -> typecheck and production build
 - `bun run check` -> run tests then build
@@ -114,10 +114,8 @@ Logic that can be deterministic is extracted into shared/server modules and cove
 - manifest schema validation
 
 E2E tests:
-- live in `testing/e2e.test.ts` and `testing/e2e-multiplayer-collision.test.ts`
-- run only when `RUN_E2E=true`
-- validate load/connect/spawn/move/no-runtime-errors
-- validate multiplayer visibility + non-overlap separation behavior
+- live in `testing/*.e2e.ts` and run via Playwright (`bun run e2e` after `bun x playwright install chromium`)
+- Exercise load/connect/spawn/move/no-runtime-errors and multiplayer separation/diagnostics behavior
 
 ## Current Status
 - V2-only netcode cutover is active; legacy `update_state`/`player_moved` runtime paths are removed.

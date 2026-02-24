@@ -104,6 +104,7 @@ const LONG_FRAME_GAP_THRESHOLD_MS = 50;
 const SHAKE_SPIKE_CAMERA_JUMP_METERS = 1.5;
 const SHAKE_SPIKE_FPS_THRESHOLD = 45;
 const SHAKE_SPIKE_WARN_INTERVAL_MS = 1000;
+const ACTIVE_COLLISION_WINDOW_MS = 3_500;
 
 const createDiagCaptureState = (): DiagCaptureState => ({
     correctionPositionErrorMaxMeters: 0,
@@ -315,7 +316,9 @@ export const useDiagnostics = (
             getSummary: () => {
                 const capture = captureRef.current;
                 const collisionFrameSampleCount = capture.frameSamples.reduce((count, frame) => {
-                    return frame.collisionEventAgeMs === null ? count : count + 1;
+                    return frame.collisionEventAgeMs !== null && frame.collisionEventAgeMs <= ACTIVE_COLLISION_WINDOW_MS
+                        ? count + 1
+                        : count;
                 }, 0);
                 return {
                     collisionFrameSampleCount,
@@ -573,7 +576,8 @@ export const useDiagnostics = (
             capture.longFrameCount += longFrameCount;
             capture.frameGapMaxMs = Math.max(capture.frameGapMaxMs, frameGapMaxMs);
             capture.longFrameGapCount += longFrameGapCount;
-            capture.longTaskCount = longTaskCountRef.current;
+            const longTaskCountSinceLog = Math.max(0, longTaskCountRef.current - capture.longTaskCount);
+            capture.longTaskCount += longTaskCountSinceLog;
             capture.longTaskMaxMs = Math.max(capture.longTaskMaxMs, longTaskMaxMsRef.current);
             capture.speedKphMax = Math.max(capture.speedKphMax, localSpeedKph);
             capture.wallClampCount = wallClampCountRef.current;
