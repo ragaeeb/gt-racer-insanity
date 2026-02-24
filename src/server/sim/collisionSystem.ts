@@ -161,13 +161,124 @@ export const syncPlayerMotionFromRigidBody = (
     player.motion.rotationY = yawRadians;
 };
 
+const BUMP_IMPULSE_STRENGTH = 25;
+const BUMP_LATERAL_IMPULSE_FACTOR = 0.35;
+const MAX_POST_BUMP_SPEED_MPS = 4.5;
+const POST_BUMP_VELOCITY_DAMPING = 0.45;
+const IMPULSE_SPEED_SCALE_CEILING_MPS = 30;
+
+export const applyPlayerBumpResponse = (
+    playerA: SimPlayerState,
+    playerB: SimPlayerState,
+    rigidBodyMap: Map<string, RigidBody>,
+) => {
+    const rbA = rigidBodyMap.get(playerA.id);
+    const rbB = rigidBodyMap.get(playerB.id);
+    if (!rbA || !rbB) {
+        return;
+    }
+
+    const posA = rbA.translation();
+    const posB = rbB.translation();
+    let dx = posB.x - posA.x;
+    let dz = posB.z - posA.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 0.001) {
+        dx = 0;
+        dz = 1;
+    } else {
+        dx /= dist;
+        dz /= dist;
+    }
+    const lateralX = -dz;
+    const lateralZ = dx;
+    const lateralSign = playerA.id < playerB.id ? 1 : -1;
+
+    const massA = rbA.mass();
+    const massB = rbB.mass();
+    const totalMass = massA + massB;
+    const ratioA = massB / totalMass;
+    const ratioB = massA / totalMass;
+
+    const impactSpeed = Math.max(Math.abs(playerA.motion.speed), Math.abs(playerB.motion.speed));
+    const speedFactor = clamp(impactSpeed / IMPULSE_SPEED_SCALE_CEILING_MPS, 0.12, 1);
+    const scaledStrength = BUMP_IMPULSE_STRENGTH * speedFactor;
+
+    const impulseA = scaledStrength * ratioA * massA;
+    const impulseB = scaledStrength * ratioB * massB;
+    const lateralImpulseA = impulseA * BUMP_LATERAL_IMPULSE_FACTOR;
+    const lateralImpulseB = impulseB * BUMP_LATERAL_IMPULSE_FACTOR;
+
+    rbA.applyImpulse(
+        {
+            x: -dx * impulseA + lateralX * lateralImpulseA * lateralSign,
+            y: 0,
+            z: -dz * impulseA + lateralZ * lateralImpulseA * lateralSign,
+        },
+        true,
+    );
+    rbB.applyImpulse(
+        {
+            x: dx * impulseB - lateralX * lateralImpulseB * lateralSign,
+            y: 0,
+            z: dz * impulseB - lateralZ * lateralImpulseB * lateralSign,
+        },
+        true,
+    );
+
+    const dampAndClampPostBumpVelocity = (rigidBody: RigidBody) => {
+        const currentVelocity = rigidBody.linvel();
+        const dampedX = currentVelocity.x * POST_BUMP_VELOCITY_DAMPING;
+        const dampedZ = currentVelocity.z * POST_BUMP_VELOCITY_DAMPING;
+        const dampedPlanarSpeed = Math.hypot(dampedX, dampedZ);
+
+        if (dampedPlanarSpeed > MAX_POST_BUMP_SPEED_MPS && dampedPlanarSpeed > 0.001) {
+            const speedScale = MAX_POST_BUMP_SPEED_MPS / dampedPlanarSpeed;
+            rigidBody.setLinvel(
+                {
+                    x: dampedX * speedScale,
+                    y: 0,
+                    z: dampedZ * speedScale,
+                },
+                true,
+            );
+        } else {
+            rigidBody.setLinvel(
+                {
+                    x: dampedX,
+                    y: 0,
+                    z: dampedZ,
+                },
+                true,
+            );
+        }
+
+        const currentAngVel = rigidBody.angvel();
+        rigidBody.setAngvel(
+            {
+                x: 0,
+                y: currentAngVel.y * 0.35,
+                z: 0,
+            },
+            true,
+        );
+    };
+
+    dampAndClampPostBumpVelocity(rbA);
+    dampAndClampPostBumpVelocity(rbB);
+
+    playerA.motion.speed = 0;
+    playerB.motion.speed = 0;
+};
+
 export type ObstacleHit = {
     playerId: string;
 };
 
 export type DrainCollisionResult = {
+    endedPlayerPairs: CollisionPair[];
     obstacleHits: ObstacleHit[];
-    playerPairs: CollisionPair[];
+    startedPlayerPairs: CollisionPair[];
 };
 
 export const drainStartedCollisions = (
@@ -175,28 +286,26 @@ export const drainStartedCollisions = (
     playerIdByColliderHandle: Map<number, string>,
     obstacleColliderHandles: Set<number>,
 ): DrainCollisionResult => {
-    const uniquePairs = new Set<string>();
-    const playerPairs: CollisionPair[] = [];
+    const uniqueStartedPairs = new Set<string>();
+    const uniqueEndedPairs = new Set<string>();
+    const startedPlayerPairs: CollisionPair[] = [];
+    const endedPlayerPairs: CollisionPair[] = [];
     const hitPlayerIds = new Set<string>();
     const obstacleHits: ObstacleHit[] = [];
 
     eventQueue.drainCollisionEvents((firstColliderHandle, secondColliderHandle, started) => {
-        if (!started) {
-            return;
-        }
-
         const firstPlayerId = playerIdByColliderHandle.get(firstColliderHandle) ?? null;
         const secondPlayerId = playerIdByColliderHandle.get(secondColliderHandle) ?? null;
         const firstIsObstacle = obstacleColliderHandles.has(firstColliderHandle);
         const secondIsObstacle = obstacleColliderHandles.has(secondColliderHandle);
 
-        if (firstPlayerId && secondIsObstacle && !hitPlayerIds.has(firstPlayerId)) {
+        if (started && firstPlayerId && secondIsObstacle && !hitPlayerIds.has(firstPlayerId)) {
             hitPlayerIds.add(firstPlayerId);
             obstacleHits.push({ playerId: firstPlayerId });
             return;
         }
 
-        if (secondPlayerId && firstIsObstacle && !hitPlayerIds.has(secondPlayerId)) {
+        if (started && secondPlayerId && firstIsObstacle && !hitPlayerIds.has(secondPlayerId)) {
             hitPlayerIds.add(secondPlayerId);
             obstacleHits.push({ playerId: secondPlayerId });
             return;
@@ -211,16 +320,26 @@ export const drainStartedCollisions = (
             : [secondPlayerId, firstPlayerId];
 
         const key = `${a}:${b}`;
-        if (uniquePairs.has(key)) {
-            return;
+        if (started) {
+            if (uniqueStartedPairs.has(key)) {
+                return;
+            }
+            uniqueStartedPairs.add(key);
+            startedPlayerPairs.push({
+                firstPlayerId: a,
+                secondPlayerId: b,
+            });
+        } else {
+            if (uniqueEndedPairs.has(key)) {
+                return;
+            }
+            uniqueEndedPairs.add(key);
+            endedPlayerPairs.push({
+                firstPlayerId: a,
+                secondPlayerId: b,
+            });
         }
-
-        uniquePairs.add(key);
-        playerPairs.push({
-            firstPlayerId: a,
-            secondPlayerId: b,
-        });
     });
 
-    return { obstacleHits, playerPairs };
+    return { endedPlayerPairs, obstacleHits, startedPlayerPairs };
 };

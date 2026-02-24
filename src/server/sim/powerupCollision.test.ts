@@ -64,10 +64,10 @@ describe('powerup collision detection', () => {
         sim.step(nowMs + 50);
 
         const snapshot = sim.buildSnapshot(nowMs + 50);
-        const hasBoosted = snapshot.players[0].activeEffects.some(
-            (e) => e.effectType === 'boosted',
+        const hasSpeedBurst = snapshot.players[0].activeEffects.some(
+            (e) => e.effectType === 'speed_burst',
         );
-        expect(hasBoosted).toBe(false);
+        expect(hasSpeedBurst).toBe(false);
         const allActive = snapshot.powerups.every((p) => p.isActive);
         expect(allActive).toBe(true);
     });
@@ -85,7 +85,7 @@ describe('powerup collision detection', () => {
         }
     });
 
-    it('should apply boosted effect via powerup trigger queue', () => {
+    it('should apply speed_burst effect via powerup trigger queue', () => {
         const sim = createSim();
         const nowMs = Date.now();
         sim.joinPlayer('p1', 'Alice', 'sport', 'red', nowMs);
@@ -94,10 +94,10 @@ describe('powerup collision detection', () => {
         sim.step(nowMs + 50);
 
         const snapshot = sim.buildSnapshot(nowMs + 50);
-        const hasBoosted = snapshot.players[0].activeEffects.some(
-            (e) => e.effectType === 'boosted',
+        const hasSpeedBurst = snapshot.players[0].activeEffects.some(
+            (e) => e.effectType === 'speed_burst',
         );
-        expect(hasBoosted).toBe(true);
+        expect(hasSpeedBurst).toBe(true);
     });
 
     it('should emit powerup_collected race event via trigger queue', () => {

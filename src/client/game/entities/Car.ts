@@ -8,6 +8,22 @@ import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 const BRAKE_LIGHT_MATERIAL_RE = /^(BrakeLight|TailLights?)$/i;
 export const SUSPENSION_BOUNCE_AMPLITUDE = 0.015;
 const AUDIO_FADE_RATE = 1.2;
+const FLIP_DURATION_MS = 1_500;
+const FLIP_PROGRESS_DT_CAP_MS = 120;
+const FLIP_TOTAL_ROTATIONS = 1;
+
+export const advanceFlipElapsedMs = (elapsedMs: number, dt: number) => {
+    const frameStepMs = Math.min(Math.max(dt * 1000, 0), FLIP_PROGRESS_DT_CAP_MS);
+    return Math.min(FLIP_DURATION_MS, elapsedMs + frameStepMs);
+};
+
+const finiteOr = (value: number, fallback: number) => (Number.isFinite(value) ? value : fallback);
+
+export const normalizeAudioSpeed = (currentSpeed: number, maxSpeed: number) => {
+    const safeSpeed = finiteOr(currentSpeed, 0);
+    const normalizedSpeedRaw = maxSpeed > 0 ? safeSpeed / maxSpeed : 0;
+    return Math.min(1.0, Math.max(0, finiteOr(normalizedSpeedRaw, 0)));
+};
 
 export type CarAssets = {
     engine?: AudioBuffer;
@@ -49,6 +65,8 @@ export class Car {
     private nameTagSprite?: THREE.Sprite;
     private nameTagTexture?: THREE.CanvasTexture;
     private nameTagMaterial?: THREE.SpriteMaterial;
+
+    private flipElapsedMs: number | null = null;
 
     constructor(
         private scene: THREE.Scene,
@@ -250,6 +268,8 @@ export class Car {
     }
 
     public update(dt: number) {
+        this.updateFlipAnimation(dt);
+
         if (this.isLocalPlayer && this.inputManager) {
             this.handleLocalMovement(dt);
         } else {
@@ -262,6 +282,67 @@ export class Car {
         this.updateAudio(dt);
     }
 
+    public setFlipped = (isFlipped: boolean): boolean => {
+        if (!isFlipped || this.flipElapsedMs !== null) {
+            return false;
+        }
+
+        return this.triggerFlip();
+    };
+
+    public applyCollisionDriveLock = (durationMs: number) => {
+        this.controller.applyDriveLock(durationMs);
+    };
+
+    public syncAuthoritativeSpeed = (speed: number) => {
+        this.controller.syncAuthoritativeSpeed(speed);
+    };
+
+    public triggerFlip = (): boolean => {
+        if (this.flipElapsedMs !== null && this.flipElapsedMs < 100) {
+            return false;
+        }
+
+        this.flipElapsedMs = 0;
+
+        if (this.gltfWrapper) {
+            this.gltfWrapper.rotation.x = 0;
+            this.gltfWrapper.position.y = 0;
+        }
+
+        return true;
+    };
+
+    private updateFlipAnimation(dt: number) {
+        if (this.flipElapsedMs === null) {
+            if (this.gltfWrapper) {
+                this.gltfWrapper.rotation.x = 0;
+                this.gltfWrapper.position.y = 0;
+            }
+            return;
+        }
+
+        this.flipElapsedMs = advanceFlipElapsedMs(this.flipElapsedMs, dt);
+
+        if (this.flipElapsedMs >= FLIP_DURATION_MS) {
+            this.flipElapsedMs = null;
+            if (this.gltfWrapper) {
+                this.gltfWrapper.rotation.x = 0;
+                this.gltfWrapper.position.y = 0;
+            }
+            return;
+        }
+
+        const t = this.flipElapsedMs / FLIP_DURATION_MS;
+        const eased = 1 - (1 - t) * (1 - t);
+        const flipRotationX = eased * Math.PI * 2 * FLIP_TOTAL_ROTATIONS;
+
+        if (this.gltfWrapper) {
+            this.gltfWrapper.rotation.x = flipRotationX;
+            this.gltfWrapper.position.y = Math.sin(eased * Math.PI) * 2.5;
+        }
+    }
+
     private updateBrakeLights() {
         const isBraking = this.controller.isBraking() && Math.abs(this.controller.getSpeed()) > 1;
         const intensity = isBraking ? 2.0 : 0;
@@ -271,7 +352,7 @@ export class Car {
     }
 
     private updateSuspensionBounce(dt: number) {
-        if (!this.gltfWrapper) {
+        if (!this.gltfWrapper || this.flipElapsedMs !== null) {
             return;
         }
         const maxSpeed = this.controller.getMaxSpeed();
@@ -309,8 +390,9 @@ export class Car {
         if (!this.isLocalPlayer) {
             currentSpeed = this.position.distanceTo(this.targetPosition) * 10;
         }
-
-        const normalizedSpeed = Math.min(1.0, currentSpeed / this.controller.getMaxSpeed());
+        currentSpeed = finiteOr(currentSpeed, 0);
+        const maxSpeed = this.controller.getMaxSpeed();
+        const normalizedSpeed = normalizeAudioSpeed(currentSpeed, maxSpeed);
         const speedDelta = currentSpeed - this.previousAudioSpeed;
         const accelerationFactor = THREE.MathUtils.clamp(speedDelta / 8, 0, 1);
         const decelerationFactor = THREE.MathUtils.clamp(-speedDelta / 8, 0, 1);
@@ -328,12 +410,12 @@ export class Car {
         const accelVolume =
             THREE.MathUtils.clamp(normalizedSpeed * 0.3 + throttleWeight * 0.5 + accelerationFactor * 0.5, 0, 1) * fade;
 
-        this.engineSound.setVolume(idleVolume);
-        this.drivingSound.setVolume(drivingVolume);
-        this.accelSound.setVolume(accelVolume);
-        this.engineSound.setPlaybackRate(0.9 + normalizedSpeed * 0.2);
-        this.drivingSound.setPlaybackRate(0.85 + normalizedSpeed * 0.4);
-        this.accelSound.setPlaybackRate(0.8 + normalizedSpeed * 0.6);
+        this.engineSound.setVolume(finiteOr(idleVolume, 0));
+        this.drivingSound.setVolume(finiteOr(drivingVolume, 0));
+        this.accelSound.setVolume(finiteOr(accelVolume, 0));
+        this.engineSound.setPlaybackRate(finiteOr(0.9 + normalizedSpeed * 0.2, 1));
+        this.drivingSound.setPlaybackRate(finiteOr(0.85 + normalizedSpeed * 0.4, 1));
+        this.accelSound.setPlaybackRate(finiteOr(0.8 + normalizedSpeed * 0.6, 1));
 
         const shouldTriggerBrake = this.isLocalPlayer
             ? this.controller.isBraking() && currentSpeed > 1.5
@@ -343,8 +425,10 @@ export class Car {
             if (this.brakeSound.isPlaying) {
                 this.brakeSound.stop();
             }
-            this.brakeSound.setVolume(THREE.MathUtils.clamp(0.65 + normalizedSpeed * 0.45, 0.65, 1.0) * fade);
-            this.brakeSound.setPlaybackRate(THREE.MathUtils.clamp(0.95 + normalizedSpeed * 0.35, 0.95, 1.25));
+            const brakeVolume = THREE.MathUtils.clamp(0.65 + normalizedSpeed * 0.45, 0.65, 1.0) * fade;
+            const brakeRate = THREE.MathUtils.clamp(0.95 + normalizedSpeed * 0.35, 0.95, 1.25);
+            this.brakeSound.setVolume(finiteOr(brakeVolume, 0.65));
+            this.brakeSound.setPlaybackRate(finiteOr(brakeRate, 1));
             this.brakeSound.play();
             this.lastBrakeTriggerAtMs = nowMs;
         }
@@ -383,6 +467,11 @@ export class Car {
     public reset() {
         this.position.set(0, 0, 0);
         this.rotationY = 0;
+        this.flipElapsedMs = null;
+        if (this.gltfWrapper) {
+            this.gltfWrapper.rotation.x = 0;
+            this.gltfWrapper.position.y = 0;
+        }
         this.controller.reset();
         this.previousAudioSpeed = 0;
         this.lastBrakeTriggerAtMs = 0;

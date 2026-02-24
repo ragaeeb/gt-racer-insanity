@@ -63,9 +63,11 @@ describe('vehicle selection integration', () => {
             }
         });
 
-        it('should not contain black in any palette', () => {
+        it('should only include black in patrol (police) palette', () => {
             for (const manifest of VEHICLE_CLASS_MANIFESTS) {
-                expect(manifest.colorPaletteIds).not.toContain('black');
+                if (manifest.colorPaletteIds.includes('black')) {
+                    expect(manifest.id).toBe('patrol');
+                }
             }
         });
     });

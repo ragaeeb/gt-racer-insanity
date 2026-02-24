@@ -13,7 +13,7 @@ export type PlayerRaceProgress = {
     lap: number;
 };
 
-export type StatusEffectType = 'slowed' | 'stunned' | 'flat_tire' | 'boosted';
+export type StatusEffectType = 'slowed' | 'stunned' | 'flat_tire' | 'boosted' | 'flipped' | 'speed_burst';
 
 export type StatusEffectInstance = {
     appliedAtMs: number;
@@ -85,7 +85,7 @@ const isRaceStatus = (value: unknown): value is RaceStatus => {
 };
 
 const isStatusEffectType = (value: unknown): value is StatusEffectType => {
-    return value === 'slowed' || value === 'stunned' || value === 'flat_tire' || value === 'boosted';
+    return value === 'slowed' || value === 'stunned' || value === 'flat_tire' || value === 'boosted' || value === 'flipped' || value === 'speed_burst';
 };
 
 export const isStatusEffectInstance = (value: unknown): value is StatusEffectInstance => {

@@ -1,6 +1,6 @@
 import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 
-export type VehicleClassId = 'sport' | 'muscle' | 'truck';
+export type VehicleClassId = 'sport' | 'muscle' | 'patrol' | 'truck';
 
 export type VehiclePhysicsManifest = {
     acceleration: number;
@@ -49,6 +49,21 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
             maxReverseSpeed: 18,
             minTurnSpeed: 0.1,
             turnSpeed: 2.4,
+        },
+    },
+    {
+        abilityId: 'spike-shot',
+        colorPaletteIds: ['white', 'black', 'blue', 'silver'],
+        id: 'patrol',
+        label: 'Patrol',
+        physics: {
+            acceleration: 22,
+            collisionMass: 1150,
+            friction: 7.5,
+            maxForwardSpeed: 42,
+            maxReverseSpeed: 18,
+            minTurnSpeed: 0.1,
+            turnSpeed: 2.5,
         },
     },
     {

@@ -17,7 +17,7 @@ const createSimulation = () =>
 describe('selection round-trip through server simulation', () => {
     it('should preserve vehicle id in snapshot for every vehicle class', () => {
         const sim = createSimulation();
-        const classes: VehicleClassId[] = ['sport', 'muscle', 'truck'];
+        const classes: VehicleClassId[] = ['sport', 'muscle', 'patrol', 'truck'];
 
         for (const vehicleId of classes) {
             sim.joinPlayer(`player-${vehicleId}`, `Player ${vehicleId}`, vehicleId, 'red');

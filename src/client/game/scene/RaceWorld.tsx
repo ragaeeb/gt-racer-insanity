@@ -6,12 +6,14 @@ import { useCameraFollow } from '@/client/game/hooks/useCameraFollow';
 import { useCarAssets } from '@/client/game/hooks/useCarAssets';
 import { useCarInterpolation } from '@/client/game/hooks/useCarInterpolation';
 import { useDiagnostics } from '@/client/game/hooks/useDiagnostics';
+import { useAbilityEmitter } from '@/client/game/hooks/useAbilityEmitter';
 import { useInputEmitter } from '@/client/game/hooks/useInputEmitter';
 import { useNetworkConnection } from '@/client/game/hooks/useNetworkConnection';
 import { useRaceSession } from '@/client/game/hooks/useRaceSession';
 import type { RaceWorldCallbacks } from '@/client/game/hooks/types';
 import { SceneEnvironment } from '@/client/game/scene/environment/SceneEnvironment';
 import { getSceneEnvironmentProfile } from '@/client/game/scene/environment/sceneEnvironmentProfiles';
+import { SpikeShotProjectiles } from '@/client/game/scene/SpikeShotProjectiles';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
 
@@ -79,12 +81,14 @@ export const RaceWorld = ({
     // Hook order matters: interpolation updates car state -> input emits -> camera follows -> diagnostics captures
     const wallClampCountRef = useCarInterpolation(sessionRef);
     useInputEmitter(sessionRef);
+    useAbilityEmitter(sessionRef);
     const cameraMetricsRef = useCameraFollow(sessionRef, activeSceneEnvironment, dirLightRef);
     useDiagnostics(sessionRef, cameraMetricsRef, wallClampCountRef);
 
     return (
         <>
             <SceneEnvironment profileId={sceneEnvironmentId} sunLightRef={dirLightRef} />
+            <SpikeShotProjectiles />
         </>
     );
 };

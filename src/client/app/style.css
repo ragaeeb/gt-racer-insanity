@@ -100,7 +100,9 @@ canvas {
     color: #ff8bb0;
 }
 
-#control-mode-toggle {
+#control-mode-toggle,
+#diagnostics-toggle,
+#diagnostics-level {
     align-items: center;
     background: rgba(0, 0, 0, 0.5);
     border: 1px solid rgba(255, 255, 255, 0.35);
@@ -117,8 +119,32 @@ canvas {
     width: fit-content;
 }
 
-#control-mode-toggle input {
+#control-mode-toggle input,
+#diagnostics-toggle input {
     margin: 0;
+}
+
+#diagnostics-level {
+    justify-content: space-between;
+    width: 100%;
+}
+
+#diagnostics-level-select {
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 6px;
+    color: #f4f6ff;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    padding: 4px 8px;
+    pointer-events: auto;
+}
+
+#diagnostics-level-select:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
 }
 
 #generate-debug-log-btn {

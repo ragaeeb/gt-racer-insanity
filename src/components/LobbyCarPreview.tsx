@@ -78,13 +78,20 @@ type SceneProps = {
     colorId: string;
 };
 
+const PREVIEW_BG_COLOR = new THREE.Color(0x1d1f2d);
+const GROUND_COLOR = new THREE.Color(0x2a2d40);
+const SKY_COLOR = new THREE.Color(0x3a3f55);
+
 const PreviewScene = ({ vehicleClassId, colorId }: SceneProps) => {
     const modelPath = getModelPathForVehicleClass(vehicleClassId);
     return (
         <>
-            <ambientLight intensity={0.9} />
-            <directionalLight position={[4, 6, 5]} intensity={1.2} />
-            <directionalLight position={[-3, 4, -4]} intensity={0.4} />
+            <color attach="background" args={[PREVIEW_BG_COLOR.r, PREVIEW_BG_COLOR.g, PREVIEW_BG_COLOR.b]} />
+            <hemisphereLight args={[SKY_COLOR, GROUND_COLOR, 0.6]} />
+            <ambientLight intensity={1.0} />
+            <directionalLight position={[4, 6, 5]} intensity={1.4} />
+            <directionalLight position={[-3, 4, -4]} intensity={0.6} />
+            <directionalLight position={[0, 2, -5]} intensity={0.3} />
             <Suspense fallback={null}>
                 <CarModel modelPath={modelPath} colorId={colorId} />
             </Suspense>
@@ -100,6 +107,7 @@ type LobbyCarPreviewProps = {
 const PRELOAD_PATHS = [
     getModelPathForVehicleClass('sport'),
     getModelPathForVehicleClass('muscle'),
+    getModelPathForVehicleClass('patrol'),
     getModelPathForVehicleClass('truck'),
 ];
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useThree } from '@react-three/fiber';
 import type * as THREE from 'three';
 import { Car } from '@/client/game/entities/Car';
@@ -16,18 +16,26 @@ import { colorIdToHSL, vehicleClassToModelIndex } from '@/client/game/vehicleSel
 import { DEFAULT_CAR_PHYSICS_CONFIG } from '@/shared/game/carPhysics';
 import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
 import { seededRandom } from '@/shared/utils/prng';
+import { getAbilityManifestById } from '@/shared/game/ability/abilityManifest';
 import { getVehicleClassManifestById, vehicleManifestToPhysicsConfig } from '@/shared/game/vehicle/vehicleClassManifest';
 import {
     DEFAULT_SCENE_ENVIRONMENT_ID,
     type SceneEnvironmentProfileId,
     getSceneEnvironmentProfileIdForTrackTheme,
 } from '@/client/game/scene/environment/sceneEnvironmentProfiles';
+import { useAbilityFxStore } from '@/client/game/state/abilityFxStore';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 import type { PlayerState } from '@/shared/network/types';
+import {
+    CLIENT_DRIVE_LOCK_FLIPPED_MS,
+    CLIENT_DRIVE_LOCK_STUNNED_MS,
+    CLIENT_HARD_SNAP_MS,
+} from '@/shared/game/collisionConfig';
 
 const SHAKE_SPIKE_GRACE_PERIOD_MS = 1800;
+const LOCAL_COLLISION_HARD_SNAP_WINDOW_MS = 3_500;
 
 type UseNetworkConnectionParams = {
     audioListenerRef: React.RefObject<THREE.AudioListener | null>;
@@ -54,6 +62,7 @@ export const useNetworkConnection = ({
 }: UseNetworkConnectionParams) => {
     const { scene, camera } = useThree();
     const [sceneEnvironmentId, setSceneEnvironmentId] = useState<SceneEnvironmentProfileId>(DEFAULT_SCENE_ENVIRONMENT_ID);
+    const opponentFlipAppliedAtByPlayerIdRef = useRef(new Map<string, number>());
     const session = sessionRef.current;
 
     const applyTrackPresentation = useCallback((trackId: string) => {
@@ -75,6 +84,7 @@ export const useNetworkConnection = ({
         });
         session.opponents.clear();
         session.opponentInterpolationBuffers.clear();
+        opponentFlipAppliedAtByPlayerIdRef.current.clear();
     }, [session]);
 
     const createOpponent = useCallback((player: PlayerState, snapshotPlayer?: { colorId?: string; vehicleId?: string }) => {
@@ -124,17 +134,29 @@ export const useNetworkConnection = ({
         opponentCar.dispose();
         session.opponents.delete(playerId);
         session.opponentInterpolationBuffers.delete(playerId);
+        opponentFlipAppliedAtByPlayerIdRef.current.delete(playerId);
     }, [session]);
 
     const resetSessionState = useCallback(() => {
         session.localInputSequence = 0;
         session.cruiseLatchActive = false;
+        session.lastCollisionEventAtMs = null;
+        session.lastCollisionEventServerTimeMs = null;
+        session.lastCollisionFlippedPlayerId = null;
+        session.lastCollisionFlipStartedAtMs = null;
+        session.lastCollisionOpponentFlipStartedAtMs = null;
+        session.lastCollisionSnapshotFlipSeenAtMs = null;
+        session.lastRaceEventProcessingMs = null;
+        session.lastSnapshotProcessingMs = null;
+        session.localCollisionDriveLockUntilMs = null;
+        session.localCollisionHardSnapUntilMs = null;
         session.latestLocalSnapshot = null;
         session.latestLocalSnapshotSeq = null;
         session.lastReconciledSnapshotSeq = null;
         session.hasLocalAuthoritativeTarget = false;
         session.lastCorrection = null;
         session.networkUpdateTimer = 0;
+        opponentFlipAppliedAtByPlayerIdRef.current.clear();
     }, [session]);
 
     useEffect(() => {
@@ -221,8 +243,6 @@ export const useNetworkConnection = ({
             if (player.id === networkManager.getSocketId()) {
                 return;
             }
-
-            createOpponent(player);
         });
 
         networkManager.onPlayerLeft((playerId) => {
@@ -230,7 +250,124 @@ export const useNetworkConnection = ({
         });
 
         const unsubscribeRaceEvent = networkManager.onRaceEvent((event) => {
+            const startedAtMs = performance.now();
+            try {
             const localPlayerId = useRuntimeStore.getState().localPlayerId;
+
+            if (event.kind === 'ability_activated') {
+                const abilityId = event.metadata?.abilityId;
+                if (typeof abilityId === 'string') {
+                    if (event.playerId === localPlayerId) {
+                        const ability = getAbilityManifestById(abilityId);
+                        if (ability) {
+                            useHudStore
+                                .getState()
+                                .setAbilityReadyAtMs(abilityId, Date.now() + ability.baseCooldownMs);
+                        }
+                    }
+
+                    if (abilityId === 'spike-shot') {
+                        const snapshot = useRuntimeStore.getState().latestSnapshot;
+                        const sourcePlayerId = event.playerId;
+                        const targetPlayerId = event.metadata?.targetPlayerId;
+                        if (snapshot && typeof sourcePlayerId === 'string' && typeof targetPlayerId === 'string') {
+                            const source = snapshot.players.find((p) => p.id === sourcePlayerId);
+                            const target = snapshot.players.find((p) => p.id === targetPlayerId);
+                            if (source && target) {
+                                useAbilityFxStore.getState().addPendingSpikeShot({
+                                    sourceX: source.x,
+                                    sourceZ: source.z,
+                                    targetX: target.x,
+                                    targetZ: target.z,
+                                    triggeredAtMs: Date.now(),
+                                });
+                            }
+                            if (targetPlayerId === localPlayerId) {
+                                useHudStore.getState().showToast('SLOWED!', 'warning');
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (event.kind === 'collision_bump') {
+                const againstPlayerId =
+                    typeof event.metadata?.againstPlayerId === 'string'
+                        ? event.metadata.againstPlayerId
+                        : null;
+                const flippedPlayerId =
+                    typeof event.metadata?.flippedPlayerId === 'string'
+                        ? event.metadata.flippedPlayerId
+                        : null;
+                const stunnedPlayerId =
+                    typeof event.metadata?.stunnedPlayerId === 'string'
+                        ? event.metadata.stunnedPlayerId
+                        : null;
+                const rammerPlayerId =
+                    typeof event.metadata?.rammerPlayerId === 'string'
+                        ? event.metadata.rammerPlayerId
+                        : null;
+                const rammerDriveLockMs =
+                    typeof event.metadata?.rammerDriveLockMs === 'number'
+                        ? event.metadata.rammerDriveLockMs
+                        : 0;
+                const isLocalInvolved = localPlayerId !== null && (
+                    event.playerId === localPlayerId ||
+                    againstPlayerId === localPlayerId ||
+                    flippedPlayerId === localPlayerId ||
+                    stunnedPlayerId === localPlayerId ||
+                    rammerPlayerId === localPlayerId
+                );
+                const localIsFlipped = localPlayerId !== null && flippedPlayerId === localPlayerId;
+                const localIsStunned = localPlayerId !== null && stunnedPlayerId === localPlayerId;
+                const localIsRammer = localPlayerId !== null && rammerPlayerId === localPlayerId;
+                // Flipped players already get authoritative correction + effect-based movement suppression.
+                // A long client-side drive lock here causes visible "freeze then jump" on the victim screen.
+                const localCollisionDriveLockMs = Math.max(
+                    localIsFlipped ? CLIENT_DRIVE_LOCK_FLIPPED_MS : 0,
+                    localIsStunned && !localIsFlipped ? CLIENT_DRIVE_LOCK_STUNNED_MS : 0,
+                    localIsRammer ? rammerDriveLockMs : 0,
+                );
+                const localCollisionHardSnapMs =
+                    localIsFlipped || localIsStunned
+                        ? Math.max(CLIENT_HARD_SNAP_MS, LOCAL_COLLISION_HARD_SNAP_WINDOW_MS)
+                        : CLIENT_HARD_SNAP_MS;
+
+                const nowMs = Date.now();
+                if (isLocalInvolved) {
+                    session.lastCollisionEventAtMs = nowMs;
+                    session.lastCollisionEventServerTimeMs = event.serverTimeMs;
+                    session.lastCollisionFlippedPlayerId = flippedPlayerId;
+                    session.lastCollisionFlipStartedAtMs = null;
+                    session.lastCollisionOpponentFlipStartedAtMs = null;
+                    session.lastCollisionSnapshotFlipSeenAtMs = null;
+                    session.localCollisionHardSnapUntilMs = nowMs + localCollisionHardSnapMs;
+
+                    if (localCollisionDriveLockMs > 0) {
+                        session.localCollisionDriveLockUntilMs = nowMs + localCollisionDriveLockMs;
+                        session.localCar?.applyCollisionDriveLock(localCollisionDriveLockMs);
+                    } else {
+                        session.localCollisionDriveLockUntilMs = null;
+                    }
+                }
+
+                if (flippedPlayerId) {
+                    if (flippedPlayerId === localPlayerId) {
+                        const startedLocalFlip = session.localCar?.triggerFlip() ?? false;
+                        if (startedLocalFlip) {
+                            session.lastCollisionFlipStartedAtMs = nowMs;
+                        }
+                    } else {
+                        const startedOpponentFlip = session.opponents.get(flippedPlayerId)?.triggerFlip() ?? false;
+                        if (startedOpponentFlip && isLocalInvolved) {
+                            session.lastCollisionOpponentFlipStartedAtMs = nowMs;
+                        }
+                    }
+                }
+                return;
+            }
+
             if (event.playerId !== localPlayerId) {
                 return;
             }
@@ -247,9 +384,14 @@ export const useNetworkConnection = ({
                     useHudStore.getState().showToast('SLOWED!', 'warning');
                 }
             }
+            } finally {
+                session.lastRaceEventProcessingMs = performance.now() - startedAtMs;
+            }
         });
 
         networkManager.onServerSnapshot((snapshot) => {
+            const startedAtMs = performance.now();
+            try {
             useRuntimeStore.getState().applySnapshot(snapshot);
             callbacks.onRaceStateChange(snapshot.raceState);
 
@@ -307,6 +449,31 @@ export const useNetworkConnection = ({
                     createOpponent(snapshotPlayer, snapshotPlayer);
                 }
 
+                const opponentCar = session.opponents.get(snapshotPlayer.id);
+                if (opponentCar) {
+                    const flippedEffect = snapshotPlayer.activeEffects.find((e) => e.effectType === 'flipped');
+                    const appliedAtMs = flippedEffect?.appliedAtMs ?? null;
+                    const previousAppliedAtMs =
+                        opponentFlipAppliedAtByPlayerIdRef.current.get(snapshotPlayer.id) ?? null;
+
+                    if (appliedAtMs !== null) {
+                        if (appliedAtMs !== previousAppliedAtMs) {
+                            const startedOpponentFlip = opponentCar.triggerFlip();
+                            if (
+                                startedOpponentFlip &&
+                                session.lastCollisionEventAtMs !== null &&
+                                session.lastCollisionFlippedPlayerId === snapshotPlayer.id &&
+                                session.lastCollisionOpponentFlipStartedAtMs === null
+                            ) {
+                                session.lastCollisionOpponentFlipStartedAtMs = Date.now();
+                            }
+                            opponentFlipAppliedAtByPlayerIdRef.current.set(snapshotPlayer.id, appliedAtMs);
+                        }
+                    } else {
+                        opponentFlipAppliedAtByPlayerIdRef.current.delete(snapshotPlayer.id);
+                    }
+                }
+
                 const interpolationBuffer = session.opponentInterpolationBuffers.get(snapshotPlayer.id);
                 if (!interpolationBuffer) {
                     continue;
@@ -340,6 +507,9 @@ export const useNetworkConnection = ({
                 for (const [, opponent] of session.opponents) {
                     opponent.fadeOutAudio();
                 }
+            }
+            } finally {
+                session.lastSnapshotProcessingMs = performance.now() - startedAtMs;
             }
         });
 

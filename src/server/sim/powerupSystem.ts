@@ -16,7 +16,7 @@ export const applyPowerupTriggers = (
         if (!player) continue;
 
         if (trigger.powerupType === 'speed-boost') {
-            applyStatusEffectToPlayer(player, 'boosted', nowMs, 1);
+            applyStatusEffectToPlayer(player, 'speed_burst', nowMs, 1);
         }
     }
 };

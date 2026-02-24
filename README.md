@@ -32,6 +32,9 @@ Multiplayer racing game with a server-authoritative V2 simulation stack, finite 
 - Sunny day and canyon-dusk environment profiles (`sceneEnvironmentProfiles`) for level/theme swaps; scenery rebuilds on track change.
 - HUD includes speed, lap, position, effect badges (boosted/flat tire/stunned/slowed), and a queued toast pipeline.
 - Layered car audio: idle engine, acceleration, driving loop, brake one-shot; audio fades out when the race finishes (dt-based).
+- Better car graphics: wheels rotate with speed, brake-light emissives pulse while braking, and suspension subtly bounces as speed changes.
+- Deterministic scenery builds alongside tracks via `SceneryManager`, with instanced buildings, street lights, and hazards that depend on track themes.
+- Diagnostic instrumentation (`useDiagnostics`) exposes `__GT_DEBUG__`/`__GT_DIAG__`, toggleable via `?diag=1` or localStorage `gt-diag`, so we can capture long-task/frame-gap data during freeze investigations.
 - E2E coverage includes smoke plus multiplayer non-overlap scenario (`RUN_E2E=true`).
 
 ## Tech Stack
@@ -120,6 +123,11 @@ E2E tests:
 - V2-only netcode cutover is active; legacy `update_state`/`player_moved` runtime paths are removed.
 - Server-authoritative collision bumping and finite race completion are enabled in the default multiplayer flow.
 - Remaining roadmap work is focused on content depth, polish, and long-horizon scaling hardening.
+
+## Lessons Learned
+- Instrumentation pays off; `useDiagnostics` now exposes `__GT_DEBUG__`/`__GT_DIAG__`, which can be enabled through `?diag=1` or `localStorage gt-diag=true` to gather frame-gap and long-task data during collisions.
+- The latest regression coverage (unit tests for interpolation, log-freezing detection, and the aggressive multiplayer E2E so we can catch freezes early) gives a quick safety net before landing tweaks to the simulation loop.
+- HUD toasts, effect badges, and consistent `hudStore` actions keep visual feedback in sync when new powerups or hazards are introduced, so hook them in whenever a new effect is added.
 
 ## Car Models
 - Multiplayer cars now cycle by player ID across multiple models.

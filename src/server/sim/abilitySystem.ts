@@ -43,7 +43,8 @@ const findNearestOpponent = (
 
 const findNearestForwardOpponent = (
     players: Map<string, SimPlayerState>,
-    sourcePlayer: SimPlayerState
+    sourcePlayer: SimPlayerState,
+    maxDistanceAhead?: number
 ): SimPlayerState | null => {
     const forwardX = Math.sin(sourcePlayer.motion.rotationY);
     const forwardZ = Math.cos(sourcePlayer.motion.rotationY);
@@ -59,9 +60,12 @@ const findNearestForwardOpponent = (
         const dx = candidate.motion.positionX - sourcePlayer.motion.positionX;
         const dz = candidate.motion.positionZ - sourcePlayer.motion.positionZ;
         const distanceSquared = dx * dx + dz * dz;
-
         const distance = Math.sqrt(distanceSquared);
+
         if (distance < 0.0001) {
+            continue;
+        }
+        if (maxDistanceAhead !== undefined && distance > maxDistanceAhead) {
             continue;
         }
 
@@ -86,7 +90,8 @@ const resolveTarget = (
     players: Map<string, SimPlayerState>,
     sourcePlayer: SimPlayerState,
     requestedTargetPlayerId: string | null,
-    targeting: AbilityTargeting
+    targeting: AbilityTargeting,
+    maxDistanceAhead?: number
 ): SimPlayerState | null => {
     switch (targeting) {
         case 'self':
@@ -101,7 +106,7 @@ const resolveTarget = (
             return findNearestOpponent(players, sourcePlayer);
         }
         case 'forward-cone':
-            return findNearestForwardOpponent(players, sourcePlayer);
+            return findNearestForwardOpponent(players, sourcePlayer, maxDistanceAhead);
         default: {
             const exhaustiveTargeting: never = targeting;
             console.warn(`[AbilitySystem] Unknown targeting mode: ${String(exhaustiveTargeting)}`);
@@ -151,7 +156,13 @@ export const applyAbilityActivation = (
         };
     }
 
-    const targetPlayer = resolveTarget(players, sourcePlayer, activation.targetPlayerId, ability.targeting);
+    const targetPlayer = resolveTarget(
+        players,
+        sourcePlayer,
+        activation.targetPlayerId,
+        ability.targeting,
+        ability.maxDistanceAhead
+    );
     if (!targetPlayer) {
         return {
             abilityId: ability.id,

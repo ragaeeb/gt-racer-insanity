@@ -164,27 +164,58 @@ const joinRace = async (page: Page, roomId: string, name: string) => {
     await page.waitForSelector('#speed', { timeout: STARTUP_TIMEOUT_MS });
 };
 
-const pressW = async (page: Page) => {
-    await page.evaluate(() => {
-        window.dispatchEvent(
-            new KeyboardEvent('keydown', {
-                bubbles: true,
-                code: 'KeyW',
-                key: 'w',
-            }),
-        );
+const setDrivingKeyState = async (page: Page, code: string, pressed: boolean) => {
+    const keyByCode: Record<string, string> = {
+        ArrowDown: 'ArrowDown',
+        ArrowLeft: 'ArrowLeft',
+        ArrowRight: 'ArrowRight',
+        ArrowUp: 'ArrowUp',
+        KeyA: 'a',
+        KeyD: 'd',
+        KeyS: 's',
+        KeyW: 'w',
+    };
+
+    const key = keyByCode[code] ?? code;
+    await page.evaluate(
+        ({ code, key, pressed }) => {
+            window.dispatchEvent(
+                new KeyboardEvent(pressed ? 'keydown' : 'keyup', {
+                    bubbles: true,
+                    code,
+                    key,
+                }),
+            );
+        },
+        { code, key, pressed },
+    );
+};
+
+const pressW = async (page: Page) => setDrivingKeyState(page, 'KeyW', true);
+const releaseW = async (page: Page) => setDrivingKeyState(page, 'KeyW', false);
+
+const enableDiagnostics = async (page: Page) => {
+    await page.addInitScript(() => {
+        window.localStorage.setItem('gt-diag', 'true');
     });
 };
 
-const releaseW = async (page: Page) => {
+const enableDiagnosticsRuntime = async (page: Page) => {
+    if (page.isClosed()) {
+        return;
+    }
+
     await page.evaluate(() => {
-        window.dispatchEvent(
-            new KeyboardEvent('keyup', {
-                bubbles: true,
-                code: 'KeyW',
-                key: 'w',
-            }),
-        );
+        const debugWindow = window as Window & {
+            __GT_DIAG__?: {
+                enable?: () => void;
+                setVerbose?: (verbose: boolean) => void;
+            };
+        };
+
+        window.localStorage.setItem('gt-diag', 'true');
+        debugWindow.__GT_DIAG__?.enable?.();
+        debugWindow.__GT_DIAG__?.setVerbose?.(false);
     });
 };
 
@@ -356,6 +387,55 @@ e2eDescribe('e2e multiplayer collision', () => {
             expect(movedA?.localCarZ ?? 0).toBeGreaterThan(stateA?.localCarZ ?? 0);
             expect(movedB?.localCarZ ?? 0).toBeGreaterThan(stateB?.localCarZ ?? 0);
             expect(Math.abs((movedA?.localCarX ?? 0) - (movedB?.localCarX ?? 0))).toBeGreaterThan(0.25);
+        } finally {
+            await Promise.allSettled([pageA.close(), pageB.close()]);
+        }
+    }, STARTUP_TIMEOUT_MS);
+
+    it('should remain connected and responsive during aggressive multiplayer steering updates', async () => {
+        if (!browser) {
+            throw new Error('Browser is not initialized');
+        }
+
+        const roomId = `MC${Date.now().toString().slice(-10)}`;
+        const pageA = await browser.newPage();
+        const pageB = await browser.newPage();
+
+        try {
+            await Promise.all([enableDiagnostics(pageA), enableDiagnostics(pageB)]);
+            await joinRace(pageA, roomId, 'Driver A');
+            await joinRace(pageB, roomId, 'Driver B');
+            await Promise.all([enableDiagnosticsRuntime(pageA), enableDiagnosticsRuntime(pageB)]);
+
+            const { stateA, stateB } = await waitForMultiplayerReady(pageA, pageB, 30_000);
+            expect(stateA?.isRunning).toEqual(true);
+            expect(stateB?.isRunning).toEqual(true);
+
+            for (let attempt = 0; attempt < 6; attempt += 1) {
+                const latestA = await readDebugState(pageA);
+                const latestB = await readDebugState(pageB);
+                const steerCode = (latestA?.localCarX ?? -6) < (latestB?.localCarX ?? -2) ? 'KeyD' : 'KeyA';
+
+                await pageA.bringToFront();
+                await setDrivingKeyState(pageA, 'KeyW', true);
+                await setDrivingKeyState(pageA, steerCode, true);
+                await pageA.waitForTimeout(1_300);
+                await setDrivingKeyState(pageA, steerCode, false);
+                await pageA.waitForTimeout(900);
+                await setDrivingKeyState(pageA, 'KeyW', false);
+
+                await pageA.waitForTimeout(250);
+            }
+
+            const [finalStateA, finalStateB] = await Promise.all([readDebugState(pageA), readDebugState(pageB)]);
+            expect(finalStateA?.isRunning).toEqual(true);
+            expect(finalStateB?.isRunning).toEqual(true);
+            expect(finalStateA?.connectionStatus).toEqual('connected');
+            expect(finalStateB?.connectionStatus).toEqual('connected');
+            expect(finalStateA?.localCarZ).not.toBeNull();
+            expect(finalStateB?.localCarZ).not.toBeNull();
+            expect(finalStateA?.opponentCount ?? 0).toBeGreaterThanOrEqual(1);
+            expect(finalStateB?.opponentCount ?? 0).toBeGreaterThanOrEqual(1);
         } finally {
             await Promise.allSettled([pageA.close(), pageB.close()]);
         }

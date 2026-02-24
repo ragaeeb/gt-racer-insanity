@@ -13,6 +13,8 @@ export type HudStoreState = {
     position: number;
     setActiveEffectIds: (effectIds: string[]) => void;
     setCooldownMsByAbilityId: (cooldownMsByAbilityId: Record<string, number>) => void;
+    /** Set when an ability is ready again (timestamp in ms). Used for cooldown display and input throttle. */
+    setAbilityReadyAtMs: (abilityId: string, readyAtMs: number) => void;
     setLap: (lap: number) => void;
     setPosition: (position: number) => void;
     setSpeedKph: (speedKph: number) => void;
@@ -41,6 +43,10 @@ export const useHudStore = create<HudStoreState>((set) => ({
             return { activeEffectIds };
         }),
     setCooldownMsByAbilityId: (cooldownMsByAbilityId) => set(() => ({ cooldownMsByAbilityId })),
+    setAbilityReadyAtMs: (abilityId, readyAtMs) =>
+        set((state) => ({
+            cooldownMsByAbilityId: { ...state.cooldownMsByAbilityId, [abilityId]: readyAtMs },
+        })),
     setLap: (lap) => set((state) => (state.lap === lap ? state : { lap })),
     setPosition: (position) => set((state) => (state.position === position ? state : { position })),
     setSpeedKph: (speedKph) =>

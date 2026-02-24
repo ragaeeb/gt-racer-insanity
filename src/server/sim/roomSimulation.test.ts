@@ -175,6 +175,583 @@ describe('RoomSimulation', () => {
         expect(player?.speed ?? 0).toBeLessThanOrEqual(sportClass.physics.maxForwardSpeed + 0.5);
     });
 
+    it('should zero both players speeds after a collision bump', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
+
+        let finalMs = 1_000;
+        let bumpOccurred = false;
+        for (let step = 0; step < 300; step += 1) {
+            finalMs = 1_000 + (step + 1) * 16;
+            const seq = step + 1;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, -1));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 1));
+            simulation.step(finalMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                bumpOccurred = true;
+                break;
+            }
+        }
+
+        expect(bumpOccurred).toEqual(true);
+
+        const snapshot = simulation.buildSnapshot(finalMs);
+        const player1 = snapshot.players.find((p) => p.id === 'player-1');
+        const player2 = snapshot.players.find((p) => p.id === 'player-2');
+
+        expect(player1?.speed ?? 99).toEqual(0);
+        expect(player2?.speed ?? 99).toEqual(0);
+    });
+
+    it('should continue separating cars for a short recovery window after collision', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
+
+        let finalMs = 1_000;
+        let bumpOccurred = false;
+        for (let step = 0; step < 300; step += 1) {
+            finalMs = 1_000 + (step + 1) * 16;
+            const seq = step + 1;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, -1));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 1));
+            simulation.step(finalMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                bumpOccurred = true;
+                break;
+            }
+        }
+
+        expect(bumpOccurred).toEqual(true);
+
+        const bumpSnapshot = simulation.buildSnapshot(finalMs);
+        const bumpPlayer1 = bumpSnapshot.players.find((p) => p.id === 'player-1');
+        const bumpPlayer2 = bumpSnapshot.players.find((p) => p.id === 'player-2');
+        const bumpDistance = Math.hypot(
+            (bumpPlayer1?.x ?? 0) - (bumpPlayer2?.x ?? 0),
+            (bumpPlayer1?.z ?? 0) - (bumpPlayer2?.z ?? 0),
+        );
+
+        for (let step = 0; step < 6; step += 1) {
+            finalMs += 16;
+            const seq = 400 + step;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, 0));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 0));
+            simulation.step(finalMs);
+            simulation.drainRaceEvents();
+        }
+
+        const recoverySnapshot = simulation.buildSnapshot(finalMs);
+        const recoveryPlayer1 = recoverySnapshot.players.find((p) => p.id === 'player-1');
+        const recoveryPlayer2 = recoverySnapshot.players.find((p) => p.id === 'player-2');
+        const recoveryDistance = Math.hypot(
+            (recoveryPlayer1?.x ?? 0) - (recoveryPlayer2?.x ?? 0),
+            (recoveryPlayer1?.z ?? 0) - (recoveryPlayer2?.z ?? 0),
+        );
+
+        expect(recoveryDistance).toBeGreaterThan(bumpDistance + 0.05);
+    });
+
+    it('should keep post-impact travel bounded so the hitter cannot blast through', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
+
+        let finalMs = 1_000;
+        let bumpOccurred = false;
+        for (let step = 0; step < 320; step += 1) {
+            finalMs = 1_000 + (step + 1) * 16;
+            const seq = step + 1;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, -1));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 1));
+            simulation.step(finalMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                bumpOccurred = true;
+                break;
+            }
+        }
+
+        expect(bumpOccurred).toEqual(true);
+
+        const bumpSnapshot = simulation.buildSnapshot(finalMs);
+        const bumpPlayer1 = bumpSnapshot.players.find((p) => p.id === 'player-1');
+        const bumpPlayer2 = bumpSnapshot.players.find((p) => p.id === 'player-2');
+        const bumpP1X = bumpPlayer1?.x ?? 0;
+        const bumpP1Z = bumpPlayer1?.z ?? 0;
+        const bumpP2X = bumpPlayer2?.x ?? 0;
+        const bumpP2Z = bumpPlayer2?.z ?? 0;
+
+        for (let step = 0; step < 24; step += 1) {
+            finalMs += 16;
+            const seq = 500 + step;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, 0));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 0));
+            simulation.step(finalMs);
+            simulation.drainRaceEvents();
+        }
+
+        const recoverySnapshot = simulation.buildSnapshot(finalMs);
+        const recoveryPlayer1 = recoverySnapshot.players.find((p) => p.id === 'player-1');
+        const recoveryPlayer2 = recoverySnapshot.players.find((p) => p.id === 'player-2');
+        const travelP1 = Math.hypot((recoveryPlayer1?.x ?? 0) - bumpP1X, (recoveryPlayer1?.z ?? 0) - bumpP1Z);
+        const travelP2 = Math.hypot((recoveryPlayer2?.x ?? 0) - bumpP2X, (recoveryPlayer2?.z ?? 0) - bumpP2Z);
+
+        expect(travelP1).toBeLessThan(3.5);
+        expect(travelP2).toBeLessThan(3.5);
+    });
+
+    it('should keep the rammer slowed during the short recovery window after impact', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Victim', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Rammer', 'sport', 'blue');
+
+        const internals = simulation as unknown as {
+            playerRigidBodyById: Map<string, {
+                setLinvel: (velocity: { x: number; y: number; z: number }, wakeUp: boolean) => void;
+                setTranslation: (translation: { x: number; y: number; z: number }, wakeUp: boolean) => void;
+            }>;
+        };
+
+        const victimRigidBody = internals.playerRigidBodyById.get('player-1');
+        const rammerRigidBody = internals.playerRigidBodyById.get('player-2');
+        expect(victimRigidBody).toBeDefined();
+        expect(rammerRigidBody).toBeDefined();
+
+        victimRigidBody?.setTranslation({ x: -6, y: 0.45, z: 50 }, true);
+        victimRigidBody?.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        rammerRigidBody?.setTranslation({ x: -6, y: 0.45, z: 0 }, true);
+        rammerRigidBody?.setLinvel({ x: 0, y: 0, z: 0 }, true);
+
+        const victim = simulation.getPlayers().get('player-1');
+        const rammer = simulation.getPlayers().get('player-2');
+        if (victim) {
+            victim.motion.positionX = -6;
+            victim.motion.positionZ = 50;
+            victim.motion.speed = 0;
+        }
+        if (rammer) {
+            rammer.motion.positionX = -6;
+            rammer.motion.positionZ = 0;
+            rammer.motion.speed = 0;
+        }
+
+        let finalMs = 1_000;
+        let bumpOccurred = false;
+        for (let step = 1; step <= 800; step += 1) {
+            finalMs = 1_000 + step * 16;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', step, finalMs, 0, 0));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', step, finalMs, 1, 0));
+            simulation.step(finalMs);
+
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                bumpOccurred = true;
+                break;
+            }
+        }
+
+        expect(bumpOccurred).toEqual(true);
+
+        for (let step = 0; step < 20; step += 1) {
+            finalMs += 16;
+            const seq = 10_000 + step;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 0, 0));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 0));
+            simulation.step(finalMs);
+            simulation.drainRaceEvents();
+        }
+
+        const snapshot = simulation.buildSnapshot(finalMs);
+        const rammerAfterImpact = snapshot.players.find((player) => player.id === 'player-2');
+
+        expect(rammerAfterImpact?.speed ?? 99).toBeLessThan(5);
+    });
+
+    it('should apply flipped effect to the slower player after collision', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
+
+        let finalMs = 1_000;
+        let bumpOccurred = false;
+        for (let step = 0; step < 300; step += 1) {
+            finalMs = 1_000 + (step + 1) * 16;
+            const seq = step + 1;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, -1));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 1));
+            simulation.step(finalMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                bumpOccurred = true;
+                break;
+            }
+        }
+
+        expect(bumpOccurred).toEqual(true);
+
+        const snapshot = simulation.buildSnapshot(finalMs);
+        const allEffects = snapshot.players.flatMap((p) => p.activeEffects);
+        const hasFlipped = allEffects.some((e) => e.effectType === 'flipped');
+
+        expect(hasFlipped).toEqual(true);
+    });
+
+    it('should apply stunned to the bumped car (not the rammer) on big-impact collisions', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
+
+        let finalMs = 1_000;
+        let bumpOccurred = false;
+        for (let step = 0; step < 300; step += 1) {
+            finalMs = 1_000 + (step + 1) * 16;
+            const seq = step + 1;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, -1));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 1));
+            simulation.step(finalMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                bumpOccurred = true;
+                break;
+            }
+        }
+
+        expect(bumpOccurred).toEqual(true);
+
+        const snapshot = simulation.buildSnapshot(finalMs);
+        const stunnedPlayers = snapshot.players.filter((p) =>
+            p.activeEffects.some((e) => e.effectType === 'stunned')
+        );
+        const flippedPlayers = snapshot.players.filter((p) =>
+            p.activeEffects.some((e) => e.effectType === 'flipped')
+        );
+        expect(stunnedPlayers.length).toBeGreaterThanOrEqual(1);
+        expect(flippedPlayers.length).toBeGreaterThanOrEqual(1);
+        for (const stunnedPlayer of stunnedPlayers) {
+            expect(stunnedPlayer.activeEffects.some((e) => e.effectType === 'flipped')).toEqual(true);
+        }
+    });
+
+    it('should keep rammer speed at zero while stunned even with throttle input', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
+
+        let finalMs = 1_000;
+        let bumpOccurred = false;
+        let bumpMs = 0;
+        for (let step = 0; step < 300; step += 1) {
+            finalMs = 1_000 + (step + 1) * 16;
+            const seq = step + 1;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, -1));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 1));
+            simulation.step(finalMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                bumpOccurred = true;
+                bumpMs = finalMs;
+                break;
+            }
+        }
+
+        expect(bumpOccurred).toEqual(true);
+
+        for (let i = 0; i < 30; i += 1) {
+            finalMs = bumpMs + (i + 1) * 16;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', 400 + i, finalMs, 1, 0));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', 400 + i, finalMs, 1, 0));
+            simulation.step(finalMs);
+        }
+
+        const snapshot = simulation.buildSnapshot(finalMs);
+        const player1 = snapshot.players.find((p) => p.id === 'player-1');
+        const player2 = snapshot.players.find((p) => p.id === 'player-2');
+
+        const bothSpeeds = [player1?.speed ?? 99, player2?.speed ?? 99];
+        expect(Math.min(...bothSpeeds)).toEqual(0);
+    });
+
+    it('should not apply bump response more than once per pair within cooldown', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
+
+        let finalMs = 1_000;
+        let bumpCount = 0;
+        for (let step = 0; step < 300; step += 1) {
+            finalMs = 1_000 + (step + 1) * 16;
+            const seq = step + 1;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, finalMs, 1, -1));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, finalMs, 1, 1));
+            simulation.step(finalMs);
+            const events = simulation.drainRaceEvents();
+            bumpCount += events.filter((event) => event.kind === 'collision_bump').length;
+        }
+
+        expect(bumpCount).toBeGreaterThanOrEqual(1);
+        expect(bumpCount).toBeLessThanOrEqual(4);
+    });
+
+    it('should not apply a second bump within the 3-second pair cooldown', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Victim', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Rammer', 'sport', 'blue');
+
+        const internals = simulation as unknown as {
+            playerRigidBodyById: Map<string, {
+                setLinvel: (velocity: { x: number; y: number; z: number }, wakeUp: boolean) => void;
+                setTranslation: (translation: { x: number; y: number; z: number }, wakeUp: boolean) => void;
+            }>;
+        };
+
+        const victimRigidBody = internals.playerRigidBodyById.get('player-1');
+        const rammerRigidBody = internals.playerRigidBodyById.get('player-2');
+        expect(victimRigidBody).toBeDefined();
+        expect(rammerRigidBody).toBeDefined();
+
+        const victim = simulation.getPlayers().get('player-1');
+        const rammer = simulation.getPlayers().get('player-2');
+        expect(victim).toBeDefined();
+        expect(rammer).toBeDefined();
+
+        const setPositions = (victimZ: number, rammerZ: number) => {
+            victimRigidBody?.setTranslation({ x: -6, y: 0.45, z: victimZ }, true);
+            victimRigidBody?.setLinvel({ x: 0, y: 0, z: 0 }, true);
+            rammerRigidBody?.setTranslation({ x: -6, y: 0.45, z: rammerZ }, true);
+            rammerRigidBody?.setLinvel({ x: 0, y: 0, z: 0 }, true);
+            if (victim) {
+                victim.motion.positionX = -6;
+                victim.motion.positionZ = victimZ;
+                victim.motion.speed = 0;
+            }
+            if (rammer) {
+                rammer.motion.positionX = -6;
+                rammer.motion.positionZ = rammerZ;
+                rammer.motion.speed = 0;
+            }
+        };
+
+        setPositions(72, 48);
+
+        let nowMs = 1_000;
+        let firstBumpMs: number | null = null;
+
+        for (let step = 1; step <= 500; step += 1) {
+            nowMs = 1_000 + step * 16;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', step, nowMs, 0, 0));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', step, nowMs, 1, 0));
+            simulation.step(nowMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                firstBumpMs = nowMs;
+                break;
+            }
+        }
+
+        expect(firstBumpMs).not.toEqual(null);
+
+        setPositions(95, 65);
+        nowMs += 16;
+        simulation.queueInputFrame('player-1', createInputFrame('ROOM1', 10_001, nowMs, 0, 0));
+        simulation.queueInputFrame('player-2', createInputFrame('ROOM1', 10_001, nowMs, 0, 0));
+        simulation.step(nowMs);
+        simulation.drainRaceEvents();
+
+        setPositions(95, 91.2);
+        if (rammer) {
+            rammer.motion.speed = 10;
+        }
+
+        let secondBumpMs: number | null = null;
+        for (let step = 1; step <= 40; step += 1) {
+            nowMs += 16;
+            const seq = 10_100 + step;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, nowMs, 0, 0));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, nowMs, 1, 0));
+            simulation.step(nowMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                secondBumpMs = nowMs;
+                break;
+            }
+        }
+
+        expect(secondBumpMs).toEqual(null);
+    });
+
+    it('should keep the rammer at zero speed during the 350ms recovery window', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Victim', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Rammer', 'sport', 'blue');
+
+        const internals = simulation as unknown as {
+            playerRigidBodyById: Map<string, {
+                setLinvel: (velocity: { x: number; y: number; z: number }, wakeUp: boolean) => void;
+                setTranslation: (translation: { x: number; y: number; z: number }, wakeUp: boolean) => void;
+            }>;
+        };
+
+        const victimRigidBody = internals.playerRigidBodyById.get('player-1');
+        const rammerRigidBody = internals.playerRigidBodyById.get('player-2');
+        expect(victimRigidBody).toBeDefined();
+        expect(rammerRigidBody).toBeDefined();
+
+        victimRigidBody?.setTranslation({ x: -6, y: 0.45, z: 60 }, true);
+        victimRigidBody?.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        rammerRigidBody?.setTranslation({ x: -6, y: 0.45, z: 0 }, true);
+        rammerRigidBody?.setLinvel({ x: 0, y: 0, z: 0 }, true);
+
+        const victim = simulation.getPlayers().get('player-1');
+        const rammer = simulation.getPlayers().get('player-2');
+        if (victim) {
+            victim.motion.positionX = -6;
+            victim.motion.positionZ = 60;
+            victim.motion.speed = 0;
+        }
+        if (rammer) {
+            rammer.motion.positionX = -6;
+            rammer.motion.positionZ = 0;
+            rammer.motion.speed = 0;
+        }
+
+        let nowMs = 1_000;
+        let bumpMs: number | null = null;
+
+        for (let step = 1; step <= 800; step += 1) {
+            nowMs = 1_000 + step * 16;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', step, nowMs, 0, 0));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', step, nowMs, 1, 0));
+            simulation.step(nowMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'collision_bump')) {
+                bumpMs = nowMs;
+                break;
+            }
+        }
+
+        expect(bumpMs).not.toEqual(null);
+
+        for (let i = 0; i < 20; i += 1) {
+            nowMs += 16;
+            const seq = 20_000 + i;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', seq, nowMs, 0, 0));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', seq, nowMs, 1, 0));
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+        }
+
+        const snapshot = simulation.buildSnapshot(nowMs);
+        const rammerSnapshot = snapshot.players.find((player) => player.id === 'player-2');
+
+        expect(rammerSnapshot).toBeDefined();
+        expect(rammerSnapshot?.speed ?? 99).toBeLessThanOrEqual(3);
+    });
+
+    it('should still apply stun to a player who hits an obstacle', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Driver', 'sport', 'red');
+
+        let nowMs = 1_000;
+        let stunned = false;
+        for (let step = 1; step <= 600; step += 1) {
+            nowMs = 1_000 + step * 16;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', step, nowMs, 1, 0));
+            simulation.step(nowMs);
+            const events = simulation.drainRaceEvents();
+            if (events.some((event) => event.kind === 'hazard_triggered' && event.metadata?.effectType === 'stunned')) {
+                stunned = true;
+                break;
+            }
+        }
+
+        if (stunned) {
+            const snapshot = simulation.buildSnapshot(nowMs);
+            const driver = snapshot.players.find((p) => p.id === 'player-1');
+            expect(driver?.activeEffects.some((e) => e.effectType === 'stunned')).toEqual(true);
+        }
+    });
+
     it('should reset player state to spawn when restarting the race', () => {
         const simulation = new RoomSimulation({
             roomId: 'ROOM1',
