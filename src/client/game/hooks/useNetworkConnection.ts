@@ -27,15 +27,41 @@ import { useAbilityFxStore } from '@/client/game/state/abilityFxStore';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
-import type { PlayerState } from '@/shared/network/types';
+import type { PlayerState, ServerSnapshotPayload } from '@/shared/network/types';
 import {
     CLIENT_DRIVE_LOCK_FLIPPED_MS,
     CLIENT_DRIVE_LOCK_STUNNED_MS,
     CLIENT_HARD_SNAP_MS,
 } from '@/shared/game/collisionConfig';
+import type { PendingSpikeShot } from '@/client/game/state/abilityFxStore';
 
 const SHAKE_SPIKE_GRACE_PERIOD_MS = 1800;
 const LOCAL_COLLISION_HARD_SNAP_WINDOW_MS = 3_500;
+
+export const buildSpikeShotFxPayload = (
+    snapshot: ServerSnapshotPayload | null,
+    sourcePlayerId: string | null,
+    targetPlayerId: string | null,
+    triggeredAtMs: number,
+): PendingSpikeShot | null => {
+    if (!snapshot || !sourcePlayerId || !targetPlayerId) {
+        return null;
+    }
+
+    const source = snapshot.players.find((player) => player.id === sourcePlayerId);
+    const target = snapshot.players.find((player) => player.id === targetPlayerId);
+    if (!source || !target) {
+        return null;
+    }
+
+    return {
+        sourceX: source.x,
+        sourceZ: source.z,
+        targetX: target.x,
+        targetZ: target.z,
+        triggeredAtMs,
+    };
+};
 
 type UseNetworkConnectionParams = {
     audioListenerRef: React.RefObject<THREE.AudioListener | null>;
@@ -270,21 +296,17 @@ export const useNetworkConnection = ({
                         const snapshot = useRuntimeStore.getState().latestSnapshot;
                         const sourcePlayerId = event.playerId;
                         const targetPlayerId = event.metadata?.targetPlayerId;
-                        if (snapshot && typeof sourcePlayerId === 'string' && typeof targetPlayerId === 'string') {
-                            const source = snapshot.players.find((p) => p.id === sourcePlayerId);
-                            const target = snapshot.players.find((p) => p.id === targetPlayerId);
-                            if (source && target) {
-                                useAbilityFxStore.getState().addPendingSpikeShot({
-                                    sourceX: source.x,
-                                    sourceZ: source.z,
-                                    targetX: target.x,
-                                    targetZ: target.z,
-                                    triggeredAtMs: Date.now(),
-                                });
-                            }
-                            if (targetPlayerId === localPlayerId) {
-                                useHudStore.getState().showToast('SLOWED!', 'warning');
-                            }
+                        const pendingSpikeShot = buildSpikeShotFxPayload(
+                            snapshot,
+                            typeof sourcePlayerId === 'string' ? sourcePlayerId : null,
+                            typeof targetPlayerId === 'string' ? targetPlayerId : null,
+                            Date.now(),
+                        );
+                        if (pendingSpikeShot) {
+                            useAbilityFxStore.getState().addPendingSpikeShot(pendingSpikeShot);
+                        }
+                        if (targetPlayerId === localPlayerId) {
+                            useHudStore.getState().showToast('SLOWED!', 'warning');
                         }
                     }
                 }

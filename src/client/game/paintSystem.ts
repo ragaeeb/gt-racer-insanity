@@ -9,6 +9,12 @@ const hasColor = (mat: THREE.Material): mat is THREE.Material & { color: THREE.C
 const hasTextureMap = (mat: THREE.Material): mat is THREE.MeshStandardMaterial & { map: THREE.Texture } =>
     mat instanceof THREE.MeshStandardMaterial && mat.map != null;
 
+export const cloneTextureForPaint = (src: THREE.Texture): THREE.Texture => {
+    const clonedTexture = src.clone();
+    clonedTexture.needsUpdate = true;
+    return clonedTexture;
+};
+
 /**
  * Convert a texture to grayscale so paint color multiplies against luminance
  * only — preserving contrast between windshield/body/trim in atlas textures.
@@ -16,14 +22,14 @@ const hasTextureMap = (mat: THREE.Material): mat is THREE.MeshStandardMaterial &
 const toGrayscaleTexture = (src: THREE.Texture): THREE.Texture => {
     const img = src.image;
     if (!img) {
-        return src;
+        return cloneTextureForPaint(src);
     }
     const canvas = document.createElement('canvas');
     canvas.width = (img as HTMLImageElement).naturalWidth || (img as HTMLCanvasElement).width || 512;
     canvas.height = (img as HTMLImageElement).naturalHeight || (img as HTMLCanvasElement).height || 512;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-        return src;
+        return cloneTextureForPaint(src);
     }
     ctx.drawImage(img as CanvasImageSource, 0, 0, canvas.width, canvas.height);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -73,11 +79,12 @@ export const applyCarPaint = (
         const cloned = originals.map((mat) => mat.clone());
         for (const mat of cloned) {
             clonedMaterialsOut?.add(mat);
-            if (shouldPaintMaterial(mat, isWheel) && hasColor(mat)) {
-                if (hasTextureMap(mat)) {
-                    mat.map = toGrayscaleTexture(mat.map);
-                    mat.needsUpdate = true;
-                }
+            const shouldPaint = shouldPaintMaterial(mat, isWheel) && hasColor(mat);
+            if (hasTextureMap(mat)) {
+                mat.map = shouldPaint ? toGrayscaleTexture(mat.map) : cloneTextureForPaint(mat.map);
+                mat.needsUpdate = true;
+            }
+            if (shouldPaint && hasColor(mat)) {
                 mat.color.copy(color);
             }
         }

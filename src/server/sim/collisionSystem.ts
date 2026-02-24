@@ -267,6 +267,8 @@ export const applyPlayerBumpResponse = (
     dampAndClampPostBumpVelocity(rbA);
     dampAndClampPostBumpVelocity(rbB);
 
+    // Keep scalar speed in sync with the bump recovery lock; drive step is skipped while
+    // recovering and this prevents stale pre-impact scalar speed from persisting in gameplay logic.
     playerA.motion.speed = 0;
     playerB.motion.speed = 0;
 };

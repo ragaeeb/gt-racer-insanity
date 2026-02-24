@@ -25,6 +25,10 @@ export const normalizeAudioSpeed = (currentSpeed: number, maxSpeed: number) => {
     return Math.min(1.0, Math.max(0, finiteOr(normalizedSpeedRaw, 0)));
 };
 
+export const canTriggerFlip = (flipElapsedMs: number | null): boolean => {
+    return flipElapsedMs === null;
+};
+
 export type CarAssets = {
     engine?: AudioBuffer;
     accelerate?: AudioBuffer;
@@ -299,7 +303,8 @@ export class Car {
     };
 
     public triggerFlip = (): boolean => {
-        if (this.flipElapsedMs !== null && this.flipElapsedMs < 100) {
+        // Prevent animation restarts while a flip is already in progress.
+        if (!canTriggerFlip(this.flipElapsedMs)) {
             return false;
         }
 
