@@ -14,6 +14,7 @@ export class CarController {
     private isBrakingInputActive = false;
     private isAcceleratingInputActive = false;
     private _movementMultiplier = 1;
+    private driveLockUntilMs = 0;
 
     constructor(physicsConfig?: CarPhysicsConfig) {
         this.physicsConfig = physicsConfig ?? DEFAULT_CAR_PHYSICS_CONFIG;
@@ -28,6 +29,17 @@ export class CarController {
         inputManager: InputManager,
         dt: number
     ): CarControllerState => {
+        if (Date.now() < this.driveLockUntilMs) {
+            this.speed = 0;
+            this.cruiseLatchActive = false;
+            this.isBrakingInputActive = false;
+            this.isAcceleratingInputActive = false;
+            return {
+                position: state.position.clone(),
+                rotationY: state.rotationY,
+            };
+        }
+
         const isUpPressed =
             inputManager.isKeyPressed('KeyW') || inputManager.isKeyPressed('ArrowUp');
         const isDownPressed =
@@ -115,6 +127,23 @@ export class CarController {
         this.cruiseLatchActive = false;
         this.isBrakingInputActive = false;
         this.isAcceleratingInputActive = false;
+        this.driveLockUntilMs = 0;
+    };
+
+    public applyDriveLock = (durationMs: number) => {
+        const clampedDurationMs = Math.max(0, durationMs);
+        this.driveLockUntilMs = Math.max(this.driveLockUntilMs, Date.now() + clampedDurationMs);
+        this.speed = 0;
+        this.cruiseLatchActive = false;
+    };
+
+    public syncAuthoritativeSpeed = (speed: number) => {
+        if (Date.now() < this.driveLockUntilMs) {
+            return;
+        }
+        const maxForwardSpeed = this.physicsConfig.maxForwardSpeed * this._movementMultiplier;
+        const maxReverseSpeed = this.physicsConfig.maxReverseSpeed * this._movementMultiplier;
+        this.speed = THREE.MathUtils.clamp(speed, -maxReverseSpeed, maxForwardSpeed);
     };
 
     public getSpeed = () => {

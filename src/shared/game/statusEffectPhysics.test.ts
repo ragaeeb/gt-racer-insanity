@@ -140,7 +140,7 @@ describe('status effect physics integration', () => {
         });
 
         it('should have all effect multipliers within sane ranges', () => {
-            const effects = ['boosted', 'slowed', 'stunned', 'flat_tire'] as const;
+            const effects = ['boosted', 'slowed', 'stunned', 'flat_tire', 'speed_burst'] as const;
             for (const id of effects) {
                 const manifest = getStatusEffectManifestById(id);
                 expect(manifest).toBeDefined();

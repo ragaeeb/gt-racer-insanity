@@ -4,10 +4,12 @@ import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest'
 export const VEHICLE_CLASS_TO_CATALOG_ID: Record<VehicleClassId, string> = {
     sport: 'sport',
     muscle: 'suv',
+    patrol: 'police',
     truck: 'pickup',
 };
 
 export const COLOR_ID_TO_HSL: Record<string, { h: number; s: number; l: number }> = {
+    black: { h: 0, s: 0.0, l: 0.12 },
     blue: { h: 0.583, s: 1.0, l: 0.5 },
     gold: { h: 0.131, s: 0.8, l: 0.55 },
     gray: { h: 0, s: 0.0, l: 0.42 },

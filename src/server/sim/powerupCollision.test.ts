@@ -53,7 +53,7 @@ describe('powerup collision detection', () => {
 
         const snapshot = sim.buildSnapshot(nowMs);
         const allActive = snapshot.powerups.every((p) => p.isActive);
-        expect(allActive).toBe(true);
+        expect(allActive).toBeTrue();
     });
 
     it('should not trigger powerup when player is far away (at spawn)', () => {
@@ -64,12 +64,10 @@ describe('powerup collision detection', () => {
         sim.step(nowMs + 50);
 
         const snapshot = sim.buildSnapshot(nowMs + 50);
-        const hasBoosted = snapshot.players[0].activeEffects.some(
-            (e) => e.effectType === 'boosted',
-        );
-        expect(hasBoosted).toBe(false);
+        const hasSpeedBurst = snapshot.players[0].activeEffects.some((e) => e.effectType === 'speed_burst');
+        expect(hasSpeedBurst).toBeFalse();
         const allActive = snapshot.powerups.every((p) => p.isActive);
-        expect(allActive).toBe(true);
+        expect(allActive).toBeTrue();
     });
 
     it('should reference valid powerup manifests', () => {
@@ -85,7 +83,7 @@ describe('powerup collision detection', () => {
         }
     });
 
-    it('should apply boosted effect via powerup trigger queue', () => {
+    it('should apply speed_burst effect via powerup trigger queue', () => {
         const sim = createSim();
         const nowMs = Date.now();
         sim.joinPlayer('p1', 'Alice', 'sport', 'red', nowMs);
@@ -94,10 +92,8 @@ describe('powerup collision detection', () => {
         sim.step(nowMs + 50);
 
         const snapshot = sim.buildSnapshot(nowMs + 50);
-        const hasBoosted = snapshot.players[0].activeEffects.some(
-            (e) => e.effectType === 'boosted',
-        );
-        expect(hasBoosted).toBe(true);
+        const hasSpeedBurst = snapshot.players[0].activeEffects.some((e) => e.effectType === 'speed_burst');
+        expect(hasSpeedBurst).toBeTrue();
     });
 
     it('should emit powerup_collected race event via trigger queue', () => {
@@ -126,6 +122,6 @@ describe('powerup collision detection', () => {
         sim.restartRace(nowMs + 100);
         const after = sim.buildSnapshot(nowMs + 100);
         expect(after.powerups.length).toBe(count);
-        expect(after.powerups.every((p) => p.isActive)).toBe(true);
+        expect(after.powerups.every((p) => p.isActive)).toBeTrue();
     });
 });

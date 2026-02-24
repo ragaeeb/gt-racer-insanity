@@ -24,12 +24,17 @@ Deliver a V2-only multiplayer architecture where the server is authoritative for
 - Physics world: `src/server/sim/rapierWorld.ts`, `src/server/sim/trackColliderBuilder.ts`, `src/server/sim/collisionSystem.ts`
 - Gameplay effects: `src/server/sim/abilitySystem.ts`, `src/server/sim/effectSystem.ts`, `src/server/sim/hazardSystem.ts`, `src/server/sim/powerupSystem.ts`
 - Snapshot output: `src/server/sim/snapshotBuilder.ts`
+- Scene decoration: `src/client/game/systems/SceneryManager.ts` deterministically places buildings, street lights, and pillars around the track using seeded randomness so each theme feels consistent.
 
 ## Module Boundaries
 - `src/client/game`: render-time scene and entity orchestration only.
 - `src/client/game/state`: transient runtime/HUD state through Zustand.
 - `src/shared/game/*`: deterministic rules/manifests reusable by both runtimes.
 - `src/server/sim/*`: authoritative mutation of race state.
+
+## Diagnostics & Observability
+- `RaceWorld` mounts `useDiagnostics` to capture frame gaps, long tasks, collision contacts, and snapshot statistics; the hook exposes `window.__GT_DEBUG__` / `window.__GT_DIAG__` for tooling and E2E automation.
+- Diagnostics can be enabled with `?diag=1` or `localStorage gt-diag=true` (use `gt-diag-verbose` for extra logging), providing a quick feedback loop for diagnosing freezes, long-collision frames, and reproduction of the crash/freeze path.
 
 ## Timing Defaults
 - Simulation tick: `60 Hz`

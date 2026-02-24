@@ -37,6 +37,16 @@ export type RaceSession = {
     hasLocalAuthoritativeTarget: boolean;
     inputManager: InputManager;
     isRunning: boolean;
+    lastCollisionEventAtMs: number | null;
+    lastCollisionEventServerTimeMs: number | null;
+    lastCollisionFlippedPlayerId: string | null;
+    lastCollisionFlipStartedAtMs: number | null;
+    lastCollisionOpponentFlipStartedAtMs: number | null;
+    lastCollisionSnapshotFlipSeenAtMs: number | null;
+    lastRaceEventProcessingMs: number | null;
+    lastSnapshotProcessingMs: number | null;
+    localCollisionDriveLockUntilMs: number | null;
+    localCollisionHardSnapUntilMs: number | null;
     lastCorrection: CorrectionSnapshot | null;
     lastReconciledSnapshotSeq: number | null;
     lastSnapshotReceivedAtMs: number | null;

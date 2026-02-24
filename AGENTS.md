@@ -26,7 +26,7 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Build: `bun run build`
 - Unit tests: `bun run test`
 - Watch tests: `bun run test:watch`
-- E2E tests: `bun run e2e` (opt-in, runs with `RUN_E2E=true`)
+- E2E tests: `bun run e2e` (launches Playwright Test via `bun x playwright test`, requires `bun x playwright install chromium` once)
 - Full check: `bun run check`
 
 ## Repository Layout
@@ -51,6 +51,11 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Player identity is part of shared network player state (`name` on `PlayerState`).
 - Scene presentation is defined through environment profiles in `src/client/game/scene/environment/sceneEnvironmentProfiles.ts`; scenery is rebuilt when the track changes (useNetworkConnection).
 - E2E tests are intentionally gated and should not run in default `bun test` flows.
+
+## Diagnostics
+- `src/client/game/hooks/useDiagnostics.ts` exposes `window.__GT_DEBUG__` (player/opponent positions, connection state) and `window.__GT_DIAG__` (frame-gap/long-task counters, report download) for runtime investigations.
+- Toggle diagnostics using `?diag=1` or `localStorage gt-diag=true` (and `gt-diag-verbose` for extra logs). Clearing the flag auto-resets capture state; toolchains/E2E can enable diagnostics at runtime via `enableDiagnosticsRuntime`.
+- When debugging freeze/regression issues, start with the exposed summary data (frame gap counts, long task max) before digging deeper; this instrumentation is the canonical way to collect safety data for collisions, hazards, and powerups.
 
 ## UI/Asset Notes
 - Favicon/app icon uses:

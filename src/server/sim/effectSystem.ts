@@ -6,12 +6,15 @@ export const applyStatusEffectToPlayer = (
     player: SimPlayerState,
     effectType: StatusEffectType,
     nowMs: number,
-    intensity = 1
+    intensity = 1,
+    durationMsOverride?: number,
 ) => {
     const manifest = getStatusEffectManifestById(effectType);
     if (!manifest) {
         return;
     }
+
+    const durationMs = durationMsOverride ?? manifest.defaultDurationMs;
 
     const existingEffectIndexes: number[] = [];
     for (let index = 0; index < player.activeEffects.length; index += 1) {
@@ -26,7 +29,7 @@ export const applyStatusEffectToPlayer = (
         player.activeEffects.push({
             appliedAtMs: nowMs,
             effectType,
-            expiresAtMs: nowMs + manifest.defaultDurationMs,
+            expiresAtMs: nowMs + durationMs,
             intensity: Math.max(0, intensity),
         });
         return;
@@ -40,7 +43,7 @@ export const applyStatusEffectToPlayer = (
     const nextEffect = {
         appliedAtMs: nowMs,
         effectType,
-        expiresAtMs: nowMs + manifest.defaultDurationMs,
+        expiresAtMs: nowMs + durationMs,
         intensity: Math.max(0, intensity),
     };
 

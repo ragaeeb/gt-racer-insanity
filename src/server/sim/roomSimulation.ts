@@ -9,8 +9,8 @@ import type { AbilityActivatePayload, RaceEventPayload } from '@/shared/network/
 import type { ClientInputFrame } from '@/shared/network/inputFrame';
 import type { ServerSnapshotPayload } from '@/shared/network/snapshot';
 import { applyAbilityActivation } from '@/server/sim/abilitySystem';
-import { applyDriveStep, drainStartedCollisions, syncPlayerMotionFromRigidBody } from '@/server/sim/collisionSystem';
-import { tickStatusEffects } from '@/server/sim/effectSystem';
+import { applyDriveStep, applyPlayerBumpResponse, drainStartedCollisions, syncPlayerMotionFromRigidBody } from '@/server/sim/collisionSystem';
+import { applyStatusEffectToPlayer, tickStatusEffects } from '@/server/sim/effectSystem';
 import { applyHazardTriggers, type HazardTrigger } from '@/server/sim/hazardSystem';
 import { InputQueue } from '@/server/sim/inputQueue';
 import { applyPowerupTriggers, type PowerupTrigger } from '@/server/sim/powerupSystem';
@@ -19,6 +19,15 @@ import { buildServerSnapshot } from '@/server/sim/snapshotBuilder';
 import { buildTrackColliders } from '@/server/sim/trackColliderBuilder';
 import type { ActiveHazard, ActivePowerup, SimPlayerState, SimRoomState } from '@/server/sim/types';
 import { PLAYER_COLLIDER_HALF_LENGTH_METERS, PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
+import {
+    BIG_IMPACT_SPEED_MPS,
+    BUMP_DRIVE_RECOVERY_MS_BUMPED,
+    BUMP_DRIVE_RECOVERY_MS_RAMMER,
+    BUMP_FLIP_COOLDOWN_MS,
+    BUMP_PAIR_COOLDOWN_MS,
+    COLLISION_STUN_DURATION_MS,
+    MIN_BUMP_IMPACT_SPEED_MPS,
+} from '@/shared/game/collisionConfig';
 
 type RoomSimulationOptions = {
     roomId: string;
@@ -31,6 +40,18 @@ type RoomSimulationOptions = {
 type AbilityActivationEnvelope = {
     playerId: string;
     payload: Omit<AbilityActivatePayload, 'roomId'>;
+};
+
+type BumpPair = {
+    firstPlayerId: string;
+    secondPlayerId: string;
+};
+
+export const toPairKey = (firstPlayerId: string, secondPlayerId: string) => {
+    const [a, b] = firstPlayerId < secondPlayerId
+        ? [firstPlayerId, secondPlayerId]
+        : [secondPlayerId, firstPlayerId];
+    return `${a}:${b}`;
 };
 
 const getSpawnPositionX = (playerIndex: number) => {
@@ -72,6 +93,11 @@ export class RoomSimulation {
     private readonly cooldownStore = new Map<string, number>();
     private readonly abilityActivationQueue: AbilityActivationEnvelope[] = [];
     private readonly hazardTriggerQueue: HazardTrigger[] = [];
+    private readonly bumpPairCooldown = new Map<string, number>();
+    private readonly activeBumpPairKeys = new Set<string>();
+    private readonly pendingBumpPairByKey = new Map<string, BumpPair>();
+    private readonly bumpFlipCooldownByPlayerId = new Map<string, number>();
+    private readonly bumpDriveRecoveryByPlayerId = new Map<string, number>();
     private readonly obstacleStunCooldownByPlayerId = new Map<string, number>();
     private readonly powerupTriggerQueue: PowerupTrigger[] = [];
     private readonly trackManifest;
@@ -133,8 +159,8 @@ export class RoomSimulation {
 
         const colliderDesc = this.rapierContext.rapier.ColliderDesc.cuboid(PLAYER_COLLIDER_HALF_WIDTH_METERS, 0.5, PLAYER_COLLIDER_HALF_LENGTH_METERS)
             .setActiveEvents(this.rapierContext.rapier.ActiveEvents.COLLISION_EVENTS)
-            .setFriction(1.25)
-            .setRestitution(0.05);
+            .setFriction(0.8)
+            .setRestitution(0.45);
 
         const collider = this.rapierContext.world.createCollider(colliderDesc, rigidBody);
         this.playerRigidBodyById.set(playerId, rigidBody);
@@ -256,6 +282,76 @@ export class RoomSimulation {
 
     private pushRaceEvent = (event: RaceEventPayload) => {
         this.state.raceEvents.push(event);
+    };
+
+    private clearBumpPairStateForPlayer = (playerId: string) => {
+        const shouldDropKey = (pairKey: string) => pairKey.startsWith(`${playerId}:`) || pairKey.endsWith(`:${playerId}`);
+
+        for (const pairKey of this.activeBumpPairKeys) {
+            if (shouldDropKey(pairKey)) {
+                this.activeBumpPairKeys.delete(pairKey);
+            }
+        }
+
+        for (const [pairKey] of this.pendingBumpPairByKey) {
+            if (shouldDropKey(pairKey)) {
+                this.pendingBumpPairByKey.delete(pairKey);
+            }
+        }
+
+        for (const [pairKey] of this.bumpPairCooldown) {
+            if (shouldDropKey(pairKey)) {
+                this.bumpPairCooldown.delete(pairKey);
+            }
+        }
+    };
+
+    private applyBumpForPair = (pair: BumpPair, nowMs: number) => {
+        const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
+        const playerA = this.state.players.get(pair.firstPlayerId);
+        const playerB = this.state.players.get(pair.secondPlayerId);
+        if (!playerA || !playerB) {
+            return;
+        }
+
+        const speedABefore = playerA.motion.speed;
+        const speedBBefore = playerB.motion.speed;
+        const impactSpeed = Math.max(Math.abs(speedABefore), Math.abs(speedBBefore));
+
+        if (impactSpeed < MIN_BUMP_IMPACT_SPEED_MPS) {
+            return;
+        }
+
+        const slowerPlayer = Math.abs(speedABefore) <= Math.abs(speedBBefore) ? playerA : playerB;
+        const fasterPlayer = slowerPlayer === playerA ? playerB : playerA;
+
+        applyPlayerBumpResponse(playerA, playerB, this.playerRigidBodyById);
+
+        this.bumpPairCooldown.set(pairKey, nowMs + BUMP_PAIR_COOLDOWN_MS);
+        this.bumpDriveRecoveryByPlayerId.set(fasterPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_RAMMER);
+        this.bumpDriveRecoveryByPlayerId.set(slowerPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_BUMPED);
+
+        const flipCooldownUntil = this.bumpFlipCooldownByPlayerId.get(slowerPlayer.id) ?? 0;
+        if (nowMs >= flipCooldownUntil) {
+            applyStatusEffectToPlayer(slowerPlayer, 'flipped', nowMs);
+            this.bumpFlipCooldownByPlayerId.set(slowerPlayer.id, nowMs + BUMP_FLIP_COOLDOWN_MS);
+        }
+
+        const isBigImpact = impactSpeed >= BIG_IMPACT_SPEED_MPS;
+        const stunnedPlayerId = isBigImpact ? slowerPlayer.id : null;
+        if (isBigImpact) {
+            applyStatusEffectToPlayer(slowerPlayer, 'stunned', nowMs, 1, COLLISION_STUN_DURATION_MS);
+        }
+
+        this.pushRaceEvent(
+            toRaceEvent(this.state.roomId, 'collision_bump', nowMs, pair.firstPlayerId, {
+                againstPlayerId: pair.secondPlayerId,
+                flippedPlayerId: slowerPlayer.id,
+                rammerDriveLockMs: BUMP_DRIVE_RECOVERY_MS_RAMMER,
+                rammerPlayerId: fasterPlayer.id,
+                stunnedPlayerId: stunnedPlayerId,
+            })
+        );
     };
 
     private processAbilityQueue = (nowMs: number) => {
@@ -431,6 +527,9 @@ export class RoomSimulation {
         this.state.players.delete(playerId);
         this.inputQueue.clearPlayer(playerId);
         this.removePlayerRigidBody(playerId);
+        this.clearBumpPairStateForPlayer(playerId);
+        this.bumpFlipCooldownByPlayerId.delete(playerId);
+        this.bumpDriveRecoveryByPlayerId.delete(playerId);
         this.obstacleStunCooldownByPlayerId.delete(playerId);
     };
 
@@ -508,6 +607,11 @@ export class RoomSimulation {
 
         this.abilityActivationQueue.length = 0;
         this.hazardTriggerQueue.length = 0;
+        this.bumpPairCooldown.clear();
+        this.activeBumpPairKeys.clear();
+        this.pendingBumpPairByKey.clear();
+        this.bumpFlipCooldownByPlayerId.clear();
+        this.bumpDriveRecoveryByPlayerId.clear();
         this.obstacleStunCooldownByPlayerId.clear();
         this.powerupTriggerQueue.length = 0;
         this.cooldownStore.clear();
@@ -546,6 +650,11 @@ export class RoomSimulation {
                 continue;
             }
 
+            const driveRecoveryUntilMs = this.bumpDriveRecoveryByPlayerId.get(player.id) ?? 0;
+            if (nowMs < driveRecoveryUntilMs) {
+                continue;
+            }
+
             applyDriveStep({
                 dtSeconds: this.dtSeconds,
                 player,
@@ -562,6 +671,7 @@ export class RoomSimulation {
             }
 
             syncPlayerMotionFromRigidBody(player, rigidBody, this.trackBoundaryX);
+
             this.updateRaceProgress(player, nowMs);
         }
 
@@ -570,12 +680,40 @@ export class RoomSimulation {
             this.playerIdByColliderHandle,
             this.obstacleColliderHandles,
         );
-        for (const pair of collisionResult.playerPairs) {
-            this.pushRaceEvent(
-                toRaceEvent(this.state.roomId, 'collision_bump', nowMs, pair.firstPlayerId, {
-                    againstPlayerId: pair.secondPlayerId,
-                })
-            );
+
+        for (const pair of collisionResult.endedPlayerPairs) {
+            const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
+            this.activeBumpPairKeys.delete(pairKey);
+            this.pendingBumpPairByKey.delete(pairKey);
+        }
+
+        for (const pair of collisionResult.startedPlayerPairs) {
+            const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
+            this.activeBumpPairKeys.add(pairKey);
+
+            const pairCooldownUntil = this.bumpPairCooldown.get(pairKey) ?? 0;
+            if (nowMs < pairCooldownUntil) {
+                this.pendingBumpPairByKey.set(pairKey, pair);
+                continue;
+            }
+
+            this.pendingBumpPairByKey.delete(pairKey);
+            this.applyBumpForPair(pair, nowMs);
+        }
+
+        for (const [pairKey, pair] of this.pendingBumpPairByKey) {
+            if (!this.activeBumpPairKeys.has(pairKey)) {
+                this.pendingBumpPairByKey.delete(pairKey);
+                continue;
+            }
+
+            const pairCooldownUntil = this.bumpPairCooldown.get(pairKey) ?? 0;
+            if (nowMs < pairCooldownUntil) {
+                continue;
+            }
+
+            this.pendingBumpPairByKey.delete(pairKey);
+            this.applyBumpForPair(pair, nowMs);
         }
         for (const hit of collisionResult.obstacleHits) {
             const cooldownUntil = this.obstacleStunCooldownByPlayerId.get(hit.playerId) ?? 0;

@@ -21,7 +21,7 @@
 ### Server -> Client
 - `room_joined`
   - payload: `{ localPlayerId, protocolVersion, seed, players, snapshot }`
-  - note: `snapshot?` is legacy notation; `room_joined` now always includes a fresh `snapshot`.
+  - note: server always includes the full authoritative snapshot (`players`, `raceState`, plus powerup/hazard state) so the client starts in sync.
 - `player_joined`
   - payload: `PlayerState`
 - `player_left`
@@ -47,6 +47,8 @@
 - `serverTimeMs`: server clock timestamp
 - `players[]`: transforms, speed, active effects, race progress, last processed input sequence
 - `raceState`: status, ordering, winner, started/ended timestamps, laps, track id
+- `powerups[]`: each entry (`{ id, powerupId, x, z, isActive }`) represents a spawn point’s current coordinates and whether it is awake; clients use this to render floating orbs and HUD toasts.
+- `hazards[]`: each entry (`{ id, hazardId, x, z }`) mirrors the server’s hazard spawns so clients can build spike-strip visuals, warning chevrons, and apply effects when collisions occur.
 
 ## Sequencing and Reconciliation
 - Client `input_frame.seq` increases monotonically.

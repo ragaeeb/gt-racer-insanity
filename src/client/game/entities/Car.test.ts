@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import * as THREE from 'three';
-import { SUSPENSION_BOUNCE_AMPLITUDE } from './Car';
+import { advanceFlipElapsedMs, canTriggerFlip, normalizeAudioSpeed, SUSPENSION_BOUNCE_AMPLITUDE } from './Car';
 
 const BRAKE_LIGHT_MATERIAL_RE = /^(BrakeLight|TailLights?)$/i;
 
@@ -79,7 +79,7 @@ describe('car visual enhancements', () => {
             for (const mat of mats) {
                 mat.emissiveIntensity = 2.0;
             }
-            expect(mats.every((m) => m.emissiveIntensity === 2.0)).toBe(true);
+            expect(mats.every((m) => m.emissiveIntensity === 2.0)).toBeTrue();
         });
     });
 
@@ -99,6 +99,50 @@ describe('car visual enhancements', () => {
                 const bounce = computeSuspensionBounce(t * 0.016, 1.0);
                 expect(Math.abs(bounce)).toBeLessThanOrEqual(SUSPENSION_BOUNCE_AMPLITUDE);
             }
+        });
+    });
+
+    describe('flip progression', () => {
+        it('should prevent flip restarts while an existing flip is active', () => {
+            expect(canTriggerFlip(0)).toBeFalse();
+            expect(canTriggerFlip(350)).toBeFalse();
+        });
+
+        it('should allow a new flip when no flip is active', () => {
+            expect(canTriggerFlip(null)).toBeTrue();
+        });
+
+        it('should clamp a large frame step so flip animation does not instantly finish', () => {
+            const elapsedMs = advanceFlipElapsedMs(0, 2.5);
+            expect(elapsedMs).toBe(120);
+        });
+
+        it('should cap elapsed flip time at the full animation duration', () => {
+            const elapsedMs = advanceFlipElapsedMs(1_450, 0.2);
+            expect(elapsedMs).toBe(1_500);
+        });
+
+        it('should ignore negative frame deltas', () => {
+            const elapsedMs = advanceFlipElapsedMs(400, -1);
+            expect(elapsedMs).toBe(400);
+        });
+    });
+
+    describe('audio speed normalization', () => {
+        it('should return zero when max speed is zero', () => {
+            expect(normalizeAudioSpeed(10, 0)).toBe(0);
+        });
+
+        it('should clamp non-finite values to a safe range', () => {
+            expect(normalizeAudioSpeed(Number.NaN, 40)).toBe(0);
+            expect(normalizeAudioSpeed(10, Number.NaN)).toBe(0);
+            expect(normalizeAudioSpeed(Number.POSITIVE_INFINITY, 40)).toBe(0);
+        });
+
+        it('should clamp normalized speed into [0, 1]', () => {
+            expect(normalizeAudioSpeed(10, 40)).toBe(0.25);
+            expect(normalizeAudioSpeed(80, 40)).toBe(1);
+            expect(normalizeAudioSpeed(-10, 40)).toBe(0);
         });
     });
 });

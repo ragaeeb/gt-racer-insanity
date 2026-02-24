@@ -4,9 +4,9 @@ export class CarVisual {
     public applyTransform = (
         mesh: THREE.Group,
         position: THREE.Vector3,
-        rotationY: number
+        rotationY: number,
     ) => {
         mesh.position.copy(position);
-        mesh.rotation.y = rotationY;
+        mesh.rotation.set(0, rotationY, 0, 'YXZ');
     };
 }

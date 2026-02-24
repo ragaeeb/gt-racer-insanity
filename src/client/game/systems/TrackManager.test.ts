@@ -77,9 +77,7 @@ describe('TrackManager', () => {
             const cylinders = meshes.filter((m) => m.geometry instanceof THREE.CylinderGeometry);
             expect(cylinders.length).toBeGreaterThanOrEqual(2);
 
-            const boxes = meshes.filter(
-                (m) => m.geometry instanceof THREE.BoxGeometry && m.position.y === 10,
-            );
+            const boxes = meshes.filter((m) => m.geometry instanceof THREE.BoxGeometry && m.position.y === 10);
             expect(boxes.length).toBeGreaterThanOrEqual(1);
         });
 
@@ -174,7 +172,7 @@ describe('TrackManager', () => {
                     break;
                 }
             }
-            expect(anyDifferent).toBe(true);
+            expect(anyDifferent).toBeTrue();
         });
     });
 });

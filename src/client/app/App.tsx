@@ -19,6 +19,7 @@ import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LobbyCarPreview } from '@/components/LobbyCarPreview';
+import { AbilityIndicator } from '@/components/AbilityIndicator';
 import { VEHICLE_CLASS_MANIFESTS, type VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import { colorIdToHexString } from '@/client/game/vehicleSelections';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
@@ -139,6 +140,7 @@ const suppressThreeDeprecationWarnings = () => {
 const EFFECT_BADGE_CONFIG: Record<string, { label: string; className: string }> = {
     boosted: { label: 'BOOSTED', className: 'effect-boost' },
     flat_tire: { label: 'FLAT TIRE', className: 'effect-flat-tire' },
+    speed_burst: { label: 'SPEED BURST', className: 'effect-boost' },
     stunned: { label: 'STUNNED', className: 'effect-stunned' },
     slowed: { label: 'SLOWED', className: 'effect-slowed' },
 };
@@ -386,6 +388,55 @@ const LandingHero = ({
     );
 };
 
+type DiagnosticsVerbosity = 'standard' | 'verbose';
+
+type GTDiagControls = {
+    clearReport: () => void;
+    disable: () => void;
+    downloadReport: () => void;
+    enable: () => void;
+    setVerbose: (verbose: boolean) => void;
+};
+
+const isEnabledFromFlag = (value: string | null) => value === '1' || value === 'true';
+
+const readStoredBooleanFlag = (key: string) => {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+    return isEnabledFromFlag(window.localStorage.getItem(key));
+};
+
+const readDiagnosticsEnabledDefault = () => {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+    const queryFlag = new URLSearchParams(window.location.search).get('diag');
+    if (isEnabledFromFlag(queryFlag)) {
+        return true;
+    }
+    return readStoredBooleanFlag('gt-diag');
+};
+
+const readDiagnosticsVerboseDefault = () => {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+    const queryFlag = new URLSearchParams(window.location.search).get('diagVerbose');
+    if (isEnabledFromFlag(queryFlag)) {
+        return true;
+    }
+    return readStoredBooleanFlag('gt-diag-verbose');
+};
+
+const getDiagControls = () => {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+    const debugWindow = window as Window & { __GT_DIAG__?: GTDiagControls };
+    return debugWindow.__GT_DIAG__ ?? null;
+};
+
 export const App = () => {
     const [playerName, setPlayerName] = useState(() => window.sessionStorage.getItem('gt-player-name-session') ?? '');
     const [nameInput, setNameInput] = useState(playerName);
@@ -401,6 +452,10 @@ export const App = () => {
     const [gameOver, setGameOver] = useState(false);
     const [resetNonce, setResetNonce] = useState(0);
     const [cruiseControlEnabled, setCruiseControlEnabled] = useState(true);
+    const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(() => readDiagnosticsEnabledDefault());
+    const [diagnosticsVerbosity, setDiagnosticsVerbosity] = useState<DiagnosticsVerbosity>(() =>
+        readDiagnosticsVerboseDefault() ? 'verbose' : 'standard'
+    );
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
     const [raceState, setRaceState] = useState<RaceState | null>(null);
     const appVersion = __APP_VERSION__;
@@ -580,14 +635,24 @@ export const App = () => {
     };
 
     const handleGenerateDebugLog = useCallback(() => {
-        const debugWindow = window as Window & {
-            __GT_DIAG__?: {
-                clearReport: () => void;
-                downloadReport: () => void;
-            };
-        };
+        getDiagControls()?.downloadReport();
+    }, []);
 
-        debugWindow.__GT_DIAG__?.downloadReport();
+    const handleDiagnosticsEnabledChange = useCallback((enabled: boolean) => {
+        setDiagnosticsEnabled(enabled);
+        window.localStorage.setItem('gt-diag', enabled ? 'true' : 'false');
+        if (enabled) {
+            getDiagControls()?.enable();
+            return;
+        }
+        getDiagControls()?.disable();
+    }, []);
+
+    const handleDiagnosticsVerbosityChange = useCallback((verbosity: DiagnosticsVerbosity) => {
+        setDiagnosticsVerbosity(verbosity);
+        const isVerbose = verbosity === 'verbose';
+        window.localStorage.setItem('gt-diag-verbose', isVerbose ? 'true' : 'false');
+        getDiagControls()?.setVerbose(isVerbose);
     }, []);
 
     if (routePath === '/') {
@@ -708,6 +773,28 @@ export const App = () => {
                         />
                         Cruise
                     </label>
+                    <label id="diagnostics-toggle">
+                        <input
+                            checked={diagnosticsEnabled}
+                            onChange={(event) => handleDiagnosticsEnabledChange(event.target.checked)}
+                            type="checkbox"
+                        />
+                        Diagnostics
+                    </label>
+                    <label id="diagnostics-level">
+                        Verbosity
+                        <select
+                            disabled={!diagnosticsEnabled}
+                            id="diagnostics-level-select"
+                            onChange={(event) =>
+                                handleDiagnosticsVerbosityChange(event.target.value as DiagnosticsVerbosity)
+                            }
+                            value={diagnosticsVerbosity}
+                        >
+                            <option value="standard">Standard</option>
+                            <option value="verbose">Verbose</option>
+                        </select>
+                    </label>
                     <button id="generate-debug-log-btn" onClick={handleGenerateDebugLog} type="button">
                         Generate Debug Log
                     </button>
@@ -724,6 +811,7 @@ export const App = () => {
                             ))}
                         </div>
                     )}
+                    <AbilityIndicator />
                 </div>
                 <Toaster position="top-center" richColors closeButton duration={2000} />
                 <div id="app-version">v{appVersion}</div>

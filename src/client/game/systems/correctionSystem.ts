@@ -2,6 +2,7 @@ export const HARD_SNAP_THRESHOLD_METERS = 15;
 export const PER_FRAME_BASE_ALPHA = 0.025;
 export const MIN_CORRECTION_THRESHOLD = 0.5;
 export const YAW_PER_FRAME_ALPHA = 0.03;
+export const COLLISION_YAW_CORRECTION_ALPHA = 0.18;
 
 export const lerpAngle = (from: number, to: number, alpha: number): number => {
     const delta = Math.atan2(Math.sin(to - from), Math.cos(to - from));

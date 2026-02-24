@@ -8,6 +8,8 @@ export type AbilityManifest = {
     effectId: StatusEffectType;
     id: string;
     label: string;
+    /** Optional max distance ahead for forward-cone targeting (meters). */
+    maxDistanceAhead?: number;
     targeting: AbilityTargeting;
 };
 
@@ -29,8 +31,17 @@ export const ABILITY_MANIFESTS: AbilityManifest[] = [
         targeting: 'nearby-enemy',
     },
     {
+        baseCooldownMs: 7_000,
+        description: 'Fires a spike forward that slows the car ahead.',
+        effectId: 'slowed',
+        id: 'spike-shot',
+        label: 'Spike Shot',
+        maxDistanceAhead: 60,
+        targeting: 'forward-cone',
+    },
+    {
         baseCooldownMs: 10_000,
-        description: 'Drops spikes behind the car to flatten tires.',
+        description: 'Launches spikes in a forward cone to flatten tires.',
         effectId: 'flat_tire',
         id: 'spike-burst',
         label: 'Spike Burst',

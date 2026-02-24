@@ -51,6 +51,7 @@ export const CAR_MODEL_CATALOG: CarModelDefinition[] = [
         author: 'Quaternius',
         license: 'CC0 1.0',
         modelPath: '/models/cars/car-police.glb',
+        modelYawOffsetRadians: Math.PI,
         sourceUrl: 'https://poly.pizza/m/BwwnUrWGmV',
     },
 ];

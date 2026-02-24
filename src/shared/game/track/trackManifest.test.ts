@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import { getHazardManifestById } from '@/shared/game/hazard/hazardManifest';
 import { getPowerupManifestById } from '@/shared/game/powerup/powerupManifest';
-import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestIds, getTrackManifestById } from '@/shared/game/track/trackManifest';
+import {
+    DEFAULT_TRACK_WIDTH_METERS,
+    getTrackManifestById,
+    getTrackManifestIds,
+} from '@/shared/game/track/trackManifest';
 
 describe('track manifest spawn validation', () => {
     const trackIds = getTrackManifestIds();
@@ -45,8 +49,8 @@ describe('track manifest spawn validation', () => {
         for (const trackId of trackIds) {
             const manifest = getTrackManifestById(trackId);
             for (const spawn of manifest.powerupSpawns) {
-                expect(Math.abs(spawn.x) < halfWidth).toBe(true);
-                expect(spawn.z > 0 && spawn.z < manifest.lengthMeters).toBe(true);
+                expect(Math.abs(spawn.x) < halfWidth).toBeTrue();
+                expect(spawn.z > 0 && spawn.z < manifest.lengthMeters).toBeTrue();
             }
         }
     });
@@ -56,8 +60,8 @@ describe('track manifest spawn validation', () => {
         for (const trackId of trackIds) {
             const manifest = getTrackManifestById(trackId);
             for (const spawn of manifest.hazardSpawns) {
-                expect(Math.abs(spawn.x) < halfWidth).toBe(true);
-                expect(spawn.z > 0 && spawn.z < manifest.lengthMeters).toBe(true);
+                expect(Math.abs(spawn.x) < halfWidth).toBeTrue();
+                expect(spawn.z > 0 && spawn.z < manifest.lengthMeters).toBeTrue();
             }
         }
     });

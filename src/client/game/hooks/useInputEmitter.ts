@@ -44,18 +44,19 @@ export const useInputEmitter = (sessionRef: React.RefObject<RaceSession>) => {
         session.cruiseLatchActive = throttleInput.cruiseLatchActive;
 
         session.localInputSequence += 1;
+        const controls = {
+            boost: inputManager.isKeyPressed('Space'),
+            brake: false,
+            handbrake: isPrecisionOverrideActive,
+            steering: resolveSteeringInput({
+                isLeftPressed,
+                isRightPressed,
+            }),
+            throttle: throttleInput.throttle,
+        };
         session.networkManager.emitInputFrame({
             ackSnapshotSeq: useRuntimeStore.getState().lastAckedSnapshotSeq,
-            controls: {
-                boost: inputManager.isKeyPressed('Space'),
-                brake: false,
-                handbrake: isPrecisionOverrideActive,
-                steering: resolveSteeringInput({
-                    isLeftPressed,
-                    isRightPressed,
-                }),
-                throttle: throttleInput.throttle,
-            },
+            controls,
             cruiseControlEnabled: inputManager.isCruiseControlEnabled(),
             precisionOverrideActive: isPrecisionOverrideActive,
             protocolVersion: PROTOCOL_V2,

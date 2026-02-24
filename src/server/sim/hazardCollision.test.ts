@@ -48,10 +48,8 @@ describe('hazard collision detection', () => {
         sim.step(nowMs + 50);
 
         const snapshot = sim.buildSnapshot(nowMs + 50);
-        const hasFlatTire = snapshot.players[0].activeEffects.some(
-            (e) => e.effectType === 'flat_tire',
-        );
-        expect(hasFlatTire).toBe(false);
+        const hasFlatTire = snapshot.players[0].activeEffects.some((e) => e.effectType === 'flat_tire');
+        expect(hasFlatTire).toBeFalse();
     });
 
     it('should reference valid hazard manifests', () => {
@@ -89,10 +87,8 @@ describe('hazard collision detection', () => {
         sim.step(nowMs + 50);
 
         const snapshot = sim.buildSnapshot(nowMs + 50);
-        const hasFlatTire = snapshot.players[0].activeEffects.some(
-            (e) => e.effectType === 'flat_tire',
-        );
-        expect(hasFlatTire).toBe(true);
+        const hasFlatTire = snapshot.players[0].activeEffects.some((e) => e.effectType === 'flat_tire');
+        expect(hasFlatTire).toBeTrue();
     });
 
     it('should emit hazard_triggered race event when trigger is queued', () => {

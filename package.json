@@ -31,9 +31,9 @@
         "server": "bun --watch src/server/index.ts",
         "test": "bun test",
         "test:watch": "bun test --watch",
-        "e2e": "bun run build && RUN_E2E=true bun test --max-concurrency=1 testing",
+        "e2e": "bun run build && bun x playwright test",
         "test:e2e": "bun run e2e",
-        "test:e2e:install": "playwright install chromium",
+        "test:e2e:install": "bun x playwright install chromium",
         "check": "bun run test && bun run build",
         "release": "semantic-release"
     },
@@ -43,6 +43,7 @@
     },
     "packageManager": "bun@1.3.9",
     "devDependencies": {
+        "@playwright/test": "^1.58.2",
         "@semantic-release/changelog": "^6.0.3",
         "@semantic-release/git": "^10.0.1",
         "@tailwindcss/vite": "^4.2.1",
