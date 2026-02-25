@@ -25,6 +25,9 @@ export type StatusEffectInstance = {
 export type SnapshotPlayerState = {
     activeEffects: StatusEffectInstance[];
     colorId: string;
+    driftAngle?: number;
+    driftBoostTier?: number;
+    driftState?: number;
     id: string;
     lastProcessedInputSeq: number;
     name: string;
@@ -126,6 +129,11 @@ export const isSnapshotPlayerState = (value: unknown): value is SnapshotPlayerSt
     const payload = value as Record<string, unknown>;
     if (!Array.isArray(payload.activeEffects)) return false;
 
+    // Optional drift fields — accept but do not require
+    if (payload.driftState !== undefined && !isFiniteNumber(payload.driftState)) return false;
+    if (payload.driftAngle !== undefined && !isFiniteNumber(payload.driftAngle)) return false;
+    if (payload.driftBoostTier !== undefined && !isFiniteNumber(payload.driftBoostTier)) return false;
+
     return (
         isString(payload.id) &&
         isString(payload.name) &&
@@ -205,7 +213,8 @@ export const serializeSnapshot = (snapshot: ServerSnapshotPayload & { projectile
         snapshot.players.map(p => [
             p.id, p.name, p.vehicleId, p.colorId, p.x, p.y, p.z, p.rotationY, p.speed, p.lastProcessedInputSeq,
             [p.progress.checkpointIndex, p.progress.completedCheckpoints.map(c => [c.checkpointIndex, c.completedAtMs]), p.progress.distanceMeters, p.progress.finishedAtMs, p.progress.lap],
-            p.activeEffects.map(e => [e.effectType, e.appliedAtMs, e.expiresAtMs, e.intensity])
+            p.activeEffects.map(e => [e.effectType, e.appliedAtMs, e.expiresAtMs, e.intensity]),
+            p.driftState ?? 0, p.driftAngle ?? 0, p.driftBoostTier ?? 0
         ]),
         snapshot.powerups.map(p => [p.id, p.powerupId, p.isActive, p.x, p.z]),
         snapshot.hazards.map(h => [h.id, h.hazardId, h.x, h.z]),

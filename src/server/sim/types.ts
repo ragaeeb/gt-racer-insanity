@@ -1,4 +1,5 @@
 import type { CarMotionState } from '@/shared/game/carPhysics';
+import type { DriftContext } from '@/shared/game/vehicle/driftConfig';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { ClientInputFrame, InputFrameControlState } from '@/shared/network/inputFrame';
 import type { RaceEventPayload } from '@/shared/network/types';
@@ -7,6 +8,7 @@ import type { PlayerRaceProgress, RaceState, StatusEffectInstance } from '@/shar
 export type SimPlayerState = {
     activeEffects: StatusEffectInstance[];
     colorId: string;
+    driftContext: DriftContext;
     id: string;
     inputState: InputFrameControlState;
     lastProcessedInputSeq: number;

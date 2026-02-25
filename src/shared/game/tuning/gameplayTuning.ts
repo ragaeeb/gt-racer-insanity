@@ -1,9 +1,10 @@
-export type DriftTuning = {
-    // M1 will add: initiationSpeedThreshold, lateralFriction values, boost tiers, etc.
-};
+import type { DriftConfig } from '@/shared/game/vehicle/driftConfig';
+import { DEFAULT_DRIFT_CONFIG } from '@/shared/game/vehicle/driftConfig';
+
+export type DriftTuning = DriftConfig;
 
 export type CollisionTuning = {
-    // M1 will add: maxImpulse, arcadeBias, stun durations, etc.
+    // M1-C will add: maxImpulse, arcadeBias, stun durations, etc.
 };
 
 export type AudioTuning = {
@@ -22,7 +23,7 @@ export type GameplayTuningConfig = {
 };
 
 export const DEFAULT_GAMEPLAY_TUNING: GameplayTuningConfig = {
-    drift: {},
+    drift: { ...DEFAULT_DRIFT_CONFIG },
     collision: {},
     audio: {},
     combat: {},

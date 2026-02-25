@@ -3,6 +3,7 @@ import { syncPlayerMotionFromRigidBody } from '@/server/sim/collisionSystem';
 import type { createRapierWorld } from '@/server/sim/rapierWorld';
 import type { SimPlayerState } from '@/server/sim/types';
 import { createInitialRaceProgress } from '@/shared/game/track/raceProgress';
+import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 import { getVehicleClassManifestById, type VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import { PLAYER_COLLIDER_HALF_LENGTH_METERS, PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 
@@ -90,6 +91,7 @@ export class PlayerManager {
         const player: SimPlayerState = {
             activeEffects: [],
             colorId: colorId || 'red',
+            driftContext: createInitialDriftContext(),
             id: playerId,
             inputState: { boost: false, brake: false, handbrake: false, steering: 0, throttle: 0 },
             lastProcessedInputSeq: -1,
@@ -123,6 +125,7 @@ export class PlayerManager {
      */
     resetPlayerForRestart(player: SimPlayerState, playerIndex: number): void {
         player.activeEffects = [];
+        player.driftContext = createInitialDriftContext();
         player.inputState = { boost: false, brake: false, handbrake: false, steering: 0, throttle: 0 };
         player.lastProcessedInputSeq = -1;
         player.motion = {
