@@ -4,6 +4,7 @@ export const STARTUP_TIMEOUT_MS = 90_000;
 
 export type GTDebugState = {
     connectionStatus: string;
+    driftBoostTier: number;
     isRunning: boolean;
     localCarX: number | null;
     localCarZ: number | null;
