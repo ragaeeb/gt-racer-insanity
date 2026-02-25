@@ -1,3 +1,16 @@
+# [1.13.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.12.0...v1.13.0) (2026-02-25)
+
+
+### Bug Fixes
+
+* **v2:** Milestone 0 ([#30](https://github.com/ragaeeb/gt-racer-insanity/issues/30)) ([4ef74da](https://github.com/ragaeeb/gt-racer-insanity/commit/4ef74da212ae9fd83e9172d9b77ffab197b5e567))
+
+
+### Features
+
+* **audio:** M2-A-C: Audio Integration ([#43](https://github.com/ragaeeb/gt-racer-insanity/issues/43)) ([0026897](https://github.com/ragaeeb/gt-racer-insanity/commit/0026897e66028dc7068f16e197994ed60d5567b3))
+* **drift:** Milestone 1: Core Driving Feel ([#37](https://github.com/ragaeeb/gt-racer-insanity/issues/37)) ([ff0d848](https://github.com/ragaeeb/gt-racer-insanity/commit/ff0d848617cf32d12b4675bce0416a89f498352a))
+
 # [1.12.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.11.0...v1.12.0) (2026-02-25)
 
 
