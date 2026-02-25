@@ -56,6 +56,48 @@ describe('RoomSimulation', () => {
         expect(player.lastProcessedInputSeq).toEqual(1);
     });
 
+    it('should keep snapshot invariants stable after many simulation steps', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 42,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        simulation.joinPlayer('player-2', 'Bob', 'sport', 'blue');
+
+        let nowMs = 1_000;
+        for (let step = 1; step <= 1_200; step += 1) {
+            nowMs = 1_000 + step * 16;
+            simulation.queueInputFrame('player-1', createInputFrame('ROOM1', step, nowMs, 1, 0.15));
+            simulation.queueInputFrame('player-2', createInputFrame('ROOM1', step, nowMs, 0.9, -0.1));
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+        }
+
+        const snapshot = simulation.buildSnapshot(nowMs);
+        expect(snapshot.players.length).toEqual(2);
+        expect(snapshot.raceState.playerOrder.length).toEqual(snapshot.players.length);
+
+        const playerIds = new Set(snapshot.players.map((player) => player.id));
+        expect(playerIds.has('player-1')).toEqual(true);
+        expect(playerIds.has('player-2')).toEqual(true);
+
+        for (const player of snapshot.players) {
+            expect(Number.isFinite(player.x)).toEqual(true);
+            expect(Number.isFinite(player.y)).toEqual(true);
+            expect(Number.isFinite(player.z)).toEqual(true);
+            expect(Number.isFinite(player.rotationY)).toEqual(true);
+            expect(Number.isFinite(player.speed)).toEqual(true);
+            expect(Number.isFinite(player.progress.distanceMeters)).toEqual(true);
+            expect(Number.isNaN(player.x)).toEqual(false);
+            expect(Number.isNaN(player.z)).toEqual(false);
+            expect(Number.isNaN(player.speed)).toEqual(false);
+        }
+    });
+
     it('should rank players by race progress in snapshots', () => {
         const simulation = new RoomSimulation({
             roomId: 'ROOM1',
