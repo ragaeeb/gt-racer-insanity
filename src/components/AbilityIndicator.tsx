@@ -21,36 +21,42 @@ export const AbilityIndicator = () => {
 
     useEffect(() => {
         setRemainingMs(computeRemaining());
-        if (readyAtMs <= Date.now()) {
-            return;
-        }
+        if (readyAtMs <= Date.now()) { return; }
 
         const interval = setInterval(() => {
             const next = computeRemaining();
             setRemainingMs(next);
-            if (next <= 0) {
-                clearInterval(interval);
-            }
+            if (next <= 0) { clearInterval(interval); }
         }, 100);
         return () => clearInterval(interval);
     }, [readyAtMs, computeRemaining]);
 
-    if (!ability) {
-        return null;
-    }
+    if (!ability) { return null; }
 
-    const label =
-        remainingMs <= 0
-            ? `${ability.label}: READY`
-            : `${ability.label}: ${(remainingMs / 1000).toFixed(1)}s`;
+    const isReady = remainingMs <= 0;
+    const label = isReady
+        ? `${ability.label}: READY`
+        : `${ability.label}: ${(remainingMs / 1000).toFixed(1)}s`;
 
     return (
         <div
             id="ability-indicator"
-            className="text-[#BCAE8A] text-sm font-bold uppercase mt-1"
+            style={{
+                fontFamily: "'Courier New', monospace",
+                fontSize: '0.7rem',
+                fontWeight: 'bold',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                marginTop: '4px',
+                color: isReady ? 'var(--gt-cyan)' : 'var(--gt-amber)',
+                textShadow: isReady
+                    ? '0 0 8px rgba(0, 229, 255, 0.6)'
+                    : '0 0 8px rgba(255, 193, 7, 0.5)',
+                transition: 'color 0.3s, text-shadow 0.3s',
+            }}
             title="Press E to use"
         >
-            🔷 {label}
+            {isReady ? '◈' : '◇'} {label}
         </div>
     );
 };

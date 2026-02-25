@@ -121,6 +121,70 @@ describe('network v2 validators', () => {
         ).toEqual(false);
     });
 
+    it('should accept a minimal valid server snapshot payload with required fields', () => {
+        const minimalPayload = {
+            hazards: [],
+            players: [
+                {
+                    activeEffects: [],
+                    colorId: 'red',
+                    id: 'player-1',
+                    lastProcessedInputSeq: 0,
+                    name: 'Driver',
+                    progress: {
+                        checkpointIndex: 0,
+                        completedCheckpoints: [],
+                        distanceMeters: 0,
+                        finishedAtMs: null,
+                        lap: 0,
+                    },
+                    rotationY: 0,
+                    speed: 0,
+                    vehicleId: 'sport',
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                },
+            ],
+            powerups: [],
+            raceState: {
+                endedAtMs: null,
+                playerOrder: ['player-1'],
+                startedAtMs: 0,
+                status: 'running',
+                totalLaps: 1,
+                trackId: 'sunset-loop',
+                winnerPlayerId: null,
+            },
+            roomId: 'ROOM_MIN',
+            seq: 1,
+            serverTimeMs: 0,
+        };
+
+        expect(isServerSnapshotPayload(minimalPayload)).toEqual(true);
+        expect(
+            isServerSnapshotPayload({
+                ...minimalPayload,
+                roomId: 123,
+            })
+        ).toEqual(false);
+        expect(
+            isServerSnapshotPayload({
+                ...minimalPayload,
+                players: undefined,
+            })
+        ).toEqual(false);
+        expect(
+            isServerSnapshotPayload({
+                ...minimalPayload,
+                raceState: {
+                    ...minimalPayload.raceState,
+                    playerOrder: undefined,
+                },
+            })
+        ).toEqual(false);
+    });
+
     it('should coerce unsupported protocol versions to latest', () => {
         expect(coerceProtocolVersion(PROTOCOL_V2)).toEqual(PROTOCOL_V2);
         expect(coerceProtocolVersion('3')).toEqual(PROTOCOL_V2);

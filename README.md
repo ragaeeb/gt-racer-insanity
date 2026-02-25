@@ -152,3 +152,7 @@ This project is licensed under the MIT License. See [LICENSE.md](LICENSE.md).
 ## Author
 - Ragaeeb Haq
 - [github.com/ragaeeb](https://github.com/ragaeeb)
+
+## Inspiration
+
+The name comes from my friend [Ahmad Akkaoui](https://www.linkedin.com/in/ahmad-akkaoui-855a0b1b) who was building a prototype for a racing game video in university after our countless hours of playing Need For Speed 2 SE.

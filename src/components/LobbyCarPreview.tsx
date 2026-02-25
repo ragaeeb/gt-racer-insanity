@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
@@ -51,6 +51,14 @@ const CarModel = ({ modelPath, colorId }: CarModelProps) => {
         () => buildWrappedCar(gltf.scene, modelPath, colorId),
         [gltf.scene, modelPath, colorId],
     );
+    const baseYaw = useMemo(() => wrapped.rotation.y, [wrapped]);
+
+    useFrame((_, dt) => {
+        wrapped.rotation.y += dt * 0.45;
+        if (wrapped.rotation.y > baseYaw + Math.PI * 2) {
+            wrapped.rotation.y -= Math.PI * 2;
+        }
+    });
 
     useEffect(() => {
         return () => {
@@ -78,20 +86,34 @@ type SceneProps = {
     colorId: string;
 };
 
-const PREVIEW_BG_COLOR = new THREE.Color(0x1d1f2d);
-const GROUND_COLOR = new THREE.Color(0x2a2d40);
-const SKY_COLOR = new THREE.Color(0x3a3f55);
+// Cyber dark palette for the preview scene
+const PREVIEW_BG_COLOR = new THREE.Color(0x020810);
+const GROUND_COLOR = new THREE.Color(0x041020);
+const SKY_COLOR = new THREE.Color(0x003344);
+const RIM_LIGHT_COLOR = new THREE.Color(0x00e5ff);
 
-const PreviewScene = ({ vehicleClassId, colorId }: SceneProps) => {
-    const modelPath = getModelPathForVehicleClass(vehicleClassId);
+const PreviewScene = () => {
     return (
         <>
             <color attach="background" args={[PREVIEW_BG_COLOR.r, PREVIEW_BG_COLOR.g, PREVIEW_BG_COLOR.b]} />
-            <hemisphereLight args={[SKY_COLOR, GROUND_COLOR, 0.6]} />
-            <ambientLight intensity={1.0} />
+            <hemisphereLight args={[SKY_COLOR, GROUND_COLOR, 0.5]} />
+            <ambientLight intensity={0.7} />
+            {/* Main key light — warm */}
             <directionalLight position={[4, 6, 5]} intensity={1.4} />
-            <directionalLight position={[-3, 4, -4]} intensity={0.6} />
-            <directionalLight position={[0, 2, -5]} intensity={0.3} />
+            {/* Cyan rim light from left */}
+            <directionalLight position={[-4, 3, -2]} intensity={0.9} color={RIM_LIGHT_COLOR} />
+            {/* Fill from right */}
+            <directionalLight position={[3, 2, -4]} intensity={0.4} />
+        </>
+    );
+};
+
+// Wrap PreviewScene + CarModel together
+const FullScene = ({ vehicleClassId, colorId }: SceneProps) => {
+    const modelPath = getModelPathForVehicleClass(vehicleClassId);
+    return (
+        <>
+            <PreviewScene />
             <Suspense fallback={null}>
                 <CarModel modelPath={modelPath} colorId={colorId} />
             </Suspense>
@@ -117,13 +139,20 @@ for (const path of PRELOAD_PATHS) {
 
 export const LobbyCarPreview = ({ selectedVehicleId, selectedColorId }: LobbyCarPreviewProps) => {
     return (
-        <div className="aspect-video w-full overflow-hidden rounded-xl bg-[#1D1F2D] border border-[#BCAE8A]/30">
+        <div
+            className="aspect-video w-full overflow-hidden"
+            style={{
+                background: '#020810',
+                border: '1px solid rgba(0,229,255,0.18)',
+                boxShadow: 'inset 0 0 20px rgba(0,229,255,0.04)',
+            }}
+        >
             <Canvas
                 camera={{ position: [0, 2.5, 6], fov: 42 }}
                 gl={{ antialias: true, alpha: false }}
                 style={{ width: '100%', height: '100%', display: 'block' }}
             >
-                <PreviewScene vehicleClassId={selectedVehicleId} colorId={selectedColorId} />
+                <FullScene vehicleClassId={selectedVehicleId} colorId={selectedColorId} />
             </Canvas>
         </div>
     );

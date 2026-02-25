@@ -1,14 +1,23 @@
+import type { StatusEffectType } from '@/shared/network/snapshot';
+
 export type HazardBehavior = 'static' | 'moving';
 
+// Hazards only apply negative status effects; 'flipped' is handled separately via applyFlipOnHit.
+export type HazardStatusEffectType = Exclude<StatusEffectType, 'boosted' | 'flipped' | 'speed_burst'>;
+
 export type HazardManifest = {
+    applyFlipOnHit?: boolean;
     collisionRadius: number;
     id: string;
     label: string;
     movementAmplitude: number;
     movementSpeed: number;
-    statusEffectId: 'flat_tire' | 'stunned' | 'slowed';
+    statusEffectDurationMs?: number;
+    statusEffectId: HazardStatusEffectType;
     type: HazardBehavior;
 };
+
+export const PUDDLE_TRAP_ID = 'puddle-trap';
 
 export const HAZARD_MANIFESTS: HazardManifest[] = [
     {
@@ -36,6 +45,17 @@ export const HAZARD_MANIFESTS: HazardManifest[] = [
         movementAmplitude: 0,
         movementSpeed: 0,
         statusEffectId: 'slowed',
+        type: 'static',
+    },
+    {
+        applyFlipOnHit: true,
+        collisionRadius: 1.6,
+        id: PUDDLE_TRAP_ID,
+        label: 'Puddle Trap',
+        movementAmplitude: 0,
+        movementSpeed: 0,
+        statusEffectDurationMs: 2_000,
+        statusEffectId: 'stunned',
         type: 'static',
     },
 ];

@@ -4,6 +4,7 @@ import {
     VEHICLE_CLASS_TO_CATALOG_ID,
     colorIdToHSL,
     colorIdToHexString,
+    isHexColorString,
     vehicleClassToModelIndex,
 } from './vehicleSelections';
 import { CAR_MODEL_CATALOG } from './assets/carModelCatalog';
@@ -52,28 +53,53 @@ describe('colorIdToHSL', () => {
         expect(hsl.s).toBe(1.0);
         expect(hsl.l).toBe(0.5);
     });
+
+    it('should parse hex color strings to HSL', () => {
+        const hsl = colorIdToHSL('#00FF00');
+        expect(hsl.h).toBeGreaterThan(0.30);
+        expect(hsl.h).toBeLessThan(0.38);
+        expect(hsl.s).toBeGreaterThan(0.95);
+        expect(hsl.l).toBeGreaterThan(0.45);
+        expect(hsl.l).toBeLessThan(0.55);
+    });
 });
 
 describe('colorIdToHexString', () => {
-    it('should return a valid CSS hsl() string for known colors', () => {
+    it('should return a valid CSS hex string for known colors', () => {
         for (const colorId of Object.keys(COLOR_ID_TO_HSL)) {
             const result = colorIdToHexString(colorId);
-            expect(result).toMatch(/^hsl\(\d+, \d+%, \d+%\)$/);
+            expect(result).toMatch(/^#[0-9A-F]{6}$/);
         }
     });
 
     it('should return a fallback for unknown color ids', () => {
         const result = colorIdToHexString('nonexistent');
-        expect(result).toMatch(/^hsl\(/);
+        expect(result).toBe('#FF0000');
+    });
+
+    it('should preserve valid hex values', () => {
+        const result = colorIdToHexString('#12abef');
+        expect(result).toBe('#12ABEF');
     });
 
     it('should cover every color in every vehicle palette', () => {
         for (const manifest of VEHICLE_CLASS_MANIFESTS) {
             for (const colorId of manifest.colorPaletteIds) {
                 const result = colorIdToHexString(colorId);
-                expect(result).toMatch(/^hsl\(\d+, \d+%, \d+%\)$/);
+                expect(result).toMatch(/^#[0-9A-F]{6}$/);
             }
         }
+    });
+});
+
+describe('isHexColorString', () => {
+    it('should validate strict #RRGGBB values', () => {
+        expect(isHexColorString('#00FF00')).toBeTrue();
+        expect(isHexColorString('#00ff00')).toBeTrue();
+        expect(isHexColorString('#0f0')).toBeFalse();
+        expect(isHexColorString('00FF00')).toBeFalse();
+        expect(isHexColorString('#00FF000')).toBeFalse();
+        expect(isHexColorString('#GGGGGG')).toBeFalse();
     });
 });
 

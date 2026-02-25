@@ -163,5 +163,6 @@ export const waitForCarsToMoveForward = async (
 
 export const expectHidden = async (page: Page, selector: string) => {
     const className = (await page.getAttribute(selector, 'class')) ?? '';
-    expect(className.includes('hidden')).toBeTruthy();
+    const classTokens = className.trim().length > 0 ? className.trim().split(/\s+/) : [];
+    expect(classTokens.includes('hidden')).toBeTruthy();
 };

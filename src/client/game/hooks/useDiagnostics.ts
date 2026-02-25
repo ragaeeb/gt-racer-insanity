@@ -1,150 +1,49 @@
-import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import type { CameraFrameMetrics } from '@/client/game/hooks/useCameraFollow';
+import { useEffect, useRef } from 'react';
+import { computeCollisionTimings } from '@/client/game/hooks/diagnostics/computeCollisionTimings';
+import {
+    ACTIVE_COLLISION_WINDOW_MS,
+    createDiagCaptureState,
+    DIAG_MAX_FRAME_SAMPLES,
+    DIAG_MAX_SPIKE_SAMPLES,
+    DIAGNOSTIC_LOG_INTERVAL_MS,
+    type DiagCaptureState,
+    type GTDebugState,
+    LONG_FRAME_GAP_THRESHOLD_MS,
+    LONG_FRAME_THRESHOLD_MS,
+    type NearestOpponent,
+    SHAKE_SPIKE_CAMERA_JUMP_METERS,
+    SHAKE_SPIKE_FPS_THRESHOLD,
+    SHAKE_SPIKE_WARN_INTERVAL_MS,
+} from '@/client/game/hooks/diagnostics/types';
+import { useContactEpisodeTracker } from '@/client/game/hooks/diagnostics/useContactEpisodeTracker';
+import { useLongTaskObserver } from '@/client/game/hooks/diagnostics/useLongTaskObserver';
 import type { RaceSession } from '@/client/game/hooks/types';
+import type { CameraFrameMetrics } from '@/client/game/hooks/useCameraFollow';
 import { useHudStore } from '@/client/game/state/hudStore';
-import { PLAYER_COLLIDER_HALF_LENGTH_METERS } from '@/shared/physics/constants';
-import type { ConnectionStatus } from '@/shared/network/types';
-
-type DiagFrameSample = {
-    cameraJumpMeters: number;
-    collisionContactToEventMs: number | null;
-    collisionContactToFlipStartMs: number | null;
-    collisionDriveLockRemainingMs: number | null;
-    collisionEventAgeMs: number | null;
-    collisionEventServerLagMs: number | null;
-    collisionEventToOpponentFlipStartMs: number | null;
-    collisionEventToFlipStartMs: number | null;
-    collisionEventToSnapshotFlipMs: number | null;
-    collisionHardSnapRemainingMs: number | null;
-    contactAgeMs: number | null;
-    contactOpponentId: string | null;
-    contactPassThroughSuspected: boolean;
-    correctionMode: string;
-    correctionPositionError: number;
-    fps: number;
-    frameGapMs: number;
-    frameDtMaxMs: number;
-    longFrameCount: number;
-    raceEventProcessingMs: number | null;
-    nearestOpponentDistanceMeters: number | null;
-    nearestOpponentRelativeZ: number | null;
-    snapshotProcessingMs: number | null;
-    playerX: number;
-    playerZ: number;
-    speedKph: number;
-    tMs: number;
-    visibilityState: DocumentVisibilityState;
-};
-
-type DiagSpikeSample = {
-    cameraJumpMeters: number;
-    cameraMotionMeters: number;
-    correctionMode: string;
-    correctionPositionError: number;
-    fps: number;
-    playerX: number;
-    playerZ: number;
-    snapshotAgeMs: number | null;
-    tMs: number;
-};
-
-type DiagCaptureState = {
-    correctionPositionErrorMaxMeters: number;
-    fpsMax: number;
-    fpsMin: number;
-    fpsSampleCount: number;
-    fpsSum: number;
-    frameSamples: DiagFrameSample[];
-    framesCaptured: number;
-    frameDtMaxMs: number;
-    frameGapMaxMs: number;
-    longFrameCount: number;
-    longFrameGapCount: number;
-    longTaskCount: number;
-    longTaskMaxMs: number;
-    passThroughSuspectedCount: number;
-    sessionStartedAtMs: number;
-    snapshotAgeCount: number;
-    snapshotAgeMaxMs: number;
-    snapshotAgeSumMs: number;
-    spikeCount: number;
-    spikeSamples: DiagSpikeSample[];
-    speedKphMax: number;
-    wallClampCount: number;
-};
-
-type GTDebugState = {
-    connectionStatus: ConnectionStatus;
-    isRunning: boolean;
-    localCarX: number | null;
-    localCarZ: number | null;
-    opponentCount: number;
-    roomId: string | null;
-    speedKph: number;
-};
-
-type ContactEpisodeState = {
-    active: boolean;
-    hadCollisionEvent: boolean;
-    initialRelativeZ: number;
-    minDistanceMeters: number;
-    opponentId: string | null;
-    passThroughSuspected: boolean;
-    startedAtMs: number;
-};
-
-const DIAGNOSTIC_LOG_INTERVAL_MS = 250;
-const DIAG_MAX_FRAME_SAMPLES = 200;
-const DIAG_MAX_SPIKE_SAMPLES = 40;
-const CONTACT_DISTANCE_THRESHOLD_METERS = PLAYER_COLLIDER_HALF_LENGTH_METERS * 2 + 0.6;
-const PASS_THROUGH_DISTANCE_THRESHOLD_METERS = PLAYER_COLLIDER_HALF_LENGTH_METERS * 2 - 0.5;
-const LONG_FRAME_THRESHOLD_MS = 80;
-const LONG_FRAME_GAP_THRESHOLD_MS = 50;
-const SHAKE_SPIKE_CAMERA_JUMP_METERS = 1.5;
-const SHAKE_SPIKE_FPS_THRESHOLD = 45;
-const SHAKE_SPIKE_WARN_INTERVAL_MS = 1000;
-const ACTIVE_COLLISION_WINDOW_MS = 3_500;
-
-const createDiagCaptureState = (): DiagCaptureState => ({
-    correctionPositionErrorMaxMeters: 0,
-    fpsMax: 0,
-    fpsMin: Number.POSITIVE_INFINITY,
-    fpsSampleCount: 0,
-    fpsSum: 0,
-    frameSamples: [],
-    framesCaptured: 0,
-    frameDtMaxMs: 0,
-    frameGapMaxMs: 0,
-    longFrameCount: 0,
-    longFrameGapCount: 0,
-    longTaskCount: 0,
-    longTaskMaxMs: 0,
-    passThroughSuspectedCount: 0,
-    sessionStartedAtMs: Date.now(),
-    snapshotAgeCount: 0,
-    snapshotAgeMaxMs: 0,
-    snapshotAgeSumMs: 0,
-    spikeCount: 0,
-    spikeSamples: [],
-    speedKphMax: 0,
-    wallClampCount: 0,
-});
 
 const parseDiagnosticsFlag = () => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') {
+        return false;
+    }
     const searchParams = new URLSearchParams(window.location.search);
     const queryFlag = searchParams.get('diag');
-    if (queryFlag === '1' || queryFlag === 'true') return true;
+    if (queryFlag === '1' || queryFlag === 'true') {
+        return true;
+    }
     const localStorageFlag = window.localStorage.getItem('gt-diag');
     return localStorageFlag === '1' || localStorageFlag === 'true';
 };
 
 const parseDiagnosticsVerboseFlag = () => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') {
+        return false;
+    }
     const searchParams = new URLSearchParams(window.location.search);
     const queryFlag = searchParams.get('diagVerbose');
-    if (queryFlag === '1' || queryFlag === 'true') return true;
+    if (queryFlag === '1' || queryFlag === 'true') {
+        return true;
+    }
     const localStorageFlag = window.localStorage.getItem('gt-diag-verbose');
     return localStorageFlag === '1' || localStorageFlag === 'true';
 };
@@ -153,8 +52,7 @@ const downloadReport = (capture: DiagCaptureState) => {
     const nowMs = Date.now();
     const durationMs = Math.max(1, nowMs - capture.sessionStartedAtMs);
     const averageFps = capture.fpsSampleCount > 0 ? capture.fpsSum / capture.fpsSampleCount : 0;
-    const snapshotAgeAverageMs =
-        capture.snapshotAgeCount > 0 ? capture.snapshotAgeSumMs / capture.snapshotAgeCount : 0;
+    const snapshotAgeAverageMs = capture.snapshotAgeCount > 0 ? capture.snapshotAgeSumMs / capture.snapshotAgeCount : 0;
     const fpsMin = capture.fpsSampleCount > 0 ? capture.fpsMin : 0;
     const header = [
         '# GT Racer Diagnostic Report',
@@ -180,8 +78,8 @@ const downloadReport = (capture: DiagCaptureState) => {
         '',
         '## Recent Spikes',
     ];
-    const spikeLines = capture.spikeSamples.map((sample) => JSON.stringify(sample));
-    const frameLines = capture.frameSamples.map((sample) => JSON.stringify(sample));
+    const spikeLines = capture.spikeSamples.map((s) => JSON.stringify(s));
+    const frameLines = capture.frameSamples.map((s) => JSON.stringify(s));
     const reportText = [
         ...header,
         ...(spikeLines.length > 0 ? spikeLines : ['(none)']),
@@ -198,16 +96,6 @@ const downloadReport = (capture: DiagCaptureState) => {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1_000);
 };
-
-const createContactEpisodeState = (): ContactEpisodeState => ({
-    active: false,
-    hadCollisionEvent: false,
-    initialRelativeZ: 0,
-    minDistanceMeters: Number.POSITIVE_INFINITY,
-    opponentId: null,
-    passThroughSuspected: false,
-    startedAtMs: 0,
-});
 
 export const useDiagnostics = (
     sessionRef: React.RefObject<RaceSession>,
@@ -226,31 +114,39 @@ export const useDiagnostics = (
     const lastCollisionFlipStartedLoggedAtMsRef = useRef<number | null>(null);
     const lastCollisionOpponentFlipStartedLoggedAtMsRef = useRef<number | null>(null);
     const lastCollisionSnapshotFlipLoggedAtMsRef = useRef<number | null>(null);
-    const contactEpisodeRef = useRef<ContactEpisodeState>(createContactEpisodeState());
     const maxFrameDtMsSinceLogRef = useRef(0);
     const longFrameCountSinceLogRef = useRef(0);
     const maxFrameGapMsSinceLogRef = useRef(0);
     const longFrameGapCountSinceLogRef = useRef(0);
     const lastFrameAtMsRef = useRef(0);
-    const longTaskCountRef = useRef(0);
-    const longTaskMaxMsRef = useRef(0);
 
-    useEffect(() => {
-        enabledRef.current = parseDiagnosticsFlag();
-        verboseRef.current = parseDiagnosticsVerboseFlag();
+    // Focused sub-hooks
+    const { longTaskCountRef, longTaskMaxMsRef, reset: resetLongTasks } = useLongTaskObserver(verboseRef);
+    const contactEpisodeTracker = useContactEpisodeTracker();
+
+    const resetAllRefs = () => {
         captureRef.current = createDiagCaptureState();
-        contactEpisodeRef.current = createContactEpisodeState();
+        spikeCountRef.current = 0;
+        contactEpisodeTracker.reset();
+        lastLogAtMsRef.current = 0;
+        lastSnapshotSeqRef.current = -1;
+        lastSpikeWarnAtMsRef.current = 0;
         maxFrameDtMsSinceLogRef.current = 0;
         longFrameCountSinceLogRef.current = 0;
         maxFrameGapMsSinceLogRef.current = 0;
         longFrameGapCountSinceLogRef.current = 0;
         lastFrameAtMsRef.current = 0;
-        longTaskCountRef.current = 0;
-        longTaskMaxMsRef.current = 0;
+        resetLongTasks();
         lastCollisionEventLoggedAtMsRef.current = null;
         lastCollisionFlipStartedLoggedAtMsRef.current = null;
         lastCollisionOpponentFlipStartedLoggedAtMsRef.current = null;
         lastCollisionSnapshotFlipLoggedAtMsRef.current = null;
+    };
+
+    useEffect(() => {
+        enabledRef.current = parseDiagnosticsFlag();
+        verboseRef.current = parseDiagnosticsVerboseFlag();
+        resetAllRefs();
 
         const debugWindow = window as Window & {
             __GT_DEBUG__?: { getState: () => GTDebugState };
@@ -271,7 +167,7 @@ export const useDiagnostics = (
         };
 
         debugWindow.__GT_DEBUG__ = {
-            getState: () => {
+            getState: (): GTDebugState => {
                 const session = sessionRef.current;
                 return {
                     connectionStatus: session.connectionStatus,
@@ -284,22 +180,10 @@ export const useDiagnostics = (
                 };
             },
         };
+
         debugWindow.__GT_DIAG__ = {
             clearReport: () => {
-                captureRef.current = createDiagCaptureState();
-                spikeCountRef.current = 0;
-                contactEpisodeRef.current = createContactEpisodeState();
-                maxFrameDtMsSinceLogRef.current = 0;
-                longFrameCountSinceLogRef.current = 0;
-                maxFrameGapMsSinceLogRef.current = 0;
-                longFrameGapCountSinceLogRef.current = 0;
-                lastFrameAtMsRef.current = 0;
-                longTaskCountRef.current = 0;
-                longTaskMaxMsRef.current = 0;
-                lastCollisionEventLoggedAtMsRef.current = null;
-                lastCollisionFlipStartedLoggedAtMsRef.current = null;
-                lastCollisionOpponentFlipStartedLoggedAtMsRef.current = null;
-                lastCollisionSnapshotFlipLoggedAtMsRef.current = null;
+                resetAllRefs();
                 console.info('[diag] cleared report buffer');
             },
             disable: () => {
@@ -339,36 +223,11 @@ export const useDiagnostics = (
             console.info('[diag] enabled via ?diag=1 or localStorage gt-diag=true');
         }
 
-        let longTaskObserver: PerformanceObserver | null = null;
-        try {
-            if (typeof PerformanceObserver !== 'undefined') {
-                const supported = PerformanceObserver.supportedEntryTypes ?? [];
-                if (supported.includes('longtask')) {
-                    longTaskObserver = new PerformanceObserver((list) => {
-                        for (const entry of list.getEntries()) {
-                            const durationMs = entry.duration;
-                            longTaskCountRef.current += 1;
-                            longTaskMaxMsRef.current = Math.max(longTaskMaxMsRef.current, durationMs);
-                            if (verboseRef.current) {
-                                console.warn('[diag][longtask]', {
-                                    durationMs: Number(durationMs.toFixed(2)),
-                                    startTimeMs: Number(entry.startTime.toFixed(2)),
-                                });
-                            }
-                        }
-                    });
-                    longTaskObserver.observe({ entryTypes: ['longtask'] });
-                }
-            }
-        } catch {
-            // Ignore unsupported performance observer environments.
-        }
-
         return () => {
-            longTaskObserver?.disconnect();
             delete debugWindow.__GT_DEBUG__;
             delete debugWindow.__GT_DIAG__;
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionRef]);
 
     useEffect(() => {
@@ -391,6 +250,8 @@ export const useDiagnostics = (
         const lastFrameAtMs = lastFrameAtMsRef.current;
         const frameGapMs = lastFrameAtMs > 0 ? nowMs - lastFrameAtMs : frameDtMs;
         lastFrameAtMsRef.current = nowMs;
+
+        // Frame timing accumulation
         maxFrameDtMsSinceLogRef.current = Math.max(maxFrameDtMsSinceLogRef.current, frameDtMs);
         maxFrameGapMsSinceLogRef.current = Math.max(maxFrameGapMsSinceLogRef.current, frameGapMs);
         if (frameDtMs >= LONG_FRAME_THRESHOLD_MS) {
@@ -399,153 +260,54 @@ export const useDiagnostics = (
         if (frameGapMs >= LONG_FRAME_GAP_THRESHOLD_MS) {
             longFrameGapCountSinceLogRef.current += 1;
             const nearCollision =
-                session.lastCollisionEventAtMs !== null &&
-                nowMs - session.lastCollisionEventAtMs <= 3_000;
-            const visibilityState = document.visibilityState;
-            if (verboseRef.current && (nearCollision || visibilityState !== 'visible')) {
+                session.lastCollisionEventAtMs !== null && nowMs - session.lastCollisionEventAtMs <= 3_000;
+            if (verboseRef.current && (nearCollision || document.visibilityState !== 'visible')) {
                 console.warn('[diag][frame-gap]', {
                     frameDtMs: Number(frameDtMs.toFixed(2)),
                     frameGapMs: Number(frameGapMs.toFixed(2)),
                     tMs: nowMs,
-                    visibilityState,
+                    visibilityState: document.visibilityState,
                 });
             }
         }
+
         const instantaneousFps = dt > 0 ? Math.round(1 / dt) : 0;
         const capture = captureRef.current;
         const cm = cameraMetricsRef.current;
         const correction = session.lastCorrection;
         const localSnapshot = session.latestLocalSnapshot;
-        let nearestOpponentDistanceMeters: number | null = null;
-        let nearestOpponentId: string | null = null;
-        let nearestOpponentRelativeZ: number | null = null;
 
+        // Find nearest opponent
+        let nearest: NearestOpponent | null = null;
         for (const [opponentId, opponentCar] of session.opponents) {
             const dx = opponentCar.position.x - localCar.position.x;
             const dz = opponentCar.position.z - localCar.position.z;
             const distance = Math.hypot(dx, dz);
-            if (nearestOpponentDistanceMeters === null || distance < nearestOpponentDistanceMeters) {
-                nearestOpponentDistanceMeters = distance;
-                nearestOpponentId = opponentId;
-                nearestOpponentRelativeZ = dz;
+            if (nearest === null || distance < nearest.distanceMeters) {
+                nearest = { distanceMeters: distance, id: opponentId, relativeZ: dz };
             }
         }
 
-        const contactEpisode = contactEpisodeRef.current;
-        const nearestDistance = nearestOpponentDistanceMeters;
-        const isContactActive =
-            nearestDistance !== null && nearestDistance <= CONTACT_DISTANCE_THRESHOLD_METERS;
-        if (isContactActive && nearestOpponentId && nearestDistance !== null) {
-            if (!contactEpisode.active || contactEpisode.opponentId !== nearestOpponentId) {
-                contactEpisode.active = true;
-                contactEpisode.startedAtMs = nowMs;
-                contactEpisode.opponentId = nearestOpponentId;
-                contactEpisode.minDistanceMeters = nearestDistance;
-                contactEpisode.initialRelativeZ = nearestOpponentRelativeZ ?? 0;
-                contactEpisode.passThroughSuspected = false;
-                contactEpisode.hadCollisionEvent = false;
-            } else {
-                contactEpisode.minDistanceMeters = Math.min(
-                    contactEpisode.minDistanceMeters,
-                    nearestDistance,
-                );
+        // Advance contact episode state machine
+        const episodeUpdate = contactEpisodeTracker.update(nearest, session, nowMs);
+        if (episodeUpdate.newPassThroughDetected) {
+            capture.passThroughSuspectedCount += 1;
+            if (verboseRef.current) {
+                console.warn('[diag][pass-through-suspected]', {
+                    minDistanceMeters: Number(episodeUpdate.detectedMinDistanceMeters.toFixed(3)),
+                    opponentId: episodeUpdate.detectedOpponentId,
+                    startedAtMs: nowMs,
+                });
             }
-
-            if (
-                session.lastCollisionEventAtMs !== null &&
-                session.lastCollisionEventAtMs >= contactEpisode.startedAtMs
-            ) {
-                contactEpisode.hadCollisionEvent = true;
-            }
-
-            const currentRelativeZ = nearestOpponentRelativeZ ?? 0;
-            const crossedThroughOpponent =
-                Math.abs(contactEpisode.initialRelativeZ) > 0.01 &&
-                Math.abs(currentRelativeZ) > 0.01 &&
-                Math.sign(currentRelativeZ) !== Math.sign(contactEpisode.initialRelativeZ);
-
-            if (
-                crossedThroughOpponent &&
-                contactEpisode.minDistanceMeters <= PASS_THROUGH_DISTANCE_THRESHOLD_METERS &&
-                !contactEpisode.hadCollisionEvent
-            ) {
-                contactEpisode.passThroughSuspected = true;
-            }
-        } else if (contactEpisode.active) {
-            if (contactEpisode.passThroughSuspected) {
-                capture.passThroughSuspectedCount += 1;
-                if (verboseRef.current) {
-                    console.warn('[diag][pass-through-suspected]', {
-                        minDistanceMeters: Number(contactEpisode.minDistanceMeters.toFixed(3)),
-                        opponentId: contactEpisode.opponentId,
-                        startedAtMs: contactEpisode.startedAtMs,
-                    });
-                }
-            }
-            contactEpisode.active = false;
-            contactEpisode.hadCollisionEvent = false;
-            contactEpisode.initialRelativeZ = 0;
-            contactEpisode.minDistanceMeters = Number.POSITIVE_INFINITY;
-            contactEpisode.opponentId = null;
-            contactEpisode.passThroughSuspected = false;
-            contactEpisode.startedAtMs = 0;
         }
 
-        const contactAgeMs =
-            contactEpisode.active && contactEpisode.startedAtMs > 0
-                ? nowMs - contactEpisode.startedAtMs
-                : null;
+        const episode = contactEpisodeTracker.episodeRef.current;
+        const timings = computeCollisionTimings(session, episode, nowMs);
+        const contactAgeMs = episode.active && episode.startedAtMs > 0 ? nowMs - episode.startedAtMs : null;
         const lastSnapshotAgeMs =
             session.lastSnapshotReceivedAtMs === null ? null : nowMs - session.lastSnapshotReceivedAtMs;
-        const collisionEventAgeMs =
-            session.lastCollisionEventAtMs === null ? null : nowMs - session.lastCollisionEventAtMs;
-        const collisionDriveLockRemainingMs =
-            session.localCollisionDriveLockUntilMs === null
-                ? null
-                : Math.max(0, session.localCollisionDriveLockUntilMs - nowMs);
-        const collisionEventServerLagMs =
-            session.lastCollisionEventAtMs !== null && session.lastCollisionEventServerTimeMs !== null
-                ? Math.max(0, session.lastCollisionEventAtMs - session.lastCollisionEventServerTimeMs)
-                : null;
-        const collisionEventToFlipStartMs =
-            session.lastCollisionEventAtMs !== null && session.lastCollisionFlipStartedAtMs !== null
-                ? Math.max(0, session.lastCollisionFlipStartedAtMs - session.lastCollisionEventAtMs)
-                : null;
-        const collisionEventToOpponentFlipStartMs =
-            session.lastCollisionEventAtMs !== null && session.lastCollisionOpponentFlipStartedAtMs !== null
-                ? Math.max(0, session.lastCollisionOpponentFlipStartedAtMs - session.lastCollisionEventAtMs)
-                : null;
-        const collisionEventToSnapshotFlipMs =
-            session.lastCollisionEventAtMs !== null && session.lastCollisionSnapshotFlipSeenAtMs !== null
-                ? Math.max(0, session.lastCollisionSnapshotFlipSeenAtMs - session.lastCollisionEventAtMs)
-                : null;
-        const collisionContactToEventMs =
-            contactEpisode.active &&
-            contactEpisode.startedAtMs > 0 &&
-            session.lastCollisionEventAtMs !== null &&
-            session.lastCollisionEventAtMs >= contactEpisode.startedAtMs
-                ? Math.max(0, session.lastCollisionEventAtMs - contactEpisode.startedAtMs)
-                : null;
-        const earliestFlipStartAtMs = [session.lastCollisionFlipStartedAtMs, session.lastCollisionOpponentFlipStartedAtMs]
-            .filter((value): value is number => value !== null)
-            .reduce<number | null>((minValue, value) => {
-                if (minValue === null || value < minValue) {
-                    return value;
-                }
-                return minValue;
-            }, null);
-        const collisionContactToFlipStartMs =
-            contactEpisode.active &&
-            contactEpisode.startedAtMs > 0 &&
-            earliestFlipStartAtMs !== null &&
-            earliestFlipStartAtMs >= contactEpisode.startedAtMs
-                ? Math.max(0, earliestFlipStartAtMs - contactEpisode.startedAtMs)
-                : null;
-        const collisionHardSnapRemainingMs =
-            session.localCollisionHardSnapUntilMs === null
-                ? null
-                : Math.max(0, session.localCollisionHardSnapUntilMs - nowMs);
 
+        // Periodic frame sample capture and verbose logging
         if (nowMs - lastLogAtMsRef.current >= DIAGNOSTIC_LOG_INTERVAL_MS) {
             lastLogAtMsRef.current = nowMs;
             const frameDtMaxMs = maxFrameDtMsSinceLogRef.current;
@@ -558,12 +320,7 @@ export const useDiagnostics = (
             longFrameGapCountSinceLogRef.current = 0;
 
             const localSpeedKph = Math.round(
-                Math.max(
-                    0,
-                    localSnapshot?.speed !== undefined
-                        ? localSnapshot.speed * 3.6
-                        : localCar.getSpeed() * 3.6,
-                ),
+                Math.max(0, localSnapshot?.speed !== undefined ? localSnapshot.speed * 3.6 : localCar.getSpeed() * 3.6),
             );
             const snapshotSpeedKph = Math.round(Math.max(0, (localSnapshot?.speed ?? 0) * 3.6));
 
@@ -591,20 +348,12 @@ export const useDiagnostics = (
                 capture.snapshotAgeMaxMs = Math.max(capture.snapshotAgeMaxMs, lastSnapshotAgeMs);
             }
 
-            const frameSample: DiagFrameSample = {
+            capture.frameSamples.push({
                 cameraJumpMeters: Number(cm.cameraJumpMeters.toFixed(4)),
-                collisionContactToEventMs,
-                collisionContactToFlipStartMs,
-                collisionDriveLockRemainingMs,
-                collisionEventAgeMs,
-                collisionEventServerLagMs,
-                collisionEventToOpponentFlipStartMs,
-                collisionEventToFlipStartMs,
-                collisionEventToSnapshotFlipMs,
-                collisionHardSnapRemainingMs,
+                ...timings,
                 contactAgeMs,
-                contactOpponentId: contactEpisode.active ? contactEpisode.opponentId : null,
-                contactPassThroughSuspected: contactEpisode.active && contactEpisode.passThroughSuspected,
+                contactOpponentId: episode.active ? episode.opponentId : null,
+                contactPassThroughSuspected: episode.active && episode.passThroughSuspected,
                 correctionMode: correction?.mode ?? 'none',
                 correctionPositionError: Number((correction?.positionError ?? 0).toFixed(4)),
                 fps: instantaneousFps,
@@ -615,10 +364,8 @@ export const useDiagnostics = (
                     session.lastRaceEventProcessingMs === null
                         ? null
                         : Number(session.lastRaceEventProcessingMs.toFixed(2)),
-                nearestOpponentDistanceMeters:
-                    nearestOpponentDistanceMeters === null ? null : Number(nearestOpponentDistanceMeters.toFixed(4)),
-                nearestOpponentRelativeZ:
-                    nearestOpponentRelativeZ === null ? null : Number(nearestOpponentRelativeZ.toFixed(4)),
+                nearestOpponentDistanceMeters: nearest === null ? null : Number(nearest.distanceMeters.toFixed(4)),
+                nearestOpponentRelativeZ: nearest === null ? null : Number(nearest.relativeZ.toFixed(4)),
                 snapshotProcessingMs:
                     session.lastSnapshotProcessingMs === null
                         ? null
@@ -628,15 +375,14 @@ export const useDiagnostics = (
                 speedKph: localSpeedKph,
                 tMs: nowMs,
                 visibilityState: document.visibilityState,
-            };
-            capture.frameSamples.push(frameSample);
+            });
             if (capture.frameSamples.length > DIAG_MAX_FRAME_SAMPLES) {
                 capture.frameSamples.shift();
             }
 
             if (session.latestLocalSnapshotSeq !== lastSnapshotSeqRef.current) {
                 lastSnapshotSeqRef.current = session.latestLocalSnapshotSeq ?? -1;
-                if (enabledRef.current && verboseRef.current) {
+                if (verboseRef.current) {
                     console.debug('[diag][snapshot]', {
                         lastProcessedInputSeq: localSnapshot?.lastProcessedInputSeq ?? null,
                         seq: lastSnapshotSeqRef.current,
@@ -646,22 +392,14 @@ export const useDiagnostics = (
                 }
             }
 
-            if (enabledRef.current && verboseRef.current) {
+            if (verboseRef.current) {
                 console.debug('[diag][frame]', {
                     cameraMotionMeters: Number(cm.cameraMotionMeters.toFixed(4)),
                     cameraJumpMeters: Number(cm.cameraJumpMeters.toFixed(4)),
-                    collisionContactToEventMs,
-                    collisionContactToFlipStartMs,
-                    collisionDriveLockRemainingMs,
-                    collisionEventAgeMs,
-                    collisionEventServerLagMs,
-                    collisionEventToOpponentFlipStartMs,
-                    collisionEventToFlipStartMs,
-                    collisionEventToSnapshotFlipMs,
-                    collisionHardSnapRemainingMs,
+                    ...timings,
                     contactAgeMs,
-                    contactOpponentId: contactEpisode.active ? contactEpisode.opponentId : null,
-                    contactPassThroughSuspected: contactEpisode.active && contactEpisode.passThroughSuspected,
+                    contactOpponentId: episode.active ? episode.opponentId : null,
+                    contactPassThroughSuspected: episode.active && episode.passThroughSuspected,
                     correctionInputLead: correction?.inputLead ?? 0,
                     correctionMode: correction?.mode ?? 'none',
                     correctionPositionApplied: Number((correction?.appliedPositionDelta ?? 0).toFixed(4)),
@@ -670,10 +408,8 @@ export const useDiagnostics = (
                     correctionYawError: Number((correction?.yawError ?? 0).toFixed(4)),
                     frameDtMs: Number(frameDtMs.toFixed(2)),
                     fps: instantaneousFps,
-                    nearestOpponentDistanceMeters:
-                        nearestOpponentDistanceMeters === null ? null : Number(nearestOpponentDistanceMeters.toFixed(4)),
-                    nearestOpponentRelativeZ:
-                        nearestOpponentRelativeZ === null ? null : Number(nearestOpponentRelativeZ.toFixed(4)),
+                    nearestOpponentDistanceMeters: nearest === null ? null : Number(nearest.distanceMeters.toFixed(4)),
+                    nearestOpponentRelativeZ: nearest === null ? null : Number(nearest.relativeZ.toFixed(4)),
                     localSpeedKph,
                     playerRotationY: Number(localCar.rotationY.toFixed(4)),
                     playerX: Number(localCar.position.x.toFixed(4)),
@@ -683,63 +419,60 @@ export const useDiagnostics = (
                     spikeCount: spikeCountRef.current,
                     wallClampCount: wallClampCountRef.current,
                 });
-            }
 
-            if (
-                verboseRef.current &&
-                session.lastCollisionEventAtMs !== null &&
-                session.lastCollisionEventAtMs !== lastCollisionEventLoggedAtMsRef.current
-            ) {
-                lastCollisionEventLoggedAtMsRef.current = session.lastCollisionEventAtMs;
-                console.debug('[diag][collision-event]', {
-                    atMs: session.lastCollisionEventAtMs,
-                    flippedPlayerId: session.lastCollisionFlippedPlayerId,
-                    serverLagMs: collisionEventServerLagMs,
-                });
-            }
+                if (
+                    session.lastCollisionEventAtMs !== null &&
+                    session.lastCollisionEventAtMs !== lastCollisionEventLoggedAtMsRef.current
+                ) {
+                    lastCollisionEventLoggedAtMsRef.current = session.lastCollisionEventAtMs;
+                    console.debug('[diag][collision-event]', {
+                        atMs: session.lastCollisionEventAtMs,
+                        flippedPlayerId: session.lastCollisionFlippedPlayerId,
+                        serverLagMs: timings.collisionEventServerLagMs,
+                    });
+                }
 
-            if (
-                verboseRef.current &&
-                session.lastCollisionSnapshotFlipSeenAtMs !== null &&
-                session.lastCollisionSnapshotFlipSeenAtMs !== lastCollisionSnapshotFlipLoggedAtMsRef.current
-            ) {
-                lastCollisionSnapshotFlipLoggedAtMsRef.current = session.lastCollisionSnapshotFlipSeenAtMs;
-                console.debug('[diag][collision-snapshot-flip]', {
-                    atMs: session.lastCollisionSnapshotFlipSeenAtMs,
-                    fromEventMs: collisionEventToSnapshotFlipMs,
-                });
-            }
+                if (
+                    session.lastCollisionSnapshotFlipSeenAtMs !== null &&
+                    session.lastCollisionSnapshotFlipSeenAtMs !== lastCollisionSnapshotFlipLoggedAtMsRef.current
+                ) {
+                    lastCollisionSnapshotFlipLoggedAtMsRef.current = session.lastCollisionSnapshotFlipSeenAtMs;
+                    console.debug('[diag][collision-snapshot-flip]', {
+                        atMs: session.lastCollisionSnapshotFlipSeenAtMs,
+                        fromEventMs: timings.collisionEventToSnapshotFlipMs,
+                    });
+                }
 
-            if (
-                verboseRef.current &&
-                session.lastCollisionFlipStartedAtMs !== null &&
-                session.lastCollisionFlipStartedAtMs !== lastCollisionFlipStartedLoggedAtMsRef.current
-            ) {
-                lastCollisionFlipStartedLoggedAtMsRef.current = session.lastCollisionFlipStartedAtMs;
-                console.debug('[diag][collision-flip-start]', {
-                    atMs: session.lastCollisionFlipStartedAtMs,
-                    fromEventMs: collisionEventToFlipStartMs,
-                });
-            }
+                if (
+                    session.lastCollisionFlipStartedAtMs !== null &&
+                    session.lastCollisionFlipStartedAtMs !== lastCollisionFlipStartedLoggedAtMsRef.current
+                ) {
+                    lastCollisionFlipStartedLoggedAtMsRef.current = session.lastCollisionFlipStartedAtMs;
+                    console.debug('[diag][collision-flip-start]', {
+                        atMs: session.lastCollisionFlipStartedAtMs,
+                        fromEventMs: timings.collisionEventToFlipStartMs,
+                    });
+                }
 
-            if (
-                verboseRef.current &&
-                session.lastCollisionOpponentFlipStartedAtMs !== null
-            ) {
-                if (session.lastCollisionOpponentFlipStartedAtMs !== lastCollisionOpponentFlipStartedLoggedAtMsRef.current) {
-                    lastCollisionOpponentFlipStartedLoggedAtMsRef.current = session.lastCollisionOpponentFlipStartedAtMs;
+                if (
+                    session.lastCollisionOpponentFlipStartedAtMs !== null &&
+                    session.lastCollisionOpponentFlipStartedAtMs !==
+                        lastCollisionOpponentFlipStartedLoggedAtMsRef.current
+                ) {
+                    lastCollisionOpponentFlipStartedLoggedAtMsRef.current =
+                        session.lastCollisionOpponentFlipStartedAtMs;
                     console.debug('[diag][collision-opponent-flip-start]', {
                         atMs: session.lastCollisionOpponentFlipStartedAtMs,
-                        fromEventMs: collisionEventToOpponentFlipStartMs,
+                        fromEventMs: timings.collisionEventToOpponentFlipStartMs,
                         flippedPlayerId: session.lastCollisionFlippedPlayerId,
                     });
                 }
             }
         }
 
+        // Shake spike detection
         const isShakeSpike =
-            cm.cameraJumpMeters >= SHAKE_SPIKE_CAMERA_JUMP_METERS ||
-            instantaneousFps <= SHAKE_SPIKE_FPS_THRESHOLD;
+            cm.cameraJumpMeters >= SHAKE_SPIKE_CAMERA_JUMP_METERS || instantaneousFps <= SHAKE_SPIKE_FPS_THRESHOLD;
 
         if (
             nowMs >= session.shakeSpikeGraceUntilMs &&
@@ -749,7 +482,7 @@ export const useDiagnostics = (
             lastSpikeWarnAtMsRef.current = nowMs;
             spikeCountRef.current += 1;
 
-            const spike: DiagSpikeSample = {
+            const spike = {
                 cameraJumpMeters: Number(cm.cameraJumpMeters.toFixed(4)),
                 cameraMotionMeters: Number(cm.cameraMotionMeters.toFixed(4)),
                 correctionMode: correction?.mode ?? 'none',
