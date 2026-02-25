@@ -5,12 +5,16 @@ export const STARTUP_TIMEOUT_MS = 90_000;
 export type GTDebugState = {
     activeEffectIds: string[];
     connectionStatus: string;
+    deployableCount: number;
     driftBoostTier: number;
     isRunning: boolean;
     localCarX: number | null;
     localCarZ: number | null;
     opponentCount: number;
+    projectileCount: number;
     roomId?: string | null;
+    speedKph: number;
+    vehicleId?: string | null;
 };
 
 const isClosedPageError = (error: unknown) => {
@@ -40,7 +44,14 @@ export const readDebugState = async (page: Page) => {
     }
 };
 
-export const joinRace = async (page: Page, roomId: string, name: string) => {
+export const joinRace = async (
+    page: Page,
+    roomId: string,
+    name: string,
+    options?: {
+        vehicleLabel?: string;
+    },
+) => {
     await page.goto(`/lobby?room=${roomId}`, {
         timeout: STARTUP_TIMEOUT_MS,
         waitUntil: 'domcontentloaded',
@@ -48,6 +59,12 @@ export const joinRace = async (page: Page, roomId: string, name: string) => {
     await page.bringToFront();
     await page.focus('body');
     await page.locator('#player-name-input').fill(name);
+    if (options?.vehicleLabel) {
+        const vehicleClassFieldset = page.locator('fieldset').filter({ hasText: 'VEHICLE CLASS' }).first();
+        await vehicleClassFieldset
+            .getByRole('button', { name: new RegExp(`^\\s*${options.vehicleLabel}\\b`, 'i') })
+            .click();
+    }
     await page.locator('#player-name-confirm').click();
     await page.waitForURL(new RegExp(`/race\\?room=${roomId}$`), { timeout: STARTUP_TIMEOUT_MS });
     await page.locator('canvas').waitFor({ timeout: STARTUP_TIMEOUT_MS });
@@ -65,6 +82,7 @@ export const setDrivingKeyState = async (page: Page, code: string, pressed: bool
         KeyE: 'e',
         KeyS: 's',
         KeyW: 'w',
+        Space: ' ',
     };
 
     const key = keyByCode[code] ?? code;

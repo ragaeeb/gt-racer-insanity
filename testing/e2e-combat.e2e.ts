@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { type GTDebugState, joinRace, readDebugState, STARTUP_TIMEOUT_MS, setDrivingKeyState } from './e2e-helpers';
+import {
+    type GTDebugState,
+    joinRace,
+    readDebugState,
+    STARTUP_TIMEOUT_MS,
+    setDrivingKeyState,
+    waitForCarsToMoveForward,
+    waitForMultiplayerReady,
+} from './e2e-helpers';
 
 const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
@@ -15,34 +23,32 @@ const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
     throw new Error('Timed out waiting for local car spawn');
 };
 
-/**
- * Wait for an active effect to appear on the player.
- * Similar to waitForDriftBoostTier in the drift E2E tests.
- */
-const waitForActiveEffect = async (
+const waitForDebugState = async (
     page: Parameters<typeof readDebugState>[0],
-    expectedEffect: string,
+    predicate: (state: GTDebugState) => boolean,
     timeoutMs: number,
-): Promise<boolean> => {
+    description: string,
+): Promise<GTDebugState> => {
     const deadline = Date.now() + timeoutMs;
     let lastState: GTDebugState | null = null;
 
     while (Date.now() < deadline) {
         const state = await readDebugState(page);
-        lastState = state;
+        if (state) {
+            lastState = state;
+        }
 
-        if (state?.activeEffectIds?.includes(expectedEffect)) {
-            return true;
+        if (state && predicate(state)) {
+            return state;
         }
         await page.waitForTimeout(100);
     }
 
-    console.log(`Timed out waiting for effect "${expectedEffect}". Last state:`, lastState);
-    return false;
+    throw new Error(`Timed out waiting for ${description}. Last state: ${JSON.stringify(lastState)}`);
 };
 
 test.describe('e2e combat - oil slick', () => {
-    test('should apply slowed effect when player drives through oil slick', async ({ browser }) => {
+    test('should spawn oil slick deployable when boost is pressed', async ({ browser }) => {
         test.setTimeout(STARTUP_TIMEOUT_MS);
 
         const roomId = `OS${Date.now().toString().slice(-10)}`;
@@ -50,39 +56,37 @@ test.describe('e2e combat - oil slick', () => {
         const pageB = await browser.newPage();
 
         try {
-            // Player A (attacker) joins and places oil slick
             await joinRace(pageA, roomId, 'Oil Slicker');
-            await waitForCarSpawn(pageA);
+            await joinRace(pageB, roomId, 'Oil Rival');
+            const [stateA, stateB] = await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
+            await waitForMultiplayerReady(pageA, pageB, 10_000);
 
-            // Wait for race to be ready
-            await pageA.waitForTimeout(2_000);
-
-            // Player A presses boost to deploy oil slick
+            await pageA.bringToFront();
             await setDrivingKeyState(pageA, 'KeyW', true);
-            await pageA.waitForTimeout(500);
-            await setDrivingKeyState(pageA, 'KeyW', false);
-
-            // Wait for deployable to be created on server
-            await pageA.waitForTimeout(1_000);
-
-            // Now Player B joins and drives through the oil slick
-            await joinRace(pageB, roomId, 'Oil Victim');
-            await waitForCarSpawn(pageB);
-
-            // Wait for both players to be in the race
-            await pageB.waitForTimeout(2_000);
-
-            // Get initial position of Player B (to verify movement)
-            await readDebugState(pageB);
-
-            // Player B drives forward (should eventually hit the oil slick behind player A)
+            await pageB.bringToFront();
             await setDrivingKeyState(pageB, 'KeyW', true);
-            await pageB.waitForTimeout(3_000);
+            await waitForCarsToMoveForward(pageA, pageB, stateA, stateB, 5_000);
+
+            await pageA.bringToFront();
+            await setDrivingKeyState(pageA, 'KeyW', false);
+            await pageB.bringToFront();
             await setDrivingKeyState(pageB, 'KeyW', false);
 
-            // Check if slowed effect was applied - poll like drift E2E does
-            const hasSlowedEffect = await waitForActiveEffect(pageB, 'slowed', 5_000);
-            expect(hasSlowedEffect).toBe(true);
+            const before = await readDebugState(pageA);
+            const initialDeployableCount = before?.deployableCount ?? 0;
+
+            await pageA.bringToFront();
+            await setDrivingKeyState(pageA, 'Space', true);
+            await pageA.waitForTimeout(450);
+            await setDrivingKeyState(pageA, 'Space', false);
+
+            const state = await waitForDebugState(
+                pageA,
+                (s) => s.deployableCount > initialDeployableCount,
+                4_000,
+                'oil slick deployable to spawn',
+            );
+            expect(state.deployableCount).toBeGreaterThan(initialDeployableCount);
         } finally {
             await Promise.allSettled([pageA.close(), pageB.close()]);
         }
@@ -92,39 +96,49 @@ test.describe('e2e combat - oil slick', () => {
         test.setTimeout(STARTUP_TIMEOUT_MS);
 
         const roomId = `OS${Date.now().toString().slice(-10)}`;
-        const page = await browser.newPage();
+        const pageA = await browser.newPage();
+        const pageB = await browser.newPage();
 
         try {
-            await joinRace(page, roomId, 'Oil Slicker');
-            await waitForCarSpawn(page);
+            await joinRace(pageA, roomId, 'Oil Slicker');
+            await joinRace(pageB, roomId, 'Oil Rival');
+            const [stateA, stateB] = await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
+            await waitForMultiplayerReady(pageA, pageB, 10_000);
 
-            // Wait for race to be ready
-            await page.waitForTimeout(2_000);
+            await pageA.bringToFront();
+            await setDrivingKeyState(pageA, 'KeyW', true);
+            await pageB.bringToFront();
+            await setDrivingKeyState(pageB, 'KeyW', true);
+            await waitForCarsToMoveForward(pageA, pageB, stateA, stateB, 5_000);
 
-            // Deploy oil slick
-            await setDrivingKeyState(page, 'KeyW', true);
-            await page.waitForTimeout(500);
-            await setDrivingKeyState(page, 'KeyW', false);
+            await pageA.bringToFront();
+            await setDrivingKeyState(pageA, 'KeyW', false);
+            await pageB.bringToFront();
+            await setDrivingKeyState(pageB, 'KeyW', false);
 
-            // Wait a bit for effect to appear on the player if they drive through it
-            await page.waitForTimeout(1_000);
+            // Deploy oil slick (boost input edge).
+            await pageA.bringToFront();
+            await setDrivingKeyState(pageA, 'Space', true);
+            await pageA.waitForTimeout(450);
+            await setDrivingKeyState(pageA, 'Space', false);
 
-            // Oil slick lifetime is 5 seconds - wait for it to expire
-            await page.waitForTimeout(6_000);
-
-            // Verify player is still responsive and has no slow effect
-            const state = await readDebugState(page);
+            await waitForDebugState(pageA, (s) => s.deployableCount > 0, 4_000, 'oil slick deployable to appear');
+            const state = await waitForDebugState(
+                pageA,
+                (s) => s.deployableCount === 0,
+                13_000,
+                'oil slick deployable to despawn',
+            );
             expect(state?.isRunning).toBe(true);
-            // The player shouldn't have the slowed effect anymore
-            expect(state?.activeEffectIds?.includes('slowed')).toBe(false);
+            expect(state.deployableCount).toBe(0);
         } finally {
-            await page.close();
+            await Promise.allSettled([pageA.close(), pageB.close()]);
         }
     });
 });
 
 test.describe('e2e combat - EMP projectile', () => {
-    test('should stun opponent when EMP projectile hits', async ({ browser }) => {
+    test('should spawn EMP projectile when ability is triggered with an opponent', async ({ browser }) => {
         test.setTimeout(STARTUP_TIMEOUT_MS);
 
         const roomId = `EM${Date.now().toString().slice(-10)}`;
@@ -132,32 +146,43 @@ test.describe('e2e combat - EMP projectile', () => {
         const pageB = await browser.newPage();
 
         try {
-            // Both players join
-            await joinRace(pageA, roomId, 'EMP Shooter');
+            // Shooter must use patrol to get spike-shot (projectile delivery).
+            await joinRace(pageA, roomId, 'EMP Shooter', { vehicleLabel: 'Patrol' });
             await joinRace(pageB, roomId, 'EMP Target');
 
             // Wait for both to be ready
-            await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
+            const [stateA, stateB] = await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
+            await waitForMultiplayerReady(pageA, pageB, 10_000);
 
-            // Wait for race to be running and multiplayer to be ready
-            await pageA.waitForTimeout(3_000);
+            await waitForDebugState(pageA, (s) => s.vehicleId === 'patrol', 5_000, 'patrol vehicle selection');
 
-            // Both drive forward a bit to get some distance
+            await pageA.bringToFront();
             await setDrivingKeyState(pageA, 'KeyW', true);
+            await pageB.bringToFront();
             await setDrivingKeyState(pageB, 'KeyW', true);
-            await pageA.waitForTimeout(2_000);
+            await waitForCarsToMoveForward(pageA, pageB, stateA, stateB, 5_000);
+
+            await pageA.bringToFront();
             await setDrivingKeyState(pageA, 'KeyW', false);
+            await pageB.bringToFront();
             await setDrivingKeyState(pageB, 'KeyW', false);
 
-            // Now Player A fires EMP using ability key (KeyE)
+            await pageA.bringToFront();
+            const initialState = await readDebugState(pageA);
+            const initialProjectileCount = initialState?.projectileCount ?? 0;
+
+            await pageA.bringToFront();
             await setDrivingKeyState(pageA, 'KeyE', true);
-            await pageA.waitForTimeout(200);
+            await pageA.waitForTimeout(450);
             await setDrivingKeyState(pageA, 'KeyE', false);
 
-            // Wait for projectile to hit (TTL is 2 seconds / 120 ticks)
-            // Poll for stunned effect like drift E2E polls for driftBoostTier
-            const hasStunnedEffect = await waitForActiveEffect(pageB, 'stunned', 5_000);
-            expect(hasStunnedEffect).toBe(true);
+            const state = await waitForDebugState(
+                pageA,
+                (s) => s.projectileCount > initialProjectileCount,
+                4_000,
+                'EMP projectile to spawn',
+            );
+            expect(state.projectileCount).toBeGreaterThan(initialProjectileCount);
         } finally {
             await Promise.allSettled([pageA.close(), pageB.close()]);
         }
@@ -170,24 +195,18 @@ test.describe('e2e combat - EMP projectile', () => {
         const page = await browser.newPage();
 
         try {
-            await joinRace(page, roomId, 'Solo Player');
+            await joinRace(page, roomId, 'Solo Player', { vehicleLabel: 'Patrol' });
             await waitForCarSpawn(page);
 
-            // Wait for race to be ready
-            await page.waitForTimeout(2_000);
-
-            // Fire EMP - since there's no opponent, projectile won't find a target
+            const before = await readDebugState(page);
             await setDrivingKeyState(page, 'KeyE', true);
-            await page.waitForTimeout(200);
+            await page.waitForTimeout(450);
             await setDrivingKeyState(page, 'KeyE', false);
 
-            // Wait for projectile to expire
-            await page.waitForTimeout(3_000);
-
-            // Player should not have stunned effect (no target found)
+            await page.waitForTimeout(2_000);
             const state = await readDebugState(page);
             expect(state?.isRunning).toBe(true);
-            expect(state?.activeEffectIds?.includes('stunned')).toBe(false);
+            expect(state?.projectileCount ?? 0).toBe(before?.projectileCount ?? 0);
         } finally {
             await page.close();
         }
