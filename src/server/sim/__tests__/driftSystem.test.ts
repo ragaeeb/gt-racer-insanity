@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import type { SimPlayerState } from '@/server/sim/types';
 import { updateDriftState } from '@/server/sim/driftSystem';
+import type { SimPlayerState } from '@/server/sim/types';
 import {
-    DEFAULT_DRIFT_CONFIG,
-    DriftState,
     createInitialDriftContext,
+    DEFAULT_DRIFT_CONFIG,
     type DriftConfig,
     type DriftContext,
+    DriftState,
 } from '@/shared/game/vehicle/driftConfig';
 
 /**
@@ -197,6 +197,7 @@ describe('Drift State Machine', () => {
             driftContext: {
                 state: DriftState.DRIFTING,
                 stateEnteredAtMs: 900,
+                lastDriftTickMs: 900,
                 accumulatedDriftTimeMs: 100,
             },
         });
@@ -213,7 +214,8 @@ describe('Drift State Machine', () => {
             steering: 0.8,
             driftContext: {
                 state: DriftState.DRIFTING,
-                stateEnteredAtMs: 900,
+                stateEnteredAtMs: 800,
+                lastDriftTickMs: 900,
                 accumulatedDriftTimeMs: 500,
             },
         });
@@ -222,8 +224,10 @@ describe('Drift State Machine', () => {
 
         // Should add 100ms (1000-900) to the 500ms already accumulated
         expect(player.driftContext.accumulatedDriftTimeMs).toBe(600);
-        // State entered at should be advanced to current time for next tick
-        expect(player.driftContext.stateEnteredAtMs).toBe(1000);
+        // stateEnteredAtMs must remain unchanged (immutable entry timestamp)
+        expect(player.driftContext.stateEnteredAtMs).toBe(800);
+        // lastDriftTickMs should be advanced to current time for next tick
+        expect(player.driftContext.lastDriftTickMs).toBe(1000);
     });
 
     it('should grant tier-1 boost after 1s of drifting', () => {
@@ -234,6 +238,7 @@ describe('Drift State Machine', () => {
             driftContext: {
                 state: DriftState.DRIFTING,
                 stateEnteredAtMs: 950,
+                lastDriftTickMs: 950,
                 accumulatedDriftTimeMs: 950,
             },
         });
@@ -251,7 +256,8 @@ describe('Drift State Machine', () => {
             steering: 0.8,
             driftContext: {
                 state: DriftState.DRIFTING,
-                stateEnteredAtMs: 1950,
+                stateEnteredAtMs: 100,
+                lastDriftTickMs: 1950,
                 accumulatedDriftTimeMs: 1950,
             },
         });
@@ -269,7 +275,8 @@ describe('Drift State Machine', () => {
             steering: 0.8,
             driftContext: {
                 state: DriftState.DRIFTING,
-                stateEnteredAtMs: 2950,
+                stateEnteredAtMs: 100,
+                lastDriftTickMs: 2950,
                 accumulatedDriftTimeMs: 2950,
             },
         });
@@ -288,6 +295,7 @@ describe('Drift State Machine', () => {
             driftContext: {
                 state: DriftState.DRIFTING,
                 stateEnteredAtMs: 900,
+                lastDriftTickMs: 900,
                 accumulatedDriftTimeMs: 1200,
                 boostTier: 1,
             },
@@ -307,6 +315,7 @@ describe('Drift State Machine', () => {
             driftContext: {
                 state: DriftState.DRIFTING,
                 stateEnteredAtMs: 900,
+                lastDriftTickMs: 900,
                 accumulatedDriftTimeMs: 1200,
                 boostTier: 1,
             },
@@ -325,6 +334,7 @@ describe('Drift State Machine', () => {
             driftContext: {
                 state: DriftState.DRIFTING,
                 stateEnteredAtMs: 900,
+                lastDriftTickMs: 900,
                 accumulatedDriftTimeMs: 2000,
                 boostTier: 2,
             },
@@ -345,6 +355,7 @@ describe('Drift State Machine', () => {
             driftContext: {
                 state: DriftState.DRIFTING,
                 stateEnteredAtMs: 990,
+                lastDriftTickMs: 990,
                 accumulatedDriftTimeMs: 100,
             },
         });
@@ -537,7 +548,7 @@ describe('Drift State Machine', () => {
     it('should support custom drift config (tuning override)', () => {
         const customConfig: DriftConfig = {
             ...DEFAULT_DRIFT_CONFIG,
-            initiationSpeedThreshold: 5,  // lower threshold
+            initiationSpeedThreshold: 5, // lower threshold
             initiationSteerThreshold: 0.3,
         };
 

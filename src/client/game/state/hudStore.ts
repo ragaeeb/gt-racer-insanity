@@ -52,7 +52,10 @@ export const useHudStore = create<HudStoreState>((set) => ({
             cooldownMsByAbilityId: { ...state.cooldownMsByAbilityId, [abilityId]: readyAtMs },
         })),
     setDriftBoostTier: (driftBoostTier) =>
-        set((state) => (state.driftBoostTier === driftBoostTier ? state : { driftBoostTier })),
+        set((state) => {
+            const normalizedTier = Math.min(3, Math.max(0, Math.trunc(driftBoostTier)));
+            return state.driftBoostTier === normalizedTier ? state : { driftBoostTier: normalizedTier };
+        }),
     setLap: (lap) => set((state) => (state.lap === lap ? state : { lap })),
     setPosition: (position) => set((state) => (state.position === position ? state : { position })),
     setSpeedKph: (speedKph) =>
@@ -61,7 +64,8 @@ export const useHudStore = create<HudStoreState>((set) => ({
             return state.speedKph === nextSpeedKph ? state : { speedKph: nextSpeedKph };
         }),
     setTrackLabel: (trackLabel) => set((state) => (state.trackLabel === trackLabel ? state : { trackLabel })),
-    showToast: (message, variant) => set((state) => ({ pendingToasts: [...state.pendingToasts, { message, variant }] })),
+    showToast: (message, variant) =>
+        set((state) => ({ pendingToasts: [...state.pendingToasts, { message, variant }] })),
     clearPendingToast: () => set((state) => ({ pendingToasts: state.pendingToasts.slice(1) })),
     speedKph: 0,
     trackLabel: TRACK_DEFAULT_LABEL,

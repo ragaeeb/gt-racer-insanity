@@ -1,6 +1,6 @@
+import { useControls } from 'leva';
 import { useEffect, useMemo, useRef } from 'react';
 import type * as THREE from 'three';
-import { useControls } from 'leva';
 import type { RaceWorldCallbacks } from '@/client/game/hooks/types';
 import { useAbilityEmitter } from '@/client/game/hooks/useAbilityEmitter';
 import { useAudioListener } from '@/client/game/hooks/useAudioListener';
@@ -83,18 +83,21 @@ export const RaceWorld = ({
     const cameraMetricsRef = useCameraFollow(sessionRef, activeSceneEnvironment, dirLightRef);
     useDiagnostics(sessionRef, cameraMetricsRef, wallClampCountRef);
 
-    if (import.meta.env.DEV) {
-        useControls('Drift Tuning', {
-            initiationSpeed: { value: 10, min: 6, max: 15, step: 0.5 },
-            initiationSteer: { value: 0.7, min: 0.3, max: 0.9, step: 0.05 },
-            driftingFriction: { value: 0.15, min: 0.05, max: 0.35, step: 0.05 },
-            boostTier1Time: { value: 1000, min: 500, max: 1500, step: 100 },
-            boostTier3Magnitude: { value: 14, min: 10, max: 25, step: 1 },
-        });
-
-        // TODO: Wire these to server config (requires server RPC or config sync)
-        // For now, they're display-only for manual tuning reference
-    }
+    // TODO: Wire these to server config (requires server RPC or config sync)
+    // For now, they're display-only for manual tuning reference.
+    // Hook must be called unconditionally to satisfy React rules-of-hooks.
+    useControls(
+        'Drift Tuning',
+        import.meta.env.DEV
+            ? {
+                  initiationSpeed: { value: 10, min: 6, max: 15, step: 0.5 },
+                  initiationSteer: { value: 0.7, min: 0.3, max: 0.9, step: 0.05 },
+                  driftingFriction: { value: 0.15, min: 0.05, max: 0.35, step: 0.05 },
+                  boostTier1Time: { value: 1000, min: 500, max: 1500, step: 100 },
+                  boostTier3Magnitude: { value: 14, min: 10, max: 25, step: 1 },
+              }
+            : {},
+    );
 
     return (
         <>

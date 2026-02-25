@@ -1,9 +1,10 @@
 import type { EventQueue, RigidBody } from '@dimforge/rapier3d-compat';
 import { updateDriftState } from '@/server/sim/driftSystem';
-import { getVehicleClassManifestById } from '@/shared/game/vehicle/vehicleClassManifest';
-import { DEFAULT_DRIFT_CONFIG } from '@/shared/game/vehicle/driftConfig';
-import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
 import type { SimPlayerState } from '@/server/sim/types';
+import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
+import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
+import { DEFAULT_DRIFT_CONFIG } from '@/shared/game/vehicle/driftConfig';
+import { getVehicleClassManifestById } from '@/shared/game/vehicle/vehicleClassManifest';
 
 type CollisionPair = {
     firstPlayerId: string;
@@ -79,9 +80,7 @@ const applyScalarSpeed = (player: SimPlayerState, dtSeconds: number, movementMul
         // lighter braking factor so the car decelerates gently instead of stopping.
         // Without throttle, handbrake still brakes at full force.
         const isThrottling = player.inputState.throttle > 0.01;
-        const brakingMultiplier = player.inputState.handbrake
-            ? (isThrottling ? 0.6 : 2.1)
-            : 1.4;
+        const brakingMultiplier = player.inputState.handbrake ? (isThrottling ? 0.6 : 2.1) : 1.4;
         if (speed > 0) {
             speed = Math.max(0, speed - acceleration * brakingMultiplier * dtSeconds);
         } else {
@@ -92,11 +91,7 @@ const applyScalarSpeed = (player: SimPlayerState, dtSeconds: number, movementMul
     player.motion.speed = clamp(speed, -maxReverseSpeed, maxForwardSpeed);
 };
 
-const applySteering = (
-    player: SimPlayerState,
-    rigidBody: RigidBody,
-    steeringMultiplier: number
-) => {
+const applySteering = (player: SimPlayerState, rigidBody: RigidBody, steeringMultiplier: number) => {
     const vehicleClass = getVehicleClassManifestById(player.vehicleId);
     const steering = clamp(player.inputState.steering, -1, 1);
 
@@ -132,7 +127,11 @@ export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveSte
 
     const desiredForwardSpeed = player.motion.speed;
     const rawDelta = desiredForwardSpeed - currentForwardSpeed;
-    const maxDelta = vehicleClass.physics.acceleration * multipliers.movementMultiplier * dtSeconds * MAX_IMPULSE_ACCELERATION_FACTOR;
+    const maxDelta =
+        vehicleClass.physics.acceleration *
+        multipliers.movementMultiplier *
+        dtSeconds *
+        MAX_IMPULSE_ACCELERATION_FACTOR;
     const deltaForward = clamp(rawDelta, -maxDelta, maxDelta);
     const impulseForward = deltaForward * rigidBody.mass();
 
@@ -146,16 +145,13 @@ export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveSte
             y: 0,
             z: forwardZ * impulseForward - rightZ * lateralDamping,
         },
-        true
+        true,
     );
 
     // Apply drift exit boost impulse if granted
     if (driftResult.boostImpulse > 0) {
         const boostForce = driftResult.boostImpulse * rigidBody.mass();
-        rigidBody.applyImpulse(
-            { x: forwardX * boostForce, y: 0, z: forwardZ * boostForce },
-            true,
-        );
+        rigidBody.applyImpulse({ x: forwardX * boostForce, y: 0, z: forwardZ * boostForce }, true);
     }
 };
 
@@ -194,11 +190,11 @@ const POST_BUMP_ANGULAR_DAMPING = 0.35;
 const IMPULSE_SPEED_SCALE_CEILING_MPS = 30;
 
 /** Hard impulse clamp in N·s — prevents physics explosions (R04 mitigation). */
-const MAX_IMPULSE = 800;
+const MAX_IMPULSE = DEFAULT_GAMEPLAY_TUNING.collision.maxImpulse;
 /** Newton's 3rd reaction multiplier for the attacker: 0.3 = trucks feel powerful. */
-const ARCADE_BIAS = 0.3;
+const ARCADE_BIAS = DEFAULT_GAMEPLAY_TUNING.collision.arcadeBias;
 /** Raw contact force divisor — normalises Rapier force magnitude into 0–2 impulse scale. */
-const FORCE_NORMALISATION_BASE = 500;
+const FORCE_NORMALISATION_BASE = DEFAULT_GAMEPLAY_TUNING.collision.forceNormalisationBase;
 /** Upper bound for the contact-force scaling factor. */
 const FORCE_SCALE_CAP = 2.0;
 
@@ -238,10 +234,12 @@ export const applyPlayerBumpResponse = (
     const impactSpeed = Math.max(Math.abs(playerA.motion.speed), Math.abs(playerB.motion.speed));
     const speedFactor = clamp(impactSpeed / IMPULSE_SPEED_SCALE_CEILING_MPS, 0.12, 1);
 
-    // Scale by contact force if available (normalised to 0–FORCE_SCALE_CAP range)
-    const forceScale = contactForceMagnitude !== undefined
-        ? Math.min(contactForceMagnitude / FORCE_NORMALISATION_BASE, FORCE_SCALE_CAP)
-        : 1.0;
+    // Scale by contact force if available (normalised to 0–FORCE_SCALE_CAP range).
+    // Floor at 0.1 so a zero contactForceMagnitude doesn't nullify the impulse entirely.
+    const forceScale =
+        contactForceMagnitude !== undefined
+            ? Math.max(0.1, Math.min(contactForceMagnitude / FORCE_NORMALISATION_BASE, FORCE_SCALE_CAP))
+            : 1.0;
 
     const scaledStrength = BUMP_IMPULSE_STRENGTH * speedFactor * forceScale;
 
@@ -255,16 +253,18 @@ export const applyPlayerBumpResponse = (
     const massRatioBtoA = massB / massA; // > 1 if B is heavier → A gets hit harder
     const massRatioAtoB = massA / massB; // > 1 if A is heavier → B gets hit harder
 
-    const impulseToA = Math.min(baseImpulse * massRatioBtoA, MAX_IMPULSE);
-    const impulseToB = Math.min(baseImpulse * massRatioAtoB, MAX_IMPULSE);
+    const rawImpulseToA = baseImpulse * massRatioBtoA;
+    const rawImpulseToB = baseImpulse * massRatioAtoB;
 
-    // Arcade bias: attacker gets only ARCADE_BIAS fraction of the reaction impulse
+    // Arcade bias: attacker gets only ARCADE_BIAS fraction of the reaction impulse.
     // This makes a heavy car (truck) feel powerful — it barely recoils on hit.
-    const reactionToA = impulseToB * ARCADE_BIAS;
-    const reactionToB = impulseToA * ARCADE_BIAS;
+    const reactionToA = rawImpulseToB * ARCADE_BIAS;
+    const reactionToB = rawImpulseToA * ARCADE_BIAS;
 
-    const totalImpulseA = impulseToA + reactionToA;
-    const totalImpulseB = impulseToB + reactionToB;
+    // Clamp the final totals (not the per-player raws) so the arcade reaction
+    // cannot push the combined impulse above the MAX_IMPULSE hard cap.
+    const totalImpulseA = Math.min(rawImpulseToA + reactionToA, MAX_IMPULSE);
+    const totalImpulseB = Math.min(rawImpulseToB + reactionToB, MAX_IMPULSE);
 
     const lateralImpulseA = totalImpulseA * BUMP_LATERAL_IMPULSE_FACTOR;
     const lateralImpulseB = totalImpulseB * BUMP_LATERAL_IMPULSE_FACTOR;
@@ -377,9 +377,8 @@ export const drainStartedCollisions = (
             return;
         }
 
-        const [a, b] = firstPlayerId < secondPlayerId
-            ? [firstPlayerId, secondPlayerId]
-            : [secondPlayerId, firstPlayerId];
+        const [a, b] =
+            firstPlayerId < secondPlayerId ? [firstPlayerId, secondPlayerId] : [secondPlayerId, firstPlayerId];
 
         const key = `${a}:${b}`;
         if (started) {

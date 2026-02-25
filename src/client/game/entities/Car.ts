@@ -5,6 +5,7 @@ import { applyCarPaint } from '@/client/game/paintSystem';
 import type { InputManager } from '@/client/game/systems/InputManager';
 import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 import { FLIPPED_DURATION_MS } from '@/shared/game/effects/statusEffectManifest';
+import { DriftState } from '@/shared/game/vehicle/driftConfig';
 
 const BRAKE_LIGHT_MATERIAL_RE = /^(BrakeLight|TailLights?)$/i;
 export const SUSPENSION_BOUNCE_AMPLITUDE = 0.015;
@@ -379,9 +380,8 @@ export class Car {
         if (!this.gltfWrapper || this.flipElapsedMs !== null) {
             return;
         }
-        // Apply a small Z-rotation on the GLTF wrapper proportional to driftAngle (max ±~5.7 degrees)
-        const DRIFT_STATE_DRIFTING = 2;
-        if (this.driftState === DRIFT_STATE_DRIFTING) {
+        // Apply a small Z-rotation on the GLTF wrapper proportional to driftAngle (max ±~2.9°)
+        if (this.driftState === DriftState.DRIFTING) {
             const tiltAngle = this.driftAngle * 0.1; // 0.1 rad/rad → ~5.7° max at full slide
             this.gltfWrapper.rotation.z = THREE.MathUtils.lerp(this.gltfWrapper.rotation.z, tiltAngle, 0.12);
         } else {
@@ -406,7 +406,9 @@ export class Car {
             }
             const mats = Array.isArray(child.material) ? child.material : [child.material];
             for (const mat of mats) {
-                if (mat instanceof THREE.MeshStandardMaterial) {
+                // Skip brake-light materials — their emissive intensity is managed by
+                // updateBrakeLights and must not be overwritten by the boost flash.
+                if (mat instanceof THREE.MeshStandardMaterial && !this.brakeLightMaterials.includes(mat)) {
                     mat.emissiveIntensity = this.boostFlashIntensity;
                 }
             }

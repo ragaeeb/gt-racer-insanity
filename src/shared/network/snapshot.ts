@@ -88,11 +88,20 @@ const isRaceStatus = (value: unknown): value is RaceStatus => {
 };
 
 const isStatusEffectType = (value: unknown): value is StatusEffectType => {
-    return value === 'slowed' || value === 'stunned' || value === 'flat_tire' || value === 'boosted' || value === 'flipped' || value === 'speed_burst';
+    return (
+        value === 'slowed' ||
+        value === 'stunned' ||
+        value === 'flat_tire' ||
+        value === 'boosted' ||
+        value === 'flipped' ||
+        value === 'speed_burst'
+    );
 };
 
 export const isStatusEffectInstance = (value: unknown): value is StatusEffectInstance => {
-    if (!value || typeof value !== 'object') return false;
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
     const payload = value as Record<string, unknown>;
 
     return (
@@ -104,9 +113,13 @@ export const isStatusEffectInstance = (value: unknown): value is StatusEffectIns
 };
 
 export const isPlayerRaceProgress = (value: unknown): value is PlayerRaceProgress => {
-    if (!value || typeof value !== 'object') return false;
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
     const payload = value as Record<string, unknown>;
-    if (!Array.isArray(payload.completedCheckpoints)) return false;
+    if (!Array.isArray(payload.completedCheckpoints)) {
+        return false;
+    }
 
     return (
         isFiniteNumber(payload.lap) &&
@@ -114,25 +127,34 @@ export const isPlayerRaceProgress = (value: unknown): value is PlayerRaceProgres
         isFiniteNumber(payload.distanceMeters) &&
         (payload.finishedAtMs === null || isFiniteNumber(payload.finishedAtMs)) &&
         payload.completedCheckpoints.every((checkpoint) => {
-            if (!checkpoint || typeof checkpoint !== 'object') return false;
+            if (!checkpoint || typeof checkpoint !== 'object') {
+                return false;
+            }
             const checkpointRecord = checkpoint as Record<string, unknown>;
-            return (
-                isFiniteNumber(checkpointRecord.checkpointIndex) &&
-                isFiniteNumber(checkpointRecord.completedAtMs)
-            );
+            return isFiniteNumber(checkpointRecord.checkpointIndex) && isFiniteNumber(checkpointRecord.completedAtMs);
         })
     );
 };
 
 export const isSnapshotPlayerState = (value: unknown): value is SnapshotPlayerState => {
-    if (!value || typeof value !== 'object') return false;
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
     const payload = value as Record<string, unknown>;
-    if (!Array.isArray(payload.activeEffects)) return false;
+    if (!Array.isArray(payload.activeEffects)) {
+        return false;
+    }
 
     // Optional drift fields — accept but do not require
-    if (payload.driftState !== undefined && !isFiniteNumber(payload.driftState)) return false;
-    if (payload.driftAngle !== undefined && !isFiniteNumber(payload.driftAngle)) return false;
-    if (payload.driftBoostTier !== undefined && !isFiniteNumber(payload.driftBoostTier)) return false;
+    if (payload.driftState !== undefined && !isFiniteNumber(payload.driftState)) {
+        return false;
+    }
+    if (payload.driftAngle !== undefined && !isFiniteNumber(payload.driftAngle)) {
+        return false;
+    }
+    if (payload.driftBoostTier !== undefined && !isFiniteNumber(payload.driftBoostTier)) {
+        return false;
+    }
 
     return (
         isString(payload.id) &&
@@ -151,9 +173,13 @@ export const isSnapshotPlayerState = (value: unknown): value is SnapshotPlayerSt
 };
 
 export const isRaceState = (value: unknown): value is RaceState => {
-    if (!value || typeof value !== 'object') return false;
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
     const payload = value as Record<string, unknown>;
-    if (!Array.isArray(payload.playerOrder)) return false;
+    if (!Array.isArray(payload.playerOrder)) {
+        return false;
+    }
 
     return (
         isString(payload.trackId) &&
@@ -167,21 +193,35 @@ export const isRaceState = (value: unknown): value is RaceState => {
 };
 
 const isSnapshotPowerupState = (value: unknown): value is SnapshotPowerupState => {
-    if (!value || typeof value !== 'object') return false;
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
     const p = value as Record<string, unknown>;
-    return isString(p.id) && isString(p.powerupId) && typeof p.isActive === 'boolean' && isFiniteNumber(p.x) && isFiniteNumber(p.z);
+    return (
+        isString(p.id) &&
+        isString(p.powerupId) &&
+        typeof p.isActive === 'boolean' &&
+        isFiniteNumber(p.x) &&
+        isFiniteNumber(p.z)
+    );
 };
 
 const isSnapshotHazardState = (value: unknown): value is SnapshotHazardState => {
-    if (!value || typeof value !== 'object') return false;
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
     const p = value as Record<string, unknown>;
     return isString(p.id) && isString(p.hazardId) && isFiniteNumber(p.x) && isFiniteNumber(p.z);
 };
 
 export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshotPayload => {
-    if (!value || typeof value !== 'object') return false;
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
     const payload = value as Record<string, unknown>;
-    if (!Array.isArray(payload.players)) return false;
+    if (!Array.isArray(payload.players)) {
+        return false;
+    }
 
     return (
         isString(payload.roomId) &&
@@ -196,7 +236,9 @@ export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshot
     );
 };
 
-export const serializeSnapshot = (snapshot: ServerSnapshotPayload & { projectiles?: any[], deployables?: any[] }): any[] => {
+export const serializeSnapshot = (
+    snapshot: ServerSnapshotPayload & { projectiles?: any[]; deployables?: any[] },
+): any[] => {
     return [
         snapshot.seq,
         snapshot.serverTimeMs,
@@ -210,15 +252,41 @@ export const serializeSnapshot = (snapshot: ServerSnapshotPayload & { projectile
             snapshot.raceState.winnerPlayerId,
             snapshot.raceState.playerOrder,
         ],
-        snapshot.players.map(p => [
-            p.id, p.name, p.vehicleId, p.colorId, p.x, p.y, p.z, p.rotationY, p.speed, p.lastProcessedInputSeq,
-            [p.progress.checkpointIndex, p.progress.completedCheckpoints.map(c => [c.checkpointIndex, c.completedAtMs]), p.progress.distanceMeters, p.progress.finishedAtMs, p.progress.lap],
-            p.activeEffects.map(e => [e.effectType, e.appliedAtMs, e.expiresAtMs, e.intensity]),
-            p.driftState ?? 0, p.driftAngle ?? 0, p.driftBoostTier ?? 0
+        snapshot.players.map((p) => [
+            p.id,
+            p.name,
+            p.vehicleId,
+            p.colorId,
+            p.x,
+            p.y,
+            p.z,
+            p.rotationY,
+            p.speed,
+            p.lastProcessedInputSeq,
+            [
+                p.progress.checkpointIndex,
+                p.progress.completedCheckpoints.map((c) => [c.checkpointIndex, c.completedAtMs]),
+                p.progress.distanceMeters,
+                p.progress.finishedAtMs,
+                p.progress.lap,
+            ],
+            p.activeEffects.map((e) => [e.effectType, e.appliedAtMs, e.expiresAtMs, e.intensity]),
+            p.driftState ?? 0,
+            p.driftAngle ?? 0,
+            p.driftBoostTier ?? 0,
         ]),
-        snapshot.powerups.map(p => [p.id, p.powerupId, p.isActive, p.x, p.z]),
-        snapshot.hazards.map(h => [h.id, h.hazardId, h.x, h.z]),
-        snapshot.projectiles?.map(pr => [pr.id, pr.ownerId, pr.targetId, pr.x, pr.z, pr.velX, pr.velZ, pr.ttlTicks]) ?? [],
-        snapshot.deployables?.map(d => [d.id, d.kind, d.ownerId, d.x, d.z, d.radius, d.lifetimeTicks]) ?? []
+        snapshot.powerups.map((p) => [p.id, p.powerupId, p.isActive, p.x, p.z]),
+        snapshot.hazards.map((h) => [h.id, h.hazardId, h.x, h.z]),
+        snapshot.projectiles?.map((pr) => [
+            pr.id,
+            pr.ownerId,
+            pr.targetId,
+            pr.x,
+            pr.z,
+            pr.velX,
+            pr.velZ,
+            pr.ttlTicks,
+        ]) ?? [],
+        snapshot.deployables?.map((d) => [d.id, d.kind, d.ownerId, d.x, d.z, d.radius, d.lifetimeTicks]) ?? [],
     ];
 };

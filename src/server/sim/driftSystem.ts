@@ -22,11 +22,7 @@ export type DriftUpdateResult = {
  *   DRIFTING ──(speed < threshold * 0.5)──> GRIPPING (no boost)
  *   RECOVERING ──(after recoveringDurationMs)──> GRIPPING (boost applied)
  */
-export const updateDriftState = (
-    player: SimPlayerState,
-    nowMs: number,
-    config: DriftConfig,
-): DriftUpdateResult => {
+export const updateDriftState = (player: SimPlayerState, nowMs: number, config: DriftConfig): DriftUpdateResult => {
     const ctx = player.driftContext;
     const input = player.inputState;
     const speed = Math.abs(player.motion.speed);
@@ -66,15 +62,20 @@ export const updateDriftState = (
             if (timeInState >= config.initiatingToDriftingTimeMs) {
                 ctx.state = DriftState.DRIFTING;
                 ctx.stateEnteredAtMs = nowMs;
+                // Seed lastDriftTickMs so the first DRIFTING tick computes dtMs = 0
+                ctx.lastDriftTickMs = nowMs;
             }
             break;
         }
 
         case DriftState.DRIFTING: {
-            // Accumulate drift time: add elapsed time since last stateEnteredAtMs update
-            const dtMs = nowMs - ctx.stateEnteredAtMs;
+            // Accumulate drift time using lastDriftTickMs, which tracks the previous tick
+            // timestamp separately from stateEnteredAtMs (the immutable state-entry time).
+            // This prevents stateEnteredAtMs from being overwritten each tick, preserving
+            // its meaning for any future time-in-state queries.
+            const dtMs = nowMs - ctx.lastDriftTickMs;
             ctx.accumulatedDriftTimeMs += dtMs;
-            ctx.stateEnteredAtMs = nowMs;
+            ctx.lastDriftTickMs = nowMs;
 
             // Update drift angle (simplified: proportional to steering input)
             ctx.driftAngle = input.steering * 0.5;

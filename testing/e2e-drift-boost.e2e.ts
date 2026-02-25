@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-import { joinRace, readDebugState, setDrivingKeyState, STARTUP_TIMEOUT_MS } from './e2e-helpers';
+import { joinRace, readDebugState, STARTUP_TIMEOUT_MS, setDrivingKeyState } from './e2e-helpers';
 
 const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
 
     while (Date.now() < deadline) {
         const state = await readDebugState(page);
-        if (state?.localCarZ !== null && state?.isRunning) {
+        if (state && state.localCarZ !== null && state.isRunning) {
             return state;
         }
         await page.waitForTimeout(250);
@@ -16,10 +16,17 @@ const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
     throw new Error('Timed out waiting for local car spawn');
 };
 
-const buildUpSpeed = async (page: Parameters<typeof readDebugState>[0], durationMs: number) => {
+/**
+ * Accelerate with KeyW for the given duration.
+ * When keepHeld is true, KeyW remains pressed after returning (avoids a
+ * deceleration gap before the drift phase that immediately re-presses KeyW).
+ */
+const buildUpSpeed = async (page: Parameters<typeof readDebugState>[0], durationMs: number, keepHeld = false) => {
     await setDrivingKeyState(page, 'KeyW', true);
     await page.waitForTimeout(durationMs);
-    await setDrivingKeyState(page, 'KeyW', false);
+    if (!keepHeld) {
+        await setDrivingKeyState(page, 'KeyW', false);
+    }
 };
 
 const waitForDriftBoostTier = async (
@@ -50,34 +57,32 @@ test.describe('e2e drift boost', () => {
         await joinRace(page, roomId, 'Drift Driver');
         await waitForCarSpawn(page);
 
-        // Accelerate past the 10 m/s drift entry threshold (~3s at full throttle)
-        await buildUpSpeed(page, 3_000);
+        // Accelerate past the 10 m/s drift entry threshold (~3s at full throttle).
+        // keepHeld=true avoids a deceleration gap before the drift phase.
+        await buildUpSpeed(page, 3_000, true);
 
-        // Drift: W (throttle) + ShiftLeft (handbrake) + KeyD (right steer)
-        await setDrivingKeyState(page, 'KeyW', true);
+        // Drift: ShiftLeft (handbrake) + KeyD (right steer) — KeyW is already held
         await setDrivingKeyState(page, 'ShiftLeft', true);
         await setDrivingKeyState(page, 'KeyD', true);
 
         // Hold for 1.5s — enough for GRIPPING → INITIATING → DRIFTING → tier 1 (1000ms accumulated)
         await page.waitForTimeout(1_500);
 
-        // Release handbrake to trigger RECOVERING state and emit the boost
-        await setDrivingKeyState(page, 'ShiftLeft', false);
-        await setDrivingKeyState(page, 'KeyD', false);
-        await setDrivingKeyState(page, 'KeyW', false);
-
-        // Tier 1 should have been reached and the DOM indicator should be visible
-        // (the indicator appears while tier > 0, disappears after RECOVERING completes)
-        // Poll __GT_DEBUG__ for the peak tier observed at the end of the drift window
+        // Poll for tier >= 1 while still in DRIFTING state (before releasing handbrake).
+        // Releasing first would transition to RECOVERING which immediately consumes boostTier.
         const peakTier = await waitForDriftBoostTier(page, 1, 3_000);
         expect(peakTier).toBeGreaterThanOrEqual(1);
 
         // DOM indicator: #drift-tier-indicator is rendered only when driftBoostTier > 0
-        // It may briefly appear and disappear — check data-tier attribute captures tier 1
         const indicator = page.locator('#drift-tier-indicator');
         await expect(indicator).toBeVisible({ timeout: 2_000 });
         const tier = await indicator.getAttribute('data-tier');
         expect(Number(tier)).toBeGreaterThanOrEqual(1);
+
+        // Release all drift keys
+        await setDrivingKeyState(page, 'ShiftLeft', false);
+        await setDrivingKeyState(page, 'KeyD', false);
+        await setDrivingKeyState(page, 'KeyW', false);
     });
 
     test('should show drift tier 3 (ultra) after ~3s of sustained drifting', async ({ page }) => {
@@ -87,11 +92,10 @@ test.describe('e2e drift boost', () => {
         await joinRace(page, roomId, 'Ultra Driver');
         await waitForCarSpawn(page);
 
-        // Build speed past the 10 m/s entry threshold
-        await buildUpSpeed(page, 3_500);
+        // Build speed past the 10 m/s entry threshold, keeping KeyW held
+        await buildUpSpeed(page, 3_500, true);
 
-        // Drift: W + ShiftLeft + KeyA — sustained drift at high throttle
-        await setDrivingKeyState(page, 'KeyW', true);
+        // Drift: ShiftLeft + KeyA — sustained drift at high throttle (KeyW already held)
         await setDrivingKeyState(page, 'ShiftLeft', true);
         await setDrivingKeyState(page, 'KeyA', true);
 

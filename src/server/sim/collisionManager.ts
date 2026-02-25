@@ -181,7 +181,7 @@ export class CollisionManager {
         const momentumB = massB * Math.abs(playerB.motion.speed);
 
         // The car with lower momentum is the "bumped" victim.
-        // At equal momentum, fall back to speed (lighter car loses).
+        // At equal momentum, playerA is arbitrarily chosen as the victim.
         const bumpedPlayer = momentumA <= momentumB ? playerA : playerB;
         const rammerPlayer = bumpedPlayer === playerA ? playerB : playerA;
         const rammerMass = rammerPlayer === playerA ? massA : massB;
@@ -194,20 +194,21 @@ export class CollisionManager {
         this.bumpDriveRecoveryByPlayerId.set(rammerPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_RAMMER);
         this.bumpDriveRecoveryByPlayerId.set(bumpedPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_BUMPED);
 
-        // Flip is gated on mass ratio: the rammer must have at least FLIP_MASS_RATIO_MIN
-        // of the victim's mass to trigger a flip. A 1050 kg sport car cannot flip an
-        // 1800 kg truck (ratio 0.58 < 0.65), but a truck can flip a sport car (1.71 ≥ 0.65).
-        const FLIP_MASS_RATIO_MIN = 0.65;
+        // Flip and stun are both gated on the same mass ratio: the rammer must have at least
+        // BUMP_MASS_RATIO_MIN of the victim's mass to trigger either effect.
+        // A 1050 kg sport car cannot flip an 1800 kg truck (ratio 0.58 < 0.65),
+        // but a truck can flip a sport car (1.71 >= 0.65).
+        const BUMP_MASS_RATIO_MIN = 0.65;
         const massRatio = rammerMass / bumpedMass;
         const flipCooldownUntil = this.bumpFlipCooldownByPlayerId.get(bumpedPlayer.id) ?? 0;
-        const didFlip = nowMs >= flipCooldownUntil && massRatio >= FLIP_MASS_RATIO_MIN;
+        const didFlip = nowMs >= flipCooldownUntil && massRatio >= BUMP_MASS_RATIO_MIN;
         if (didFlip) {
             applyStatusEffectToPlayer(bumpedPlayer, 'flipped', nowMs);
             this.bumpFlipCooldownByPlayerId.set(bumpedPlayer.id, nowMs + BUMP_FLIP_COOLDOWN_MS);
         }
 
-        // Stun is also gated on mass ratio: a lighter car can't stun a heavier one.
-        const isBigImpact = impactSpeed >= BIG_IMPACT_SPEED_MPS && massRatio >= FLIP_MASS_RATIO_MIN;
+        // Stun is also gated on the same mass ratio as flip.
+        const isBigImpact = impactSpeed >= BIG_IMPACT_SPEED_MPS && massRatio >= BUMP_MASS_RATIO_MIN;
         const stunnedPlayerId = isBigImpact ? bumpedPlayer.id : null;
         if (isBigImpact) {
             applyStatusEffectToPlayer(bumpedPlayer, 'stunned', nowMs, 1, COLLISION_STUN_DURATION_MS);

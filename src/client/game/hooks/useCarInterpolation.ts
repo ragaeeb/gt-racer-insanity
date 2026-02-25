@@ -15,6 +15,7 @@ import {
 import { sampleInterpolationBuffer } from '@/client/game/systems/interpolationSystem';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
 import { DEFAULT_TRACK_WIDTH_METERS } from '@/shared/game/track/trackManifest';
+import { DriftState } from '@/shared/game/vehicle/driftConfig';
 import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 
 const LOCAL_TRACK_BOUNDARY_X_METERS = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
@@ -125,7 +126,9 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
 
                 if (import.meta.env.DEV) {
                     if (localCar.driftState !== prevDriftStateLogRef.current) {
-                        const stateNames = ['GRIPPING', 'INITIATING', 'DRIFTING', 'RECOVERING'];
+                        const stateNames = Object.fromEntries(
+                            Object.entries(DriftState).map(([k, v]) => [v, k]),
+                        ) as Record<number, string>;
                         console.debug('[drift] state →', stateNames[localCar.driftState] ?? localCar.driftState, {
                             angle: localCar.driftAngle.toFixed(3),
                             tier: localCar.driftBoostTier,

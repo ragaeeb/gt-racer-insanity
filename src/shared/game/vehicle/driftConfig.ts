@@ -12,7 +12,11 @@ export type DriftConfig = {
     initiationSpeedThreshold: number;
     /** 0–1 — minimum steering angle to enter drift */
     initiationSteerThreshold: number;
-    /** ms — time in INITIATING before falling back to GRIPPING */
+    /**
+     * ms — time in INITIATING before falling back to GRIPPING.
+     * TODO: this field is defined but not yet consumed by updateDriftState;
+     * currently INITIATING→GRIPPING only triggers on speed/steer loss.
+     */
     initiatingToGrippingTimeMs: number;
     /** ms — time in INITIATING before transitioning to DRIFTING */
     initiatingToDriftingTimeMs: number;
@@ -49,7 +53,7 @@ export const DEFAULT_DRIFT_CONFIG: DriftConfig = {
     initiatingToDriftingTimeMs: 150,
     driftingLateralFriction: 0.15,
     initiatingLateralFriction: 0.35,
-    recoveringLateralFriction: 0.50,
+    recoveringLateralFriction: 0.5,
     grippingLateralFriction: 0.65,
     boostTier1TimeMs: 1000,
     boostTier2TimeMs: 2000,
@@ -64,10 +68,15 @@ export const DEFAULT_DRIFT_CONFIG: DriftConfig = {
 export type DriftContext = {
     /** Current drift FSM state */
     state: DriftStateValue;
-    /** Timestamp (ms) when the current state was entered */
+    /** Timestamp (ms) when the current state was entered — never mutated mid-state */
     stateEnteredAtMs: number;
     /** Timestamp (ms) when drifting first began (for accumulated time) */
     driftStartedAtMs: number;
+    /**
+     * Timestamp (ms) of the previous DRIFTING tick — used to compute per-tick dtMs
+     * without repurposing stateEnteredAtMs (which must remain the true entry time).
+     */
+    lastDriftTickMs: number;
     /** Current drift angle in radians */
     driftAngle: number;
     /** Total accumulated time in DRIFTING state (ms) */
@@ -80,6 +89,7 @@ export const createInitialDriftContext = (): DriftContext => ({
     state: DriftState.GRIPPING,
     stateEnteredAtMs: 0,
     driftStartedAtMs: 0,
+    lastDriftTickMs: 0,
     driftAngle: 0,
     accumulatedDriftTimeMs: 0,
     boostTier: 0,
