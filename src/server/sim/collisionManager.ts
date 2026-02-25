@@ -58,7 +58,12 @@ export class CollisionManager {
      * Processes the started and ended player-pair collision sets produced by
      * `drainStartedCollisions`. Applies bump responses and manages pair cooldowns.
      */
-    processBumpCollisions(startedPairs: BumpPair[], endedPairs: BumpPair[], nowMs: number): void {
+    processBumpCollisions(
+        startedPairs: BumpPair[],
+        endedPairs: BumpPair[],
+        nowMs: number,
+        contactForces?: Map<string, number>,
+    ): void {
         for (const pair of endedPairs) {
             const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
             this.activeBumpPairKeys.delete(pairKey);
@@ -76,7 +81,7 @@ export class CollisionManager {
             }
 
             this.pendingBumpPairByKey.delete(pairKey);
-            this.applyBumpForPair(pair, nowMs);
+            this.applyBumpForPair(pair, nowMs, contactForces);
         }
 
         // Flush any pending pairs whose cooldown has now expired.
@@ -92,7 +97,7 @@ export class CollisionManager {
             }
 
             this.pendingBumpPairByKey.delete(pairKey);
-            this.applyBumpForPair(pair, nowMs);
+            this.applyBumpForPair(pair, nowMs, contactForces);
         }
     }
 
@@ -152,7 +157,7 @@ export class CollisionManager {
         this.obstacleStunCooldownByPlayerId.clear();
     }
 
-    private applyBumpForPair(pair: BumpPair, nowMs: number): void {
+    private applyBumpForPair(pair: BumpPair, nowMs: number, contactForces?: Map<string, number>): void {
         const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
         const playerA = this.players.get(pair.firstPlayerId);
         const playerB = this.players.get(pair.secondPlayerId);
@@ -165,35 +170,57 @@ export class CollisionManager {
             return;
         }
 
-        const slowerPlayer = Math.abs(playerA.motion.speed) <= Math.abs(playerB.motion.speed) ? playerA : playerB;
-        const fasterPlayer = slowerPlayer === playerA ? playerB : playerA;
+        // Use rigid body mass for momentum-based victim selection.
+        // Heavier cars at the same speed have more momentum and "win" the collision.
+        const rbA = this.rigidBodyById.get(playerA.id);
+        const rbB = this.rigidBodyById.get(playerB.id);
+        const massA = rbA?.mass() ?? 1;
+        const massB = rbB?.mass() ?? 1;
 
-        applyPlayerBumpResponse(playerA, playerB, this.rigidBodyById);
+        const momentumA = massA * Math.abs(playerA.motion.speed);
+        const momentumB = massB * Math.abs(playerB.motion.speed);
+
+        // The car with lower momentum is the "bumped" victim.
+        // At equal momentum, playerA is arbitrarily chosen as the victim.
+        const bumpedPlayer = momentumA <= momentumB ? playerA : playerB;
+        const rammerPlayer = bumpedPlayer === playerA ? playerB : playerA;
+        const rammerMass = rammerPlayer === playerA ? massA : massB;
+        const bumpedMass = bumpedPlayer === playerA ? massA : massB;
+
+        const forceMagnitude = contactForces?.get(pairKey);
+        applyPlayerBumpResponse(playerA, playerB, this.rigidBodyById, forceMagnitude);
 
         this.bumpPairCooldown.set(pairKey, nowMs + BUMP_PAIR_COOLDOWN_MS);
-        this.bumpDriveRecoveryByPlayerId.set(fasterPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_RAMMER);
-        this.bumpDriveRecoveryByPlayerId.set(slowerPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_BUMPED);
+        this.bumpDriveRecoveryByPlayerId.set(rammerPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_RAMMER);
+        this.bumpDriveRecoveryByPlayerId.set(bumpedPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_BUMPED);
 
-        const flipCooldownUntil = this.bumpFlipCooldownByPlayerId.get(slowerPlayer.id) ?? 0;
-        const didFlip = nowMs >= flipCooldownUntil;
+        // Flip and stun are both gated on the same mass ratio: the rammer must have at least
+        // BUMP_MASS_RATIO_MIN of the victim's mass to trigger either effect.
+        // A 1050 kg sport car cannot flip an 1800 kg truck (ratio 0.58 < 0.65),
+        // but a truck can flip a sport car (1.71 >= 0.65).
+        const BUMP_MASS_RATIO_MIN = 0.65;
+        const massRatio = rammerMass / bumpedMass;
+        const flipCooldownUntil = this.bumpFlipCooldownByPlayerId.get(bumpedPlayer.id) ?? 0;
+        const didFlip = nowMs >= flipCooldownUntil && massRatio >= BUMP_MASS_RATIO_MIN;
         if (didFlip) {
-            applyStatusEffectToPlayer(slowerPlayer, 'flipped', nowMs);
-            this.bumpFlipCooldownByPlayerId.set(slowerPlayer.id, nowMs + BUMP_FLIP_COOLDOWN_MS);
+            applyStatusEffectToPlayer(bumpedPlayer, 'flipped', nowMs);
+            this.bumpFlipCooldownByPlayerId.set(bumpedPlayer.id, nowMs + BUMP_FLIP_COOLDOWN_MS);
         }
 
-        const isBigImpact = impactSpeed >= BIG_IMPACT_SPEED_MPS;
-        const stunnedPlayerId = isBigImpact ? slowerPlayer.id : null;
+        // Stun is also gated on the same mass ratio as flip.
+        const isBigImpact = impactSpeed >= BIG_IMPACT_SPEED_MPS && massRatio >= BUMP_MASS_RATIO_MIN;
+        const stunnedPlayerId = isBigImpact ? bumpedPlayer.id : null;
         if (isBigImpact) {
-            applyStatusEffectToPlayer(slowerPlayer, 'stunned', nowMs, 1, COLLISION_STUN_DURATION_MS);
+            applyStatusEffectToPlayer(bumpedPlayer, 'stunned', nowMs, 1, COLLISION_STUN_DURATION_MS);
         }
 
         this.emitEvent({
             kind: 'collision_bump',
             metadata: {
                 againstPlayerId: pair.secondPlayerId,
-                flippedPlayerId: didFlip ? slowerPlayer.id : null,
+                flippedPlayerId: didFlip ? bumpedPlayer.id : null,
                 rammerDriveLockMs: BUMP_DRIVE_RECOVERY_MS_RAMMER,
-                rammerPlayerId: fasterPlayer.id,
+                rammerPlayerId: rammerPlayer.id,
                 stunnedPlayerId,
             },
             playerId: pair.firstPlayerId,

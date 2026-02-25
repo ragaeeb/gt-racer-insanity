@@ -1,27 +1,27 @@
 import { Canvas, type RootState } from '@react-three/fiber';
 import React, {
-    Suspense,
+    type Dispatch,
     lazy,
     memo,
+    type SetStateAction,
+    Suspense,
     useCallback,
     useEffect,
     useMemo,
     useState,
-    type Dispatch,
-    type SetStateAction,
 } from 'react';
+import { Toaster, toast } from 'sonner';
 import * as THREE from 'three';
-import { toast, Toaster } from 'sonner';
 import { clientConfig } from '@/client/app/config';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
+import { colorIdToHexString } from '@/client/game/vehicleSelections';
+import { AbilityIndicator } from '@/components/AbilityIndicator';
+import { LobbyCarPreview } from '@/components/LobbyCarPreview';
 import { Button } from '@/components/ui/button';
 import { ColorPicker } from '@/components/ui/color-picker';
 import { Input } from '@/components/ui/input';
-import { LobbyCarPreview } from '@/components/LobbyCarPreview';
-import { AbilityIndicator } from '@/components/AbilityIndicator';
 import { VEHICLE_CLASS_MANIFESTS, type VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
-import { colorIdToHexString } from '@/client/game/vehicleSelections';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
 
 const RaceWorld = lazy(async () => {
@@ -31,7 +31,11 @@ const RaceWorld = lazy(async () => {
 
 const GithubIcon = () => (
     <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6" aria-hidden="true" focusable="false">
-        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+        <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z"
+        />
     </svg>
 );
 
@@ -60,10 +64,26 @@ const TailwindIcon = () => (
 );
 
 const techStack = [
-    { name: 'Bun', description: 'Blazing-fast JS runtime & package manager for the server and toolchain.', icon: <BunIcon /> },
-    { name: 'React Three Fiber', description: 'Declarative 3D scene graph rendering powered by Three.js.', icon: <ThreeIcon /> },
-    { name: 'Socket.IO', description: 'Real-time bidirectional event-based multiplayer synchronization.', icon: <SocketIoIcon /> },
-    { name: 'Tailwind CSS', description: 'Utility-first CSS framework for precise and responsive UI styling.', icon: <TailwindIcon /> }
+    {
+        name: 'Bun',
+        description: 'Blazing-fast JS runtime & package manager for the server and toolchain.',
+        icon: <BunIcon />,
+    },
+    {
+        name: 'React Three Fiber',
+        description: 'Declarative 3D scene graph rendering powered by Three.js.',
+        icon: <ThreeIcon />,
+    },
+    {
+        name: 'Socket.IO',
+        description: 'Real-time bidirectional event-based multiplayer synchronization.',
+        icon: <SocketIoIcon />,
+    },
+    {
+        name: 'Tailwind CSS',
+        description: 'Utility-first CSS framework for precise and responsive UI styling.',
+        icon: <TailwindIcon />,
+    },
 ];
 
 const systemStatus = [
@@ -105,7 +125,8 @@ const suppressThreeDeprecationWarnings = () => {
     const originalError = console.error.bind(console);
     const suppressedMessages = new Set<string>();
 
-    const wrapLogger = (original: typeof console.warn): typeof console.warn =>
+    const wrapLogger =
+        (original: typeof console.warn): typeof console.warn =>
         (...args: unknown[]) => {
             const firstArg = args[0];
             if (matchesSuppressedPattern(firstArg)) {
@@ -170,12 +191,7 @@ const RaceSceneCanvas = memo(
         }, []);
 
         return (
-            <Canvas
-                camera={RACE_CANVAS_CAMERA}
-                dpr={[1, 2]}
-                onCreated={handleCreated}
-                shadows={RACE_CANVAS_SHADOWS}
-            >
+            <Canvas camera={RACE_CANVAS_CAMERA} dpr={[1, 2]} onCreated={handleCreated} shadows={RACE_CANVAS_SHADOWS}>
                 <Suspense fallback={null}>
                     {playerName && roomId ? (
                         <RaceWorld
@@ -193,7 +209,7 @@ const RaceSceneCanvas = memo(
                 </Suspense>
             </Canvas>
         );
-    }
+    },
 );
 
 RaceSceneCanvas.displayName = 'RaceSceneCanvas';
@@ -217,12 +233,14 @@ const LandingHero = ({
     joinRoomInput,
     setJoinRoomInput,
     handleJoinSubmit,
-    homeError
+    homeError,
 }: LandingHeroProps) => {
     const [scrollY, setScrollY] = useState(0);
 
     useEffect(() => {
-        const handleScroll = () => { setScrollY(window.scrollY); };
+        const handleScroll = () => {
+            setScrollY(window.scrollY);
+        };
         window.addEventListener('scroll', handleScroll, { passive: true });
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
@@ -231,15 +249,12 @@ const LandingHero = ({
 
     return (
         <div className="text-[#C8E8FF] relative font-sans bg-[#020408] overflow-x-hidden">
-
             {/* ── Background layers ── */}
             <div className="fixed top-0 left-0 w-full h-screen pointer-events-none z-0">
                 {/* Gradient base */}
                 <div className="absolute inset-0 bg-gradient-to-b from-[#060A14] via-[#040810] to-[#02040C]" />
                 {/* Cyber grid */}
-                <div
-                    className="absolute inset-0 cyber-grid opacity-100"
-                />
+                <div className="absolute inset-0 cyber-grid opacity-100" />
                 {/* Scan lines */}
                 <div
                     className="absolute inset-0 scan-lines opacity-100"
@@ -253,7 +268,10 @@ const LandingHero = ({
                 {/* Radial vignette */}
                 <div
                     className="absolute inset-0"
-                    style={{ background: 'radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, rgba(2,4,8,0.7) 100%)' }}
+                    style={{
+                        background:
+                            'radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, rgba(2,4,8,0.7) 100%)',
+                    }}
                 />
             </div>
 
@@ -264,9 +282,29 @@ const LandingHero = ({
             >
                 <svg viewBox="0 0 500 150" className="w-[800px] h-auto" aria-hidden="true" focusable="false">
                     {/* Data stream lines — cyan */}
-                    <path d="M500,100 L440,100 M480,80 L420,80 M490,120 L455,120" stroke="#00E5FF" strokeWidth="3" strokeLinecap="round" opacity="0.75" className="animate-pulse" />
-                    <path d="M462,90 L385,90 M472,110 L405,110 M458,74 L398,74" stroke="#00E5FF" strokeWidth="1.5" strokeLinecap="round" opacity="0.4" />
-                    <path d="M500,96 L475,96 M500,104 L480,104" stroke="#4DE2FF" strokeWidth="1" strokeLinecap="round" opacity="0.25" strokeDasharray="3 4" />
+                    <path
+                        d="M500,100 L440,100 M480,80 L420,80 M490,120 L455,120"
+                        stroke="#00E5FF"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        opacity="0.75"
+                        className="animate-pulse"
+                    />
+                    <path
+                        d="M462,90 L385,90 M472,110 L405,110 M458,74 L398,74"
+                        stroke="#00E5FF"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        opacity="0.4"
+                    />
+                    <path
+                        d="M500,96 L475,96 M500,104 L480,104"
+                        stroke="#4DE2FF"
+                        strokeWidth="1"
+                        strokeLinecap="round"
+                        opacity="0.25"
+                        strokeDasharray="3 4"
+                    />
 
                     {/* Data stream dots */}
                     <circle cx="442" cy="100" r="2.5" fill="#00E5FF" opacity="0.9" className="animate-ping" />
@@ -281,17 +319,36 @@ const LandingHero = ({
                     <path d="M 440,45 C 430,45 380,55 350,65 L 400,65 Z" fill="#007ACC" />
 
                     {/* Car Body (Blue Theme) */}
-                    <path d="M 60,110 C 50,110 40,105 35,95 C 45,85 70,80 120,75 C 150,65 180,50 220,45 C 260,40 280,45 310,55 C 330,60 380,60 410,65 C 430,68 440,75 440,85 C 440,100 430,110 420,110 Z" fill="url(#blue-theme-car)" />
+                    <path
+                        d="M 60,110 C 50,110 40,105 35,95 C 45,85 70,80 120,75 C 150,65 180,50 220,45 C 260,40 280,45 310,55 C 330,60 380,60 410,65 C 430,68 440,75 440,85 C 440,100 430,110 420,110 Z"
+                        fill="url(#blue-theme-car)"
+                    />
 
                     {/* Cyan accent stripe */}
-                    <path d="M 150,68 C 185,60 235,55 285,60 C 315,63 365,68 402,72" fill="none" stroke="rgba(0,229,255,0.45)" strokeWidth="1.5" />
+                    <path
+                        d="M 150,68 C 185,60 235,55 285,60 C 315,63 365,68 402,72"
+                        fill="none"
+                        stroke="rgba(0,229,255,0.45)"
+                        strokeWidth="1.5"
+                    />
 
                     {/* Side detailing */}
-                    <path d="M 60,95 C 100,90 200,85 280,95 C 320,100 360,95 400,90" fill="none" stroke="#310000" strokeWidth="3" />
+                    <path
+                        d="M 60,95 C 100,90 200,85 280,95 C 320,100 360,95 400,90"
+                        fill="none"
+                        stroke="#310000"
+                        strokeWidth="3"
+                    />
                     <path d="M 280,95 C 310,95 330,85 340,75 C 320,85 290,95 280,95 Z" fill="#111" />
 
                     {/* Windshield & Windows */}
-                    <path d="M 180,50 C 210,45 240,45 260,50 C 255,60 210,65 160,65 C 160,65 170,55 180,50 Z" fill="#0a1520" stroke="#00E5FF" strokeWidth="0.6" strokeOpacity="0.35" />
+                    <path
+                        d="M 180,50 C 210,45 240,45 260,50 C 255,60 210,65 160,65 C 160,65 170,55 180,50 Z"
+                        fill="#0a1520"
+                        stroke="#00E5FF"
+                        strokeWidth="0.6"
+                        strokeOpacity="0.35"
+                    />
                     <path d="M 265,52 C 275,55 290,60 300,65 L 250,65 C 255,60 260,55 265,52 Z" fill="#0a1520" />
 
                     {/* Front intake & headlight — cyan */}
@@ -339,14 +396,16 @@ const LandingHero = ({
 
             {/* ── Scrollable content ── */}
             <div className="relative z-20 w-full flex flex-col items-center">
-
                 {/* ── Hero Section ── */}
                 <div className="w-full min-h-screen flex flex-col items-center justify-center p-4">
-
                     {/* System status pills */}
                     <div className="flex flex-wrap gap-3 mb-8 justify-center">
                         {systemStatus.map((s) => (
-                            <div key={s.label} className="flex items-center gap-2 font-mono text-[10px] tracking-[0.18em] uppercase" style={{ color: s.color }}>
+                            <div
+                                key={s.label}
+                                className="flex items-center gap-2 font-mono text-[10px] tracking-[0.18em] uppercase"
+                                style={{ color: s.color }}
+                            >
                                 <span
                                     className="inline-block w-1.5 h-1.5 rounded-full animate-pulse"
                                     style={{ backgroundColor: s.color, boxShadow: `0 0 6px ${s.color}` }}
@@ -373,7 +432,8 @@ const LandingHero = ({
                         style={{
                             background: 'rgba(2, 8, 20, 0.88)',
                             border: '1px solid rgba(0, 229, 255, 0.22)',
-                            boxShadow: '0 0 40px rgba(0,229,255,0.08), inset 0 0 30px rgba(0,229,255,0.03), 0 20px 60px rgba(0,0,0,0.7)',
+                            boxShadow:
+                                '0 0 40px rgba(0,229,255,0.08), inset 0 0 30px rgba(0,229,255,0.03), 0 20px 60px rgba(0,0,0,0.7)',
                         }}
                     >
                         {/* Top-left corner bracket */}
@@ -513,7 +573,9 @@ const LandingHero = ({
                                 {/* Hover gradient overlay */}
                                 <div
                                     className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                                    style={{ background: 'linear-gradient(135deg, rgba(0,229,255,0.06) 0%, transparent 60%)' }}
+                                    style={{
+                                        background: 'linear-gradient(135deg, rgba(0,229,255,0.06) 0%, transparent 60%)',
+                                    }}
                                 />
 
                                 {/* Icon */}
@@ -525,7 +587,9 @@ const LandingHero = ({
                                 </div>
 
                                 {/* Label chip */}
-                                <p className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/35 uppercase mb-1">MODULE</p>
+                                <p className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/35 uppercase mb-1">
+                                    MODULE
+                                </p>
                                 <h3 className="text-xl font-bold text-[#C8E8FF] mb-3 tracking-wide">{tech.name}</h3>
                                 <p className="text-[#4A7A9B] text-sm leading-relaxed">{tech.description}</p>
 
@@ -559,7 +623,8 @@ const LandingHero = ({
                             style={{ color: 'rgba(102,242,255,0.82)' }}
                             onMouseEnter={(e) => {
                                 (e.currentTarget as HTMLElement).style.color = '#00E5FF';
-                                (e.currentTarget as HTMLElement).style.filter = 'drop-shadow(0 0 8px rgba(0,229,255,0.6))';
+                                (e.currentTarget as HTMLElement).style.filter =
+                                    'drop-shadow(0 0 8px rgba(0,229,255,0.6))';
                             }}
                             onMouseLeave={(e) => {
                                 (e.currentTarget as HTMLElement).style.color = 'rgba(102,242,255,0.82)';
@@ -570,7 +635,10 @@ const LandingHero = ({
                         </a>
                     </div>
 
-                    <p className="font-mono text-[10px] tracking-[0.2em] uppercase text-center" style={{ color: 'rgba(163,206,236,0.9)' }}>
+                    <p
+                        className="font-mono text-[10px] tracking-[0.2em] uppercase text-center"
+                        style={{ color: 'rgba(163,206,236,0.9)' }}
+                    >
                         <a
                             href={APP_HOMEPAGE}
                             target="_blank"
@@ -612,26 +680,38 @@ type GTDiagControls = {
 const isEnabledFromFlag = (value: string | null) => value === '1' || value === 'true';
 
 const readStoredBooleanFlag = (key: string) => {
-    if (typeof window === 'undefined') { return false; }
+    if (typeof window === 'undefined') {
+        return false;
+    }
     return isEnabledFromFlag(window.localStorage.getItem(key));
 };
 
 const readDiagnosticsEnabledDefault = () => {
-    if (typeof window === 'undefined') { return false; }
+    if (typeof window === 'undefined') {
+        return false;
+    }
     const queryFlag = new URLSearchParams(window.location.search).get('diag');
-    if (isEnabledFromFlag(queryFlag)) { return true; }
+    if (isEnabledFromFlag(queryFlag)) {
+        return true;
+    }
     return readStoredBooleanFlag('gt-diag');
 };
 
 const readDiagnosticsVerboseDefault = () => {
-    if (typeof window === 'undefined') { return false; }
+    if (typeof window === 'undefined') {
+        return false;
+    }
     const queryFlag = new URLSearchParams(window.location.search).get('diagVerbose');
-    if (isEnabledFromFlag(queryFlag)) { return true; }
+    if (isEnabledFromFlag(queryFlag)) {
+        return true;
+    }
     return readStoredBooleanFlag('gt-diag-verbose');
 };
 
 const getDiagControls = () => {
-    if (typeof window === 'undefined') { return null; }
+    if (typeof window === 'undefined') {
+        return null;
+    }
     const debugWindow = window as Window & { __GT_DIAG__?: GTDiagControls };
     return debugWindow.__GT_DIAG__ ?? null;
 };
@@ -653,7 +733,7 @@ export const App = () => {
     const [cruiseControlEnabled, setCruiseControlEnabled] = useState(true);
     const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(() => readDiagnosticsEnabledDefault());
     const [diagnosticsVerbosity, setDiagnosticsVerbosity] = useState<DiagnosticsVerbosity>(() =>
-        readDiagnosticsVerboseDefault() ? 'verbose' : 'standard'
+        readDiagnosticsVerboseDefault() ? 'verbose' : 'standard',
     );
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
     const [raceState, setRaceState] = useState<RaceState | null>(null);
@@ -663,22 +743,31 @@ export const App = () => {
     const position = useHudStore((state) => state.position);
     const trackLabel = useHudStore((state) => state.trackLabel);
     const activeEffectIds = useHudStore((state) => state.activeEffectIds);
+    const driftBoostTier = useHudStore((state) => state.driftBoostTier);
     const pendingToasts = useHudStore((state) => state.pendingToasts);
     const clearPendingToast = useHudStore((state) => state.clearPendingToast);
     const latestSnapshot = useRuntimeStore((state) => state.latestSnapshot);
     const roomIdFromUrl = useMemo(() => new URLSearchParams(routeSearch).get('room') ?? '', [routeSearch]);
     const winnerName = useMemo(() => {
-        if (!raceState?.winnerPlayerId) { return null; }
+        if (!raceState?.winnerPlayerId) {
+            return null;
+        }
         const winnerSnapshot = latestSnapshot?.players.find((player) => player.id === raceState.winnerPlayerId);
         return winnerSnapshot?.name ?? raceState.winnerPlayerId;
     }, [latestSnapshot, raceState]);
 
     useEffect(() => {
-        if (pendingToasts.length === 0) { return; }
+        if (pendingToasts.length === 0) {
+            return;
+        }
         const next = pendingToasts[0];
-        if (next.variant === 'success') { toast.success(next.message); }
-        else if (next.variant === 'error') { toast.error(next.message); }
-        else { toast.warning(next.message); }
+        if (next.variant === 'success') {
+            toast.success(next.message);
+        } else if (next.variant === 'error') {
+            toast.error(next.message);
+        } else {
+            toast.warning(next.message);
+        }
         clearPendingToast();
     }, [pendingToasts, clearPendingToast]);
 
@@ -690,42 +779,72 @@ export const App = () => {
     const navigateTo = (path: string, roomId?: string, replace = false) => {
         const search = roomId ? `?room=${encodeURIComponent(roomId)}` : '';
         const target = `${path}${search}`;
-        if (replace) { window.history.replaceState({}, '', target); }
-        else { window.history.pushState({}, '', target); }
+        if (replace) {
+            window.history.replaceState({}, '', target);
+        } else {
+            window.history.pushState({}, '', target);
+        }
         setLocationState();
     };
 
     useEffect(() => {
-        const onPopState = () => { setLocationState(); };
+        const onPopState = () => {
+            setLocationState();
+        };
         window.addEventListener('popstate', onPopState);
-        return () => { window.removeEventListener('popstate', onPopState); };
+        return () => {
+            window.removeEventListener('popstate', onPopState);
+        };
     }, []);
 
     useEffect(() => {
         const searchRoomId = new URLSearchParams(routeSearch).get('room');
         const hasPlayerName = playerName.trim().length > 0;
 
-        if (routePath === '/' && searchRoomId) { navigateTo('/lobby', searchRoomId, true); return; }
-        if (routePath === '/lobby' && !searchRoomId) { navigateTo('/', undefined, true); return; }
-        if (routePath === '/lobby') { return; }
-        if (routePath === '/race') {
-            if (!searchRoomId) { navigateTo('/', undefined, true); return; }
-            if (!hasPlayerName) { navigateTo('/lobby', searchRoomId, true); }
+        if (routePath === '/' && searchRoomId) {
+            navigateTo('/lobby', searchRoomId, true);
             return;
         }
-        if (routePath !== '/') { navigateTo('/', undefined, true); }
+        if (routePath === '/lobby' && !searchRoomId) {
+            navigateTo('/', undefined, true);
+            return;
+        }
+        if (routePath === '/lobby') {
+            return;
+        }
+        if (routePath === '/race') {
+            if (!searchRoomId) {
+                navigateTo('/', undefined, true);
+                return;
+            }
+            if (!hasPlayerName) {
+                navigateTo('/lobby', searchRoomId, true);
+            }
+            return;
+        }
+        if (routePath !== '/') {
+            navigateTo('/', undefined, true);
+        }
     }, [playerName, routePath, routeSearch]);
 
-    useEffect(() => { setNameInput(playerName); }, [playerName]);
+    useEffect(() => {
+        setNameInput(playerName);
+    }, [playerName]);
 
     const sanitizePlayerName = (value: string) => {
         const trimmed = value.trim();
-        if (trimmed.length === 0) { return 'Player'; }
+        if (trimmed.length === 0) {
+            return 'Player';
+        }
         return trimmed.slice(0, 24);
     };
 
     const sanitizeRoomId = (value: string) =>
-        value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 16);
+        value
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9_-]/g, '')
+            .slice(0, 16);
 
     const generateRoomId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -740,7 +859,9 @@ export const App = () => {
         setIsCheckingServer(true);
         try {
             const response = await fetch(`${clientConfig.serverUrl}/health`);
-            if (!response.ok) { throw new Error('Server health check failed'); }
+            if (!response.ok) {
+                throw new Error('Server health check failed');
+            }
             navigateTo('/lobby', generateRoomId());
         } catch {
             setHomeError('Server is not running');
@@ -749,12 +870,17 @@ export const App = () => {
         }
     };
 
-    const handleJoinExistingGame = () => { setHomeError(''); setShowJoinPrompt(true); };
+    const handleJoinExistingGame = () => {
+        setHomeError('');
+        setShowJoinPrompt(true);
+    };
 
     const handleJoinSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const sanitizedRoomId = sanitizeRoomId(joinRoomInput);
-        if (!sanitizedRoomId) { return; }
+        if (!sanitizedRoomId) {
+            return;
+        }
         navigateTo('/lobby', sanitizedRoomId);
     };
 
@@ -763,15 +889,22 @@ export const App = () => {
         const nextName = sanitizePlayerName(nameInput);
         window.sessionStorage.setItem('gt-player-name-session', nextName);
         setPlayerName(nextName);
-        if (roomIdFromUrl) { navigateTo('/race', roomIdFromUrl); }
+        if (roomIdFromUrl) {
+            navigateTo('/race', roomIdFromUrl);
+        }
     };
 
-    const handleGenerateDebugLog = useCallback(() => { getDiagControls()?.downloadReport(); }, []);
+    const handleGenerateDebugLog = useCallback(() => {
+        getDiagControls()?.downloadReport();
+    }, []);
 
     const handleDiagnosticsEnabledChange = useCallback((enabled: boolean) => {
         setDiagnosticsEnabled(enabled);
         window.localStorage.setItem('gt-diag', enabled ? 'true' : 'false');
-        if (enabled) { getDiagControls()?.enable(); return; }
+        if (enabled) {
+            getDiagControls()?.enable();
+            return;
+        }
         getDiagControls()?.disable();
     }, []);
 
@@ -811,7 +944,10 @@ export const App = () => {
                 <div className="absolute inset-0 cyber-grid opacity-100 pointer-events-none" />
                 <div
                     className="absolute inset-0 pointer-events-none"
-                    style={{ background: 'radial-gradient(ellipse 70% 70% at 50% 50%, transparent 30%, rgba(2,4,8,0.85) 100%)' }}
+                    style={{
+                        background:
+                            'radial-gradient(ellipse 70% 70% at 50% 50%, transparent 30%, rgba(2,4,8,0.85) 100%)',
+                    }}
                 />
 
                 <form
@@ -819,13 +955,20 @@ export const App = () => {
                     style={{
                         background: 'rgba(2, 8, 20, 0.9)',
                         border: '1px solid rgba(0, 229, 255, 0.2)',
-                        boxShadow: '0 0 40px rgba(0,229,255,0.06), inset 0 0 30px rgba(0,229,255,0.02), 0 20px 60px rgba(0,0,0,0.8)',
+                        boxShadow:
+                            '0 0 40px rgba(0,229,255,0.06), inset 0 0 30px rgba(0,229,255,0.02), 0 20px 60px rgba(0,0,0,0.8)',
                     }}
                     onSubmit={handleStartRace}
                 >
                     {/* Corner brackets */}
-                    <span className="absolute top-0 left-0 w-4 h-4 pointer-events-none" style={{ borderTop: '2px solid #00E5FF', borderLeft: '2px solid #00E5FF' }} />
-                    <span className="absolute bottom-0 right-0 w-4 h-4 pointer-events-none" style={{ borderBottom: '2px solid #00E5FF', borderRight: '2px solid #00E5FF' }} />
+                    <span
+                        className="absolute top-0 left-0 w-4 h-4 pointer-events-none"
+                        style={{ borderTop: '2px solid #00E5FF', borderLeft: '2px solid #00E5FF' }}
+                    />
+                    <span
+                        className="absolute bottom-0 right-0 w-4 h-4 pointer-events-none"
+                        style={{ borderBottom: '2px solid #00E5FF', borderRight: '2px solid #00E5FF' }}
+                    />
 
                     {/* Header */}
                     <div className="text-center space-y-1">
@@ -842,7 +985,10 @@ export const App = () => {
 
                     {/* Name input */}
                     <div className="space-y-1.5">
-                        <label htmlFor="player-name-input" className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/40 uppercase block">
+                        <label
+                            htmlFor="player-name-input"
+                            className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/40 uppercase block"
+                        >
                             CALLSIGN
                         </label>
                         <Input
@@ -879,7 +1025,9 @@ export const App = () => {
                                         className="py-3 px-2 font-mono text-xs uppercase tracking-wider transition-all"
                                         style={{
                                             background: isSelected ? 'rgba(0,229,255,0.12)' : 'rgba(0,0,0,0.3)',
-                                            border: isSelected ? '1px solid rgba(0,229,255,0.6)' : '1px solid rgba(0,229,255,0.12)',
+                                            border: isSelected
+                                                ? '1px solid rgba(0,229,255,0.6)'
+                                                : '1px solid rgba(0,229,255,0.12)',
                                             color: isSelected ? '#00E5FF' : 'rgba(0,229,255,0.4)',
                                             boxShadow: isSelected ? '0 0 12px rgba(0,229,255,0.15)' : 'none',
                                         }}
@@ -934,14 +1082,18 @@ export const App = () => {
     }
 
     /* ── Race ── */
-    if (routePath !== '/race') { return null; }
+    if (routePath !== '/race') {
+        return null;
+    }
 
     return (
         <div className="h-full w-full">
             <div id="game-ui">
                 <div id="hud-panel">
                     <div id="speed">{Math.round(speedKph)} km/h</div>
-                    <div id="lap-position">LAP {lap} &nbsp;|&nbsp; P{position}</div>
+                    <div id="lap-position">
+                        LAP {lap} &nbsp;|&nbsp; P{position}
+                    </div>
                     <div id="track-name">{trackLabel}</div>
                     <div data-status={connectionStatus} id="connection-status">
                         {connectionStatus}
@@ -993,6 +1145,65 @@ export const App = () => {
                         </div>
                     )}
                     <AbilityIndicator />
+                    {driftBoostTier > 0 &&
+                        (() => {
+                            const DRIFT_TIER_CONFIG: Record<
+                                number,
+                                { color: string; glow: string; dotGlow: string; label: string }
+                            > = {
+                                1: {
+                                    color: '#29B6F6',
+                                    glow: '0 0 8px rgba(41,182,246,0.7)',
+                                    dotGlow: '0 0 6px rgba(41,182,246,0.9)',
+                                    label: 'MINI',
+                                },
+                                2: {
+                                    color: '#FF9800',
+                                    glow: '0 0 8px rgba(255,152,0,0.7)',
+                                    dotGlow: '0 0 6px rgba(255,152,0,0.9)',
+                                    label: 'SUPER',
+                                },
+                                3: {
+                                    color: '#BB86FC',
+                                    glow: '0 0 8px rgba(187,134,252,0.7)',
+                                    dotGlow: '0 0 6px rgba(187,134,252,0.9)',
+                                    label: 'ULTRA',
+                                },
+                            };
+                            const tierConfig = DRIFT_TIER_CONFIG[driftBoostTier] ?? DRIFT_TIER_CONFIG[1];
+                            return (
+                                <div
+                                    id="drift-tier-indicator"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontFamily: "'Courier New', monospace",
+                                        fontSize: '0.7rem',
+                                        fontWeight: 'bold',
+                                        letterSpacing: '0.1em',
+                                        textTransform: 'uppercase',
+                                        marginTop: '4px',
+                                        color: tierConfig.color,
+                                        textShadow: tierConfig.glow,
+                                        transition: 'color 0.3s, text-shadow 0.3s',
+                                    }}
+                                    data-tier={driftBoostTier}
+                                >
+                                    <span
+                                        style={{
+                                            display: 'inline-block',
+                                            width: '8px',
+                                            height: '8px',
+                                            borderRadius: '50%',
+                                            backgroundColor: tierConfig.color,
+                                            boxShadow: tierConfig.dotGlow,
+                                        }}
+                                    />
+                                    DRIFT {tierConfig.label}
+                                </div>
+                            );
+                        })()}
                 </div>
                 <Toaster position="top-center" richColors closeButton duration={2000} />
                 <div id="app-version">v{appVersion}</div>
@@ -1000,7 +1211,9 @@ export const App = () => {
                     <h1>RACE RESULTS</h1>
                     <p id="race-result-summary">WINNER: {winnerName ?? 'TBD'}</p>
                     <p id="race-result-position">FINISH: P{position}</p>
-                    <p id="race-result-laps">LAPS: {lap}/{raceState?.totalLaps ?? lap}</p>
+                    <p id="race-result-laps">
+                        LAPS: {lap}/{raceState?.totalLaps ?? lap}
+                    </p>
                     <p id="race-result-track">TRACK: {trackLabel}</p>
                     <button id="restart-btn" onClick={handleRestart} type="button">
                         REINITIALIZE

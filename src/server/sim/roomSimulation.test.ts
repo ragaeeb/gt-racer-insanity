@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
 import { generateTrackObstacles } from '@/shared/game/track/trackObstacles';
 import { getVehicleClassManifestById } from '@/shared/game/vehicle/vehicleClassManifest';
+import { DriftState } from '@/shared/game/vehicle/driftConfig';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
 type TestRigidBody = {
@@ -839,5 +840,245 @@ describe('RoomSimulation', () => {
         expect(restartedPlayer?.speed ?? 1).toBeCloseTo(0, 3);
         expect(restartedPlayer?.lastProcessedInputSeq).toEqual(-1);
         expect(restartedPlayer?.progress.distanceMeters ?? 1).toEqual(0);
+    });
+});
+
+/**
+ * Creates an input frame with explicit handbrake control for drift testing.
+ */
+const createDriftInputFrame = (
+    roomId: string,
+    seq: number,
+    timestampMs: number,
+    throttle: number,
+    steering: number,
+    handbrake: boolean,
+) => ({
+    ackSnapshotSeq: null,
+    controls: {
+        boost: false,
+        brake: false,
+        handbrake,
+        steering,
+        throttle,
+    },
+    cruiseControlEnabled: !handbrake,
+    precisionOverrideActive: handbrake,
+    protocolVersion: PROTOCOL_V2,
+    roomId,
+    seq,
+    timestampMs,
+});
+
+describe('drift system integration', () => {
+    const TICK_HZ = 60;
+    const DT_MS = Math.round(1000 / TICK_HZ);
+
+    /**
+     * Accelerates a player to top speed over ~120 ticks (2 seconds at 60 Hz).
+     * Returns the nowMs after acceleration.
+     */
+    const accelerateToSpeed = (
+        simulation: RoomSimulation,
+        playerId: string,
+        roomId: string,
+        startSeq: number,
+        startMs: number,
+        ticks: number,
+    ) => {
+        let nowMs = startMs;
+        for (let i = 0; i < ticks; i++) {
+            const seq = startSeq + i;
+            nowMs = startMs + (i + 1) * DT_MS;
+            simulation.queueInputFrame(playerId, createDriftInputFrame(roomId, seq, nowMs, 1, 0, false));
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+        }
+        return { nowMs, nextSeq: startSeq + ticks };
+    };
+
+    it('should transition driftState to DRIFTING in snapshot when handbrake + steer at speed', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'DRIFT1',
+            seed: 1,
+            tickHz: TICK_HZ,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('drifter', 'Drifter', 'sport', 'red');
+
+        // Phase 1: accelerate to well above 10 m/s threshold
+        const { nowMs: accelEndMs, nextSeq } = accelerateToSpeed(simulation, 'drifter', 'DRIFT1', 1, 1_000, 120);
+
+        // Phase 2: hold handbrake + full left steer for enough ticks to pass INITIATING (150ms → ~10 ticks)
+        let nowMs = accelEndMs;
+        let driftingDetected = false;
+        for (let i = 0; i < 30; i++) {
+            const seq = nextSeq + i;
+            nowMs += DT_MS;
+            simulation.queueInputFrame('drifter', createDriftInputFrame('DRIFT1', seq, nowMs, 1.0, 1.0, true));
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+
+            const snapshot = simulation.buildSnapshot(nowMs);
+            const player = snapshot.players.find((p) => p.id === 'drifter');
+            if (player?.driftState === DriftState.DRIFTING) {
+                driftingDetected = true;
+                break;
+            }
+        }
+
+        expect(driftingDetected).toBeTrue();
+    });
+
+    it('should show non-zero driftAngle in snapshot while DRIFTING', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'DRIFT2',
+            seed: 1,
+            tickHz: TICK_HZ,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('drifter', 'Drifter', 'sport', 'red');
+
+        const { nowMs: accelEndMs, nextSeq } = accelerateToSpeed(simulation, 'drifter', 'DRIFT2', 1, 1_000, 120);
+
+        // Hold handbrake + steer until DRIFTING, then read angle after at least one full tick in DRIFTING
+        let nowMs = accelEndMs;
+        let driftAngle: number | undefined;
+        let ticksInDrifting = 0;
+        for (let i = 0; i < 30; i++) {
+            const seq = nextSeq + i;
+            nowMs += DT_MS;
+            simulation.queueInputFrame('drifter', createDriftInputFrame('DRIFT2', seq, nowMs, 1.0, -0.9, true));
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+
+            const snapshot = simulation.buildSnapshot(nowMs);
+            const player = snapshot.players.find((p) => p.id === 'drifter');
+            if (player?.driftState === DriftState.DRIFTING) {
+                ticksInDrifting++;
+                // driftAngle is set inside the DRIFTING handler, so we need
+                // at least one full tick processing in DRIFTING state
+                if (ticksInDrifting >= 2) {
+                    driftAngle = player.driftAngle;
+                    break;
+                }
+            }
+        }
+
+        expect(driftAngle).toBeDefined();
+        expect(driftAngle).not.toBe(0);
+    });
+
+    it('should reach driftBoostTier >= 1 after 1s+ of DRIFTING in snapshot', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'DRIFT3',
+            seed: 1,
+            tickHz: TICK_HZ,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('drifter', 'Drifter', 'sport', 'red');
+
+        const { nowMs: accelEndMs, nextSeq } = accelerateToSpeed(simulation, 'drifter', 'DRIFT3', 1, 1_000, 120);
+
+        // Hold handbrake + steer for ~1.5s sim time (≥90 ticks at 60Hz)
+        let nowMs = accelEndMs;
+        let maxBoostTier = 0;
+        for (let i = 0; i < 120; i++) {
+            const seq = nextSeq + i;
+            nowMs += DT_MS;
+            simulation.queueInputFrame('drifter', createDriftInputFrame('DRIFT3', seq, nowMs, 1.0, 1.0, true));
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+
+            const snapshot = simulation.buildSnapshot(nowMs);
+            const player = snapshot.players.find((p) => p.id === 'drifter');
+            maxBoostTier = Math.max(maxBoostTier, player?.driftBoostTier ?? 0);
+        }
+
+        expect(maxBoostTier).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should reset driftBoostTier to 0 after handbrake release and recovery', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'DRIFT4',
+            seed: 1,
+            tickHz: TICK_HZ,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('drifter', 'Drifter', 'sport', 'red');
+
+        const { nowMs: accelEndMs, nextSeq } = accelerateToSpeed(simulation, 'drifter', 'DRIFT4', 1, 1_000, 120);
+
+        // Phase 2: drift for 1.5s to earn a boost tier
+        let nowMs = accelEndMs;
+        let seq = nextSeq;
+        let maxBoostTier = 0;
+        for (let i = 0; i < 100; i++) {
+            nowMs += DT_MS;
+            simulation.queueInputFrame('drifter', createDriftInputFrame('DRIFT4', seq++, nowMs, 1.0, 1.0, true));
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+
+            const snapshot = simulation.buildSnapshot(nowMs);
+            const player = snapshot.players.find((p) => p.id === 'drifter');
+            maxBoostTier = Math.max(maxBoostTier, player?.driftBoostTier ?? 0);
+        }
+
+        expect(maxBoostTier).toBeGreaterThanOrEqual(1);
+
+        // Phase 3: release handbrake, wait for recovery (300ms ≈ 18 ticks)
+        for (let i = 0; i < 30; i++) {
+            nowMs += DT_MS;
+            simulation.queueInputFrame('drifter', createDriftInputFrame('DRIFT4', seq++, nowMs, 1.0, 0, false));
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+        }
+
+        const finalSnapshot = simulation.buildSnapshot(nowMs);
+        const player = finalSnapshot.players.find((p) => p.id === 'drifter');
+
+        expect(player?.driftState).toBe(DriftState.GRIPPING);
+        expect(player?.driftBoostTier).toBe(0);
+    });
+
+    it('should reach tier-3 boost after 3s+ of sustained drifting', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'DRIFT5',
+            seed: 1,
+            tickHz: TICK_HZ,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('drifter', 'Drifter', 'sport', 'red');
+
+        const { nowMs: accelEndMs, nextSeq } = accelerateToSpeed(simulation, 'drifter', 'DRIFT5', 1, 1_000, 120);
+
+        // Drift with 0.75 steering (just above 0.7 threshold) + full throttle.
+        // The reduced handbrake braking while throttling and preserved forward
+        // speed on wall-clamp allow sustained drifting up to tier 3.
+        let nowMs = accelEndMs;
+        let maxBoostTier = 0;
+        for (let i = 0; i < 300; i++) {
+            const seq = nextSeq + i;
+            nowMs += DT_MS;
+            simulation.queueInputFrame('drifter', createDriftInputFrame('DRIFT5', seq, nowMs, 1.0, 0.75, true));
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+
+            const snapshot = simulation.buildSnapshot(nowMs);
+            const player = snapshot.players.find((p) => p.id === 'drifter');
+            maxBoostTier = Math.max(maxBoostTier, player?.driftBoostTier ?? 0);
+        }
+
+        expect(maxBoostTier).toBe(3);
     });
 });

@@ -5,6 +5,9 @@ const toSnapshotPlayerState = (player: SimRoomState['players'] extends Map<strin
     return {
         activeEffects: player.activeEffects,
         colorId: player.colorId,
+        driftAngle: player.driftContext.driftAngle,
+        driftBoostTier: player.driftContext.boostTier,
+        driftState: player.driftContext.state,
         id: player.id,
         lastProcessedInputSeq: player.lastProcessedInputSeq,
         name: player.name,

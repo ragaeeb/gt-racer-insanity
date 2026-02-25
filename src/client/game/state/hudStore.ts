@@ -8,6 +8,8 @@ export type Toast = { message: string; variant: ToastVariant };
 export type HudStoreState = {
     activeEffectIds: string[];
     cooldownMsByAbilityId: Record<string, number>;
+    /** Current drift boost tier: 0 = none, 1 = blue (mini), 2 = orange (super), 3 = purple (ultra) */
+    driftBoostTier: number;
     lap: number;
     pendingToasts: Toast[];
     position: number;
@@ -15,6 +17,7 @@ export type HudStoreState = {
     setCooldownMsByAbilityId: (cooldownMsByAbilityId: Record<string, number>) => void;
     /** Set when an ability is ready again (timestamp in ms). Used for cooldown display and input throttle. */
     setAbilityReadyAtMs: (abilityId: string, readyAtMs: number) => void;
+    setDriftBoostTier: (tier: number) => void;
     setLap: (lap: number) => void;
     setPosition: (position: number) => void;
     setSpeedKph: (speedKph: number) => void;
@@ -28,6 +31,7 @@ export type HudStoreState = {
 export const useHudStore = create<HudStoreState>((set) => ({
     activeEffectIds: [],
     cooldownMsByAbilityId: {},
+    driftBoostTier: 0,
     lap: 1,
     pendingToasts: [],
     position: 1,
@@ -47,6 +51,11 @@ export const useHudStore = create<HudStoreState>((set) => ({
         set((state) => ({
             cooldownMsByAbilityId: { ...state.cooldownMsByAbilityId, [abilityId]: readyAtMs },
         })),
+    setDriftBoostTier: (driftBoostTier) =>
+        set((state) => {
+            const normalizedTier = Math.min(3, Math.max(0, Math.trunc(driftBoostTier)));
+            return state.driftBoostTier === normalizedTier ? state : { driftBoostTier: normalizedTier };
+        }),
     setLap: (lap) => set((state) => (state.lap === lap ? state : { lap })),
     setPosition: (position) => set((state) => (state.position === position ? state : { position })),
     setSpeedKph: (speedKph) =>
@@ -55,7 +64,8 @@ export const useHudStore = create<HudStoreState>((set) => ({
             return state.speedKph === nextSpeedKph ? state : { speedKph: nextSpeedKph };
         }),
     setTrackLabel: (trackLabel) => set((state) => (state.trackLabel === trackLabel ? state : { trackLabel })),
-    showToast: (message, variant) => set((state) => ({ pendingToasts: [...state.pendingToasts, { message, variant }] })),
+    showToast: (message, variant) =>
+        set((state) => ({ pendingToasts: [...state.pendingToasts, { message, variant }] })),
     clearPendingToast: () => set((state) => ({ pendingToasts: state.pendingToasts.slice(1) })),
     speedKph: 0,
     trackLabel: TRACK_DEFAULT_LABEL,

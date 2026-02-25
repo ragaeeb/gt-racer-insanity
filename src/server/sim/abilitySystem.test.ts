@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import { applyAbilityActivation } from '@/server/sim/abilitySystem';
 import type { SimPlayerState } from '@/server/sim/types';
+import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 
 const createPlayer = (id: string): SimPlayerState => {
     return {
         activeEffects: [],
         colorId: 'red',
+        driftContext: createInitialDriftContext(),
         id,
         inputState: {
             boost: false,

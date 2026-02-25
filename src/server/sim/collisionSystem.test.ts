@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import type { RigidBody } from '@dimforge/rapier3d-compat';
 import { applyPlayerBumpResponse } from '@/server/sim/collisionSystem';
 import type { SimPlayerState } from '@/server/sim/types';
+import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 
 type Vector3 = { x: number; y: number; z: number };
@@ -49,6 +50,7 @@ const createMockRigidBody = ({
 const createPlayer = (id: string, vehicleId: VehicleClassId, speed: number): SimPlayerState => ({
     activeEffects: [],
     colorId: 'red',
+    driftContext: createInitialDriftContext(),
     id,
     inputState: {
         boost: false,

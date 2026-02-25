@@ -176,6 +176,7 @@ export const useDiagnostics = (
                 const session = sessionRef.current;
                 return {
                     connectionStatus: session.connectionStatus,
+                    driftBoostTier: useHudStore.getState().driftBoostTier,
                     isRunning: session.isRunning,
                     localCarX: session.localCar?.position.x ?? null,
                     localCarZ: session.localCar?.position.z ?? null,

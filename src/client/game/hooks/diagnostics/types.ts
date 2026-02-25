@@ -73,6 +73,7 @@ export type DiagCaptureState = {
 
 export type GTDebugState = {
     connectionStatus: import('@/shared/network/types').ConnectionStatus;
+    driftBoostTier: number;
     isRunning: boolean;
     localCarX: number | null;
     localCarZ: number | null;
