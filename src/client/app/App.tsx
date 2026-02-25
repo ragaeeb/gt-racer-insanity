@@ -17,6 +17,7 @@ import { clientConfig } from '@/client/app/config';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 import { Button } from '@/components/ui/button';
+import { ColorPicker } from '@/components/ui/color-picker';
 import { Input } from '@/components/ui/input';
 import { LobbyCarPreview } from '@/components/LobbyCarPreview';
 import { AbilityIndicator } from '@/components/AbilityIndicator';
@@ -687,14 +688,6 @@ export const App = () => {
     }, [latestSnapshot, raceState]);
 
     useEffect(() => {
-        if (routePath !== '/lobby') { return; }
-        const activeVehicle = VEHICLE_CLASS_MANIFESTS.find((v) => v.id === selectedVehicleId) ?? VEHICLE_CLASS_MANIFESTS[0];
-        const palette = activeVehicle.colorPaletteIds;
-        if (!palette.includes(selectedColorId)) { setSelectedColorId(palette[0]); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [routePath, selectedVehicleId]);
-
-    useEffect(() => {
         if (pendingToasts.length === 0) { return; }
         const next = pendingToasts[0];
         if (next.variant === 'success') { toast.success(next.message); }
@@ -821,8 +814,6 @@ export const App = () => {
 
     /* ── Lobby / Pilot Config ── */
     if (routePath === '/lobby') {
-        const activeVehicle = VEHICLE_CLASS_MANIFESTS.find((v) => v.id === selectedVehicleId) ?? VEHICLE_CLASS_MANIFESTS[0];
-        const availableColors = activeVehicle.colorPaletteIds;
         const roomCode = new URLSearchParams(routeSearch).get('room') ?? '';
 
         return (
@@ -898,9 +889,6 @@ export const App = () => {
                                         type="button"
                                         onClick={() => {
                                             setSelectedVehicleId(vehicle.id);
-                                            if (!vehicle.colorPaletteIds.includes(selectedColorId)) {
-                                                setSelectedColorId(vehicle.colorPaletteIds[0]);
-                                            }
                                         }}
                                         className="py-3 px-2 font-mono text-xs uppercase tracking-wider transition-all"
                                         style={{
@@ -927,27 +915,11 @@ export const App = () => {
                         <legend className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/40 uppercase mb-2 block">
                             PAINT MODULE
                         </legend>
-                        <div className="flex gap-3 flex-wrap">
-                            {availableColors.map((colorId) => (
-                                <button
-                                    key={colorId}
-                                    type="button"
-                                    onClick={() => setSelectedColorId(colorId)}
-                                    className="w-10 h-10 transition-all"
-                                    style={{
-                                        backgroundColor: colorIdToHexString(colorId),
-                                        border: selectedColorId === colorId
-                                            ? '2px solid #00E5FF'
-                                            : '2px solid rgba(0,229,255,0.15)',
-                                        boxShadow: selectedColorId === colorId
-                                            ? '0 0 12px rgba(0,229,255,0.5)'
-                                            : 'none',
-                                        transform: selectedColorId === colorId ? 'scale(1.12)' : 'scale(1)',
-                                    }}
-                                    title={colorId}
-                                />
-                            ))}
-                        </div>
+                        <ColorPicker
+                            className="h-10 rounded-none"
+                            onChange={(value: string) => setSelectedColorId(value)}
+                            value={colorIdToHexString(selectedColorId)}
+                        />
                     </fieldset>
 
                     {/* 3D Preview */}
