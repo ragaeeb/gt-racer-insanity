@@ -6,7 +6,7 @@ import type { ClientInputFrame } from '@/shared/network/inputFrame';
 import type { ServerSnapshotPayload } from '@/shared/network/snapshot';
 import type { AbilityActivatePayload, RaceEventPayload } from '@/shared/network/types';
 import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
-import { applyAbilityActivation } from './abilitySystem';
+import { applyAbilityActivation, commitAbilityCooldown } from './abilitySystem';
 import { CollisionManager } from './collisionManager';
 import { applyDriveStep, drainStartedCollisions, syncPlayerMotionFromRigidBody } from './collisionSystem';
 import { checkDeployableCollisions, spawnDeployable, updateDeployables } from './deployableSystem';
@@ -69,10 +69,7 @@ export class RoomSimulation {
         this.rapierContext = createRapierWorld(this.dtSeconds);
         this.trackManifest = getTrackManifestById(options.trackId);
         this.trackBoundaryX = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
-        this.deployableLifetimeTicks = Math.max(
-            1,
-            Math.round(this.combatTuning.oilSlickLifetimeMs / 1000 / this.dtSeconds),
-        );
+        this.deployableLifetimeTicks = this.combatTuning.deployableOilSlickLifetimeTicks;
 
         const trackColliders = buildTrackColliders(this.rapierContext.rapier, this.rapierContext.world, {
             seed: options.seed,
@@ -225,9 +222,6 @@ export class RoomSimulation {
                 nowMs,
                 this.cooldownStore,
             );
-            if (!resolved.applied) {
-                continue;
-            }
 
             // Projectile-delivery abilities spawn a homing projectile
             if (resolved.spawnProjectile) {
@@ -238,11 +232,33 @@ export class RoomSimulation {
                         this.state.players,
                         this.state.activeProjectiles,
                         this.combatTuning,
+                        nowMs,
                     );
                     if (projectile) {
                         this.state.activeProjectiles.push(projectile);
+                        commitAbilityCooldown(
+                            this.cooldownStore,
+                            resolved.sourcePlayerId,
+                            resolved.abilityId,
+                            nowMs,
+                        );
+                        this.pushRaceEvent({
+                            kind: 'ability_activated',
+                            metadata: {
+                                abilityId: resolved.abilityId,
+                                targetPlayerId: resolved.targetPlayerId,
+                            },
+                            playerId: resolved.sourcePlayerId,
+                            roomId: this.state.roomId,
+                            serverTimeMs: nowMs,
+                        });
                     }
                 }
+                continue;
+            }
+
+            if (!resolved.applied) {
+                continue;
             }
 
             this.pushRaceEvent({
@@ -309,7 +325,7 @@ export class RoomSimulation {
                 const deployable = spawnDeployable(
                     'oil-slick',
                     player,
-                    this.state.activeDeployables.length,
+                    this.state.activeDeployables,
                     this.deployableLifetimeTicks,
                     this.combatTuning,
                     this.totalTrackLengthMeters,

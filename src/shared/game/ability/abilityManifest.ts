@@ -11,7 +11,7 @@ export type AbilityDelivery = 'instant' | 'projectile';
 
 export type AbilityManifest = {
     baseCooldownMs: number;
-    /** How the effect reaches its target. Default: 'instant'. */
+    /** How the effect reaches its target. */
     delivery: AbilityDelivery;
     description: string;
     effectId: StatusEffectType;

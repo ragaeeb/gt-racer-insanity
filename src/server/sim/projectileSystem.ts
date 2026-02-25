@@ -16,12 +16,22 @@ export const resetProjectileIdCounter = () => {
  * Find the nearest opponent to the `owner` from the players map.
  * Returns null if there are no opponents.
  */
-const findNearestOpponent = (owner: SimPlayerState, players: Map<string, SimPlayerState>): SimPlayerState | null => {
+const findNearestOpponent = (
+    owner: SimPlayerState,
+    players: Map<string, SimPlayerState>,
+    nowMs: number,
+    immunityMs: number,
+): SimPlayerState | null => {
     let nearest: SimPlayerState | null = null;
     let minDistSq = Infinity;
 
     for (const candidate of players.values()) {
         if (candidate.id === owner.id) {
+            continue;
+        }
+
+        const timeSinceLastHit = nowMs - (candidate.lastHitByProjectileAtMs ?? 0);
+        if (timeSinceLastHit < immunityMs) {
             continue;
         }
 
@@ -47,6 +57,7 @@ export const createProjectile = (
     players: Map<string, SimPlayerState>,
     existingProjectiles: ActiveProjectile[],
     config: CombatTuning,
+    nowMs: number,
 ): ActiveProjectile | null => {
     // Check per-player cap
     const ownerProjectileCount = existingProjectiles.filter((p) => p.ownerId === owner.id).length;
@@ -59,7 +70,7 @@ export const createProjectile = (
         return null;
     }
 
-    const nearestOpponent = findNearestOpponent(owner, players);
+    const nearestOpponent = findNearestOpponent(owner, players, nowMs, config.projectileHitImmunityMs);
     if (!nearestOpponent) {
         return null;
     }
@@ -105,7 +116,7 @@ export const stepProjectile = (
         const dist = Math.sqrt(toTargetX * toTargetX + toTargetZ * toTargetZ);
 
         // Hit detection — check before steering
-        if (dist < config.projectileHitRadius) {
+        if (dist <= config.projectileHitRadius) {
             return 'hit';
         }
 
@@ -119,15 +130,14 @@ export const stepProjectile = (
 
         // 2D cross product for turn direction
         const cross = currentDirX * dirZ - currentDirZ * dirX;
-        const turnAmount = Math.min(
-            Math.abs(cross) * config.projectileTurnRate * dtSeconds,
-            config.projectileTurnRate * dtSeconds,
-        );
-        const turnSign = cross > 0 ? 1 : -1;
+        const dot = currentDirX * dirX + currentDirZ * dirZ;
+        const signedAngleToTarget = Math.atan2(cross, dot);
+        const maxTurn = config.projectileTurnRate * dtSeconds;
+        const clampedTurn = Math.max(-maxTurn, Math.min(maxTurn, signedAngleToTarget));
 
         // Rotate velocity vector
-        const cos = Math.cos(turnAmount * turnSign);
-        const sin = Math.sin(turnAmount * turnSign);
+        const cos = Math.cos(clampedTurn);
+        const sin = Math.sin(clampedTurn);
         const newVelX = currentDirX * cos - currentDirZ * sin;
         const newVelZ = currentDirX * sin + currentDirZ * cos;
 
@@ -170,6 +180,7 @@ export const stepAllProjectiles = (
             const target = proj.targetId ? state.players.get(proj.targetId) : null;
             if (target) {
                 applyStatusEffectToPlayer(target, 'stunned', nowMs, 1, config.stunnedEffectDurationMs);
+                target.lastHitByProjectileAtMs = nowMs;
 
                 pushRaceEvent({
                     kind: 'projectile_hit',

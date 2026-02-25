@@ -50,16 +50,6 @@ export type AudioTuning = {
 };
 
 export type CombatTuning = {
-    /** Max deployables across the room for oil-slick system. */
-    maxDeployables: number;
-    /** Radius of an oil slick deployable in meters. */
-    oilSlickRadius: number;
-    /** Lifetime of an oil slick in milliseconds. */
-    oilSlickLifetimeMs: number;
-    /** Spawn offset behind the deploying player in meters. */
-    oilSlickSpawnDistance: number;
-    /** Duration of the slippery/slowed effect applied by oil slick (ms). */
-    slipperyEffectDurationMs: number;
     /** Max deployables any single player may have active simultaneously. */
     deployableMaxPerPlayer: number;
     /** Max deployables across the entire room. */
@@ -68,6 +58,10 @@ export type CombatTuning = {
     deployableOilSlickRadius: number;
     /** Lifetime of an oil slick in ticks (600 = 10s @ 60Hz). */
     deployableOilSlickLifetimeTicks: number;
+    /** Spawn offset behind the deploying player in meters. */
+    deployableOilSlickSpawnDistance: number;
+    /** Duration of the slippery/slowed effect applied by oil slick (ms). */
+    deployableOilSlickEffectDurationMs: number;
     /** Max projectiles any single player may have active simultaneously. */
     projectileMaxPerPlayer: number;
     /** Max projectiles across the entire room. */
@@ -127,15 +121,12 @@ export const DEFAULT_GAMEPLAY_TUNING: GameplayTuningConfig = {
         },
     },
     combat: {
-        maxDeployables: 16,
-        oilSlickRadius: 3,
-        oilSlickLifetimeMs: 5_000,
-        oilSlickSpawnDistance: 5,
-        slipperyEffectDurationMs: 2_000,
         deployableMaxPerPlayer: 1,
         deployableMaxPerRoom: 8,
         deployableOilSlickRadius: 3.5,
         deployableOilSlickLifetimeTicks: 600,
+        deployableOilSlickSpawnDistance: 5,
+        deployableOilSlickEffectDurationMs: 2000,
         projectileMaxPerPlayer: 1,
         projectileMaxPerRoom: 8,
         projectileSpeed: 25,

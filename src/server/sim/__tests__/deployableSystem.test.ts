@@ -12,8 +12,7 @@ import {
 import type { ActiveDeployable, SimPlayerState } from '../types';
 
 const combatTuning = DEFAULT_GAMEPLAY_TUNING.combat;
-const tickHz = 60;
-const oilSlickLifetimeTicks = Math.max(1, Math.round((combatTuning.oilSlickLifetimeMs / 1000) * tickHz));
+const oilSlickLifetimeTicks = combatTuning.deployableOilSlickLifetimeTicks;
 
 const createInputFrame = (roomId: string, seq: number, timestampMs: number, boost: boolean) => {
     return {
@@ -34,12 +33,7 @@ const createInputFrame = (roomId: string, seq: number, timestampMs: number, boos
     };
 };
 
-const mockPlayer = (overrides: {
-    id?: string;
-    x?: number;
-    z?: number;
-    rotationY?: number;
-}): SimPlayerState => ({
+const mockPlayer = (overrides: { id?: string; x?: number; z?: number; rotationY?: number }): SimPlayerState => ({
     activeEffects: [],
     colorId: 'red',
     driftContext: createInitialDriftContext(),
@@ -86,7 +80,7 @@ const mockDeployable = (overrides: {
         x: overrides.x ?? 0,
         z: overrides.z ?? 0,
     },
-    radius: overrides.radius ?? combatTuning.oilSlickRadius,
+    radius: overrides.radius ?? combatTuning.deployableOilSlickRadius,
     remainingTicks: overrides.remainingTicks ?? oilSlickLifetimeTicks,
     triggered: overrides.triggered ?? false,
 });
@@ -96,7 +90,7 @@ describe('Deployable System', () => {
         resetDeployableIdCounter();
         const player = mockPlayer({ rotationY: 0, x: 10, z: 20 });
 
-        const deployable = spawnDeployable('oil-slick', player, 0, oilSlickLifetimeTicks, combatTuning);
+        const deployable = spawnDeployable('oil-slick', player, [], oilSlickLifetimeTicks, combatTuning);
 
         expect(deployable).not.toBeNull();
         expect(deployable?.position.x).toBeCloseTo(10, 5);
@@ -145,16 +139,27 @@ describe('Deployable System', () => {
         expect(deployables.length).toBe(0);
     });
 
-    it('should cap deployables at 16 total', () => {
+    it('should cap deployables at max per room', () => {
         const player = mockPlayer({});
 
-        const deployable = spawnDeployable(
-            'oil-slick',
-            player,
-            combatTuning.maxDeployables,
-            oilSlickLifetimeTicks,
-            combatTuning,
+        // Fill the room with dummy deployables
+        const dummyDeployables: ActiveDeployable[] = Array(combatTuning.deployableMaxPerRoom).fill(
+            mockDeployable({ ownerId: 'other-player' }),
         );
+
+        const deployable = spawnDeployable('oil-slick', player, dummyDeployables, oilSlickLifetimeTicks, combatTuning);
+
+        expect(deployable).toBeNull();
+    });
+
+    it('should cap deployables at max per player', () => {
+        const player = mockPlayer({ id: 'owner' });
+
+        const dummyDeployables: ActiveDeployable[] = Array(combatTuning.deployableMaxPerPlayer).fill(
+            mockDeployable({ ownerId: 'owner' }),
+        );
+
+        const deployable = spawnDeployable('oil-slick', player, dummyDeployables, oilSlickLifetimeTicks, combatTuning);
 
         expect(deployable).toBeNull();
     });

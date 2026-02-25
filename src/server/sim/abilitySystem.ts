@@ -18,6 +18,20 @@ type AbilityResolutionResult = {
     targetPlayerId: string | null;
 };
 
+export const commitAbilityCooldown = (
+    cooldownStore: Map<string, number>,
+    sourcePlayerId: string,
+    abilityId: string,
+    nowMs: number,
+) => {
+    const ability = getAbilityManifestById(abilityId);
+    if (!ability) {
+        return false;
+    }
+    cooldownStore.set(`${sourcePlayerId}:${ability.id}`, nowMs + ability.baseCooldownMs);
+    return true;
+};
+
 const findNearestOpponent = (
     players: Map<string, SimPlayerState>,
     sourcePlayer: SimPlayerState,
@@ -179,15 +193,22 @@ export const applyAbilityActivation = (
         };
     }
 
-    cooldownStore.set(cooldownKey, nowMs + ability.baseCooldownMs);
-
     const isProjectile = ability.delivery === 'projectile';
 
-    // Projectile-delivery abilities defer their effect to the projectile hit.
-    // Instant abilities apply the status effect immediately.
-    if (!isProjectile) {
-        applyStatusEffectToPlayer(targetPlayer, ability.effectId, nowMs, 1);
+    // Projectile-delivery abilities defer cooldown and success until spawn succeeds.
+    if (isProjectile) {
+        return {
+            abilityId: ability.id,
+            applied: false,
+            reason: 'ok',
+            sourcePlayerId,
+            spawnProjectile: true,
+            targetPlayerId: targetPlayer.id,
+        };
     }
+
+    applyStatusEffectToPlayer(targetPlayer, ability.effectId, nowMs, 1);
+    cooldownStore.set(cooldownKey, nowMs + ability.baseCooldownMs);
 
     return {
         abilityId: ability.id,

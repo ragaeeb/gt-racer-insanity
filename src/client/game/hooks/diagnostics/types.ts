@@ -72,6 +72,7 @@ export type DiagCaptureState = {
 };
 
 export type GTDebugState = {
+    activeEffectIds: string[];
     connectionStatus: import('@/shared/network/types').ConnectionStatus;
     driftBoostTier: number;
     isRunning: boolean;

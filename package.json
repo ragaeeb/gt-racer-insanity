@@ -38,7 +38,7 @@
         "test:e2e": "bun run e2e",
         "test:e2e:install": "bun x playwright install chromium",
         "check": "bun run test && bun run check:assets && bun run build",
-        "check:assets": "for f in public/models/**/*.glb; do bunx @gltf-transform/cli validate \"$f\" || exit 1; done",
+        "check:assets": "bun run ./scripts/check-assets.ts",
         "release": "semantic-release"
     },
     "engines": {

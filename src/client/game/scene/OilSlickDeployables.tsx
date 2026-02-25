@@ -1,55 +1,67 @@
-import { useThree } from '@react-three/fiber';
-import { useEffect, useRef } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import { useRef } from 'react';
+import * as THREE from 'three';
 import { OilSlick } from '@/client/game/entities/OilSlick';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
-import type { SnapshotDeployableState } from '@/shared/network/snapshot';
+import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
 
-const EMPTY_DEPLOYABLES: SnapshotDeployableState[] = [];
+const POOL_SIZE = DEFAULT_GAMEPLAY_TUNING.combat.deployableMaxPerRoom;
 
+/**
+ * Renders server-authoritative oil slick deployables from snapshot data.
+ *
+ * Maintains a pool of OilSlick objects and updates positions each frame
+ * based on `snapshot.deployables[]`. Unused pool entries are hidden.
+ */
 export const OilSlickDeployables = () => {
     const { scene } = useThree();
-    const deployables = useRuntimeStore((state) => state.latestSnapshot?.deployables ?? EMPTY_DEPLOYABLES);
-    const oilSlickByIdRef = useRef(new Map<number, OilSlick>());
+    const poolRef = useRef<THREE.Group | null>(null);
+    const slicksRef = useRef<OilSlick[]>([]);
+    const initialised = useRef(false);
 
-    useEffect(() => {
-        const activeIds = new Set<number>();
+    // Lazily initialise the pool
+    if (!initialised.current) {
+        const group = new THREE.Group();
+        group.name = 'oil-slick-deployables';
 
-        for (const deployable of deployables) {
-            if (deployable.kind !== 'oil-slick') {
-                continue;
-            }
+        const radius = DEFAULT_GAMEPLAY_TUNING.combat.deployableOilSlickRadius;
+        for (let i = 0; i < POOL_SIZE; i++) {
+            const slick = new OilSlick(0, 0, radius);
+            slick.mesh.visible = false;
 
-            activeIds.add(deployable.id);
-            const existing = oilSlickByIdRef.current.get(deployable.id);
-            if (existing) {
-                existing.setPosition(deployable.x, deployable.z);
-                continue;
-            }
-
-            const oilSlick = new OilSlick(deployable.x, deployable.z, deployable.radius);
-            scene.add(oilSlick.mesh);
-            oilSlickByIdRef.current.set(deployable.id, oilSlick);
+            group.add(slick.mesh);
+            slicksRef.current.push(slick);
         }
 
-        for (const [id, oilSlick] of oilSlickByIdRef.current) {
-            if (activeIds.has(id)) {
+        poolRef.current = group;
+        scene.add(group);
+        initialised.current = true;
+    }
+
+    useFrame(() => {
+        const snapshot = useRuntimeStore.getState().latestSnapshot;
+        const deployables = snapshot?.deployables ?? [];
+
+        // Filter just oil slicks to be safe, though currently it's the only type
+        const oilSlicks = deployables.filter((d) => d.kind === 'oil-slick');
+
+        for (let i = 0; i < POOL_SIZE; i++) {
+            const slick = slicksRef.current[i];
+            if (!slick) {
                 continue;
             }
-            scene.remove(oilSlick.mesh);
-            oilSlick.dispose();
-            oilSlickByIdRef.current.delete(id);
-        }
-    }, [deployables, scene]);
 
-    useEffect(() => {
-        return () => {
-            for (const oilSlick of oilSlickByIdRef.current.values()) {
-                scene.remove(oilSlick.mesh);
-                oilSlick.dispose();
+            if (i < oilSlicks.length) {
+                const d = oilSlicks[i];
+                slick.setPosition(d.x, d.z);
+                slick.mesh.visible = true;
+            } else {
+                slick.mesh.visible = false;
             }
-            oilSlickByIdRef.current.clear();
-        };
-    }, [scene]);
+        }
+    });
 
+    // The pool is managed imperatively via scene.add above;
+    // React only provides the mount/unmount lifecycle.
     return null;
 };

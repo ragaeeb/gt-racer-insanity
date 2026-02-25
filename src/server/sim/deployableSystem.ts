@@ -13,18 +13,28 @@ export const resetDeployableIdCounter = () => {
 export const spawnDeployable = (
     kind: ActiveDeployable['kind'],
     player: SimPlayerState,
-    existingCount: number,
+    existingDeployables: ActiveDeployable[],
     lifetimeTicks: number,
     tuning: CombatTuning,
     totalTrackLengthMeters = Number.POSITIVE_INFINITY,
 ): ActiveDeployable | null => {
-    if (existingCount >= tuning.maxDeployables) {
+    if (existingDeployables.length >= tuning.deployableMaxPerRoom) {
+        return null;
+    }
+
+    let playerCount = 0;
+    for (const d of existingDeployables) {
+        if (d.ownerId === player.id) {
+            playerCount++;
+        }
+    }
+    if (playerCount >= tuning.deployableMaxPerPlayer) {
         return null;
     }
 
     if (
         Number.isFinite(totalTrackLengthMeters) &&
-        player.motion.positionZ >= totalTrackLengthMeters - FINISH_ZONE_BLOCK_DISTANCE_METERS
+        player.progress.distanceMeters >= totalTrackLengthMeters - FINISH_ZONE_BLOCK_DISTANCE_METERS
     ) {
         return null;
     }
@@ -38,10 +48,10 @@ export const spawnDeployable = (
         lifetimeTicks,
         ownerId: player.id,
         position: {
-            x: player.motion.positionX - forwardX * tuning.oilSlickSpawnDistance,
-            z: player.motion.positionZ - forwardZ * tuning.oilSlickSpawnDistance,
+            x: player.motion.positionX - forwardX * tuning.deployableOilSlickSpawnDistance,
+            z: player.motion.positionZ - forwardZ * tuning.deployableOilSlickSpawnDistance,
         },
-        radius: tuning.oilSlickRadius,
+        radius: tuning.deployableOilSlickRadius,
         remainingTicks: lifetimeTicks,
         triggered: false,
     };
@@ -82,7 +92,7 @@ export const checkDeployableCollisions = (
             if (distSq <= triggerRadiusSq) {
                 deployable.triggered = true;
                 triggers.push({
-                    effectDurationMs: tuning.slipperyEffectDurationMs,
+                    effectDurationMs: tuning.deployableOilSlickEffectDurationMs,
                     effectType: 'slowed',
                     hazardId: 'oil-slick',
                     playerId: player.id,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { RoomSimulation } from '@/server/sim/roomSimulation';
 import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 import { createProjectile, stepAllProjectiles, stepProjectile } from '../projectileSystem';
@@ -151,6 +152,20 @@ describe('Projectile System - Proportional Navigation', () => {
         expect(result).toBe('hit');
     });
 
+    it('should return "hit" when exactly on hit radius boundary', () => {
+        const target = mockPlayer({ id: 'p2', positionX: combatConfig.projectileHitRadius, positionZ: 0 });
+        const players = new Map<string, SimPlayerState>([['p2', target]]);
+
+        const proj = mockProjectile({
+            position: { x: 0, z: 0 },
+            targetId: 'p2',
+        });
+
+        const result = stepProjectile(proj, players, 1 / 60, combatConfig);
+
+        expect(result).toBe('hit');
+    });
+
     it('should return "expired" after TTL ticks', () => {
         const players = new Map<string, SimPlayerState>();
 
@@ -199,6 +214,21 @@ describe('Projectile System - Proportional Navigation', () => {
         expect(proj.velocity.z).toBeGreaterThan(0); // still flying roughly forward
     });
 
+    it('should start rotating when target is directly behind', () => {
+        const target = mockPlayer({ id: 'p2', positionX: 0, positionZ: -50 });
+        const players = new Map<string, SimPlayerState>([['p2', target]]);
+
+        const proj = mockProjectile({
+            position: { x: 0, z: 0 },
+            velocity: { x: 0, z: combatConfig.projectileSpeed },
+            targetId: 'p2',
+        });
+
+        stepProjectile(proj, players, 1 / 60, combatConfig);
+
+        expect(Math.abs(proj.velocity.x)).toBeGreaterThan(0);
+    });
+
     it('should advance position based on velocity and dt', () => {
         const players = new Map<string, SimPlayerState>();
 
@@ -227,7 +257,7 @@ describe('Projectile System - Lifecycle', () => {
             ['p3', far],
         ]);
 
-        const proj = createProjectile(owner, players, [], combatConfig);
+        const proj = createProjectile(owner, players, [], combatConfig, 5000);
 
         expect(proj).not.toBeNull();
         expect(proj!.targetId).toBe('p2'); // nearest
@@ -238,7 +268,7 @@ describe('Projectile System - Lifecycle', () => {
         const owner = mockPlayer({ id: 'p1' });
         const players = new Map<string, SimPlayerState>([['p1', owner]]);
 
-        const proj = createProjectile(owner, players, [], combatConfig);
+        const proj = createProjectile(owner, players, [], combatConfig, 5000);
 
         expect(proj).toBeNull();
     });
@@ -256,7 +286,7 @@ describe('Projectile System - Lifecycle', () => {
             mockProjectile({ id: i + 1, ownerId: 'p1' }),
         );
 
-        const proj = createProjectile(owner, players, existingProjectiles, combatConfig);
+        const proj = createProjectile(owner, players, existingProjectiles, combatConfig, 5000);
 
         expect(proj).toBeNull();
     });
@@ -274,7 +304,7 @@ describe('Projectile System - Lifecycle', () => {
             mockProjectile({ id: i + 1, ownerId: `other-${i}` }),
         );
 
-        const proj = createProjectile(owner, players, existingProjectiles, combatConfig);
+        const proj = createProjectile(owner, players, existingProjectiles, combatConfig, 5000);
 
         expect(proj).toBeNull();
     });
@@ -313,31 +343,50 @@ describe('Projectile System - Lifecycle', () => {
             position: { x: 1, z: 1 }, // direct hit position
         });
 
-        // Simulate: target was hit recently (has active stunned effect applied 100ms ago)
         target.activeEffects.push({
             appliedAtMs: 4900,
             effectType: 'stunned',
-            expiresAtMs: 6500, // still active
+            expiresAtMs: 6500,
             intensity: 1,
         });
+
+        // Simulate: target was hit recently (timestamp set 100ms ago).
+        target.lastHitByProjectileAtMs = 4900;
+        const initialEffectsLength = target.activeEffects.length;
+        const initialStunnedExpiresAtMs = target.activeEffects.find((effect) => effect.effectType === 'stunned')?.expiresAtMs;
 
         const state = mockRoomState([owner, target], [proj]);
         const nowMs = 5000;
 
         stepAllProjectiles(state, 1 / 60, nowMs, combatConfig, () => {});
 
-        // Should still count as a hit (projectile consumed), but target already has stunned
-        // The effect system merges/extends the duration rather than stacking
         expect(state.activeProjectiles.length).toBe(0);
+        expect(target.activeEffects.length).toBe(initialEffectsLength);
+        const stunnedAfterStep = target.activeEffects.find((effect) => effect.effectType === 'stunned');
+        expect(stunnedAfterStep?.expiresAtMs).toBe(initialStunnedExpiresAtMs);
     });
 
-    it('should clear projectiles on race restart (via array reset)', () => {
-        const projectiles = [mockProjectile({ id: 1 }), mockProjectile({ id: 2 }), mockProjectile({ id: 3 })];
+    it('should clear projectiles on race restart', () => {
+        const sim = new RoomSimulation({
+            roomId: 'projectile-reset-room',
+            seed: 42,
+            tickHz: 60,
+            totalLaps: 1,
+            trackId: 'sunset-loop',
+        });
 
-        // Simulating what restartRace does
-        projectiles.length = 0;
+        const nowMs = 5000;
+        sim.joinPlayer('p1', 'Owner', 'patrol', 'red', nowMs);
+        sim.joinPlayer('p2', 'Target', 'sport', 'blue', nowMs);
+        sim.queueAbilityActivation('p1', { abilityId: 'spike-shot', seq: 1, targetPlayerId: null });
+        sim.step(nowMs + 16);
 
-        expect(projectiles.length).toBe(0);
+        const beforeRestartSnapshot = sim.buildSnapshot(nowMs + 16);
+        expect(beforeRestartSnapshot.projectiles?.length ?? 0).toBeGreaterThan(0);
+
+        sim.restartRace(nowMs + 32);
+        const afterRestartSnapshot = sim.buildSnapshot(nowMs + 32);
+        expect(afterRestartSnapshot.projectiles?.length ?? 0).toBe(0);
     });
 
     it('should remove expired projectiles from state', () => {
@@ -420,7 +469,7 @@ describe('Projectile System - Lifecycle', () => {
             ['p2', opponent],
         ]);
 
-        const proj = createProjectile(owner, players, [], combatConfig);
+        const proj = createProjectile(owner, players, [], combatConfig, 5000);
         expect(proj).not.toBeNull();
 
         // Forward in this engine: sin(0) = 0 for x, cos(0) = 1 for z
@@ -435,7 +484,7 @@ describe('Projectile System - Lifecycle', () => {
             ['p2', opponent],
         ]);
 
-        const proj = createProjectile(owner, players, [], combatConfig);
+        const proj = createProjectile(owner, players, [], combatConfig, 5000);
         expect(proj).not.toBeNull();
 
         const speed = Math.sqrt(proj!.velocity.x ** 2 + proj!.velocity.z ** 2);

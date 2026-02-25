@@ -3,6 +3,7 @@ import { expect, type Page } from '@playwright/test';
 export const STARTUP_TIMEOUT_MS = 90_000;
 
 export type GTDebugState = {
+    activeEffectIds: string[];
     connectionStatus: string;
     driftBoostTier: number;
     isRunning: boolean;
@@ -61,6 +62,7 @@ export const setDrivingKeyState = async (page: Page, code: string, pressed: bool
         ArrowUp: 'ArrowUp',
         KeyA: 'a',
         KeyD: 'd',
+        KeyE: 'e',
         KeyS: 's',
         KeyW: 'w',
     };

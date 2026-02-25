@@ -17,7 +17,8 @@
         ],
         "types": [
             "vite/client",
-            "bun-types"
+            "bun-types",
+            "@playwright/test"
         ],
         "skipLibCheck": true,
         "moduleResolution": "bundler",

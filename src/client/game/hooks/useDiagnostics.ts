@@ -183,6 +183,7 @@ export const useDiagnostics = (
                     opponentCount: session.opponents.size,
                     roomId: session.networkManager?.roomId ?? null,
                     speedKph: useHudStore.getState().speedKph,
+                    activeEffectIds: session.latestLocalSnapshot?.activeEffects?.map((e) => e.effectType) ?? [],
                 };
             },
         };
@@ -212,9 +213,10 @@ export const useDiagnostics = (
                 }, 0);
                 return {
                     collisionFrameSampleCount,
-                    drawCallsAvg: capture.drawCallsSampleCount > 0
-                        ? Math.round(capture.drawCallsSum / capture.drawCallsSampleCount)
-                        : 0,
+                    drawCallsAvg:
+                        capture.drawCallsSampleCount > 0
+                            ? Math.round(capture.drawCallsSum / capture.drawCallsSampleCount)
+                            : 0,
                     drawCallsMax: capture.drawCallsMax,
                     longFrameGapCount: capture.longFrameGapCount,
                     longTaskCount: capture.longTaskCount,

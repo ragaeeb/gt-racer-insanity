@@ -237,7 +237,7 @@ const isSnapshotHazardState = (value: unknown): value is SnapshotHazardState => 
     return isString(p.id) && isString(p.hazardId) && isFiniteNumber(p.x) && isFiniteNumber(p.z);
 };
 
-const isSnapshotProjectileState = (value: unknown): value is SnapshotProjectileState => {
+export const isSnapshotProjectileState = (value: unknown): value is SnapshotProjectileState => {
     if (!value || typeof value !== 'object') {
         return false;
     }
@@ -254,7 +254,7 @@ const isSnapshotProjectileState = (value: unknown): value is SnapshotProjectileS
     );
 };
 
-const isSnapshotDeployableState = (value: unknown): value is SnapshotDeployableState => {
+export const isSnapshotDeployableState = (value: unknown): value is SnapshotDeployableState => {
     if (!value || typeof value !== 'object') {
         return false;
     }
@@ -312,9 +312,7 @@ export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshot
     );
 };
 
-export const serializeSnapshot = (
-    snapshot: ServerSnapshotPayload & { projectiles?: any[]; deployables?: any[] },
-): any[] => {
+export const serializeSnapshot = (snapshot: ServerSnapshotPayload): any[] => {
     return [
         snapshot.seq,
         snapshot.serverTimeMs,

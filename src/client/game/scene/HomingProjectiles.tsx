@@ -1,14 +1,20 @@
 import { useFrame, useThree } from '@react-three/fiber';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
+import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
 
-const PROJECTILE_Y = 1;
-const SPHERE_RADIUS = 0.3;
-const SPHERE_SEGMENTS = 8;
-const TRAIL_LENGTH = 2;
-const CYAN = 0x00ffff;
-const POOL_SIZE = 8;
+const PROJECTILE_VISUALS = {
+    color: 0x00ffff, // Cyan
+    emissiveIntensity: 2,
+    renderHeightY: 1,
+    sphereRadius: 0.3,
+    sphereSegments: 8,
+    trailLength: 2,
+    trailOpacity: 0.5,
+};
+
+const POOL_SIZE = DEFAULT_GAMEPLAY_TUNING.combat.projectileMaxPerRoom;
 
 /**
  * Renders server-authoritative projectiles from snapshot data.
@@ -25,13 +31,20 @@ export const HomingProjectiles = () => {
     const materialRef = useRef<THREE.MeshStandardMaterial | null>(null);
     const initialised = useRef(false);
 
-    // Lazily initialise the pool
-    if (!initialised.current) {
-        geometryRef.current = new THREE.SphereGeometry(SPHERE_RADIUS, SPHERE_SEGMENTS, SPHERE_SEGMENTS);
+    useEffect(() => {
+        if (initialised.current) {
+            return;
+        }
+
+        geometryRef.current = new THREE.SphereGeometry(
+            PROJECTILE_VISUALS.sphereRadius,
+            PROJECTILE_VISUALS.sphereSegments,
+            PROJECTILE_VISUALS.sphereSegments,
+        );
         materialRef.current = new THREE.MeshStandardMaterial({
-            color: CYAN,
-            emissive: CYAN,
-            emissiveIntensity: 2,
+            color: PROJECTILE_VISUALS.color,
+            emissive: PROJECTILE_VISUALS.color,
+            emissiveIntensity: PROJECTILE_VISUALS.emissiveIntensity,
         });
 
         const group = new THREE.Group();
@@ -44,11 +57,11 @@ export const HomingProjectiles = () => {
 
             const trailGeo = new THREE.BufferGeometry().setFromPoints([
                 new THREE.Vector3(0, 0, 0),
-                new THREE.Vector3(0, 0, -TRAIL_LENGTH),
+                new THREE.Vector3(0, 0, -PROJECTILE_VISUALS.trailLength),
             ]);
             const trailMat = new THREE.LineBasicMaterial({
-                color: CYAN,
-                opacity: 0.5,
+                color: PROJECTILE_VISUALS.color,
+                opacity: PROJECTILE_VISUALS.trailOpacity,
                 transparent: true,
             });
             const trail = new THREE.Line(trailGeo, trailMat);
@@ -62,7 +75,27 @@ export const HomingProjectiles = () => {
         poolRef.current = group;
         scene.add(group);
         initialised.current = true;
-    }
+
+        return () => {
+            if (poolRef.current) {
+                scene.remove(poolRef.current);
+            }
+
+            for (const trail of trailsRef.current) {
+                trail.geometry.dispose();
+                (trail.material as THREE.Material).dispose();
+            }
+
+            geometryRef.current?.dispose();
+            materialRef.current?.dispose();
+            meshesRef.current = [];
+            trailsRef.current = [];
+            poolRef.current = null;
+            geometryRef.current = null;
+            materialRef.current = null;
+            initialised.current = false;
+        };
+    }, [scene]);
 
     useFrame(() => {
         const snapshot = useRuntimeStore.getState().latestSnapshot;
@@ -76,7 +109,7 @@ export const HomingProjectiles = () => {
 
             if (i < projectiles.length) {
                 const p = projectiles[i];
-                mesh.position.set(p.x, PROJECTILE_Y, p.z);
+                mesh.position.set(p.x, PROJECTILE_VISUALS.renderHeightY, p.z);
                 mesh.visible = true;
             } else {
                 mesh.visible = false;
