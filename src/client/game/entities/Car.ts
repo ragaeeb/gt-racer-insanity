@@ -4,7 +4,8 @@ import { EngineLayerManager } from '@/client/game/audio/engineLayerManager';
 import { SurfaceAudioManager } from '@/client/game/audio/surfaceAudio';
 import { CarController } from '@/client/game/entities/CarController';
 import { CarVisual } from '@/client/game/entities/CarVisual';
-import { applyCarPaint } from '@/client/game/paintSystem';
+import type { PaintMaterialRef } from '@/client/game/paintSystem';
+import { applyCarPaint, createFallbackPaintMaterial } from '@/client/game/paintSystem';
 import type { InputManager } from '@/client/game/systems/InputManager';
 import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 import { FLIPPED_DURATION_MS } from '@/shared/game/effects/statusEffectManifest';
@@ -84,6 +85,8 @@ export class Car {
     private readonly carColor = new THREE.Color(0xff0055);
     private readonly brakeLightMaterials: THREE.MeshStandardMaterial[] = [];
     private readonly boostFlashMaterials: THREE.MeshStandardMaterial[] = [];
+    // References to body paint materials — used to update dirt intensity each frame
+    private paintRefs: PaintMaterialRef[] = [];
     private suspensionTime = 0;
     private gltfWrapper: THREE.Group | null = null;
     private nameTagSprite?: THREE.Sprite;
@@ -272,14 +275,15 @@ export class Car {
         }
 
         // Fallback Box Geometries (used while GLTF is loading)
+        // Use MeshPhysicalMaterial to match the GLTF paint upgrade (clearcoat, reflectivity)
         const bodyGeo = new THREE.BoxGeometry(2, 0.8, 4);
-        const bodyMat = new THREE.MeshStandardMaterial({ color: this.carColor });
+        const bodyMat = createFallbackPaintMaterial(this.carColor, this.clonedMaterials);
         const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
         bodyMesh.position.y = 0.4;
         bodyMesh.castShadow = true;
 
         const roofGeo = new THREE.BoxGeometry(1.6, 0.6, 2);
-        const roofMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const roofMat = createFallbackPaintMaterial(0x333333, this.clonedMaterials);
         const roofMesh = new THREE.Mesh(roofGeo, roofMat);
         roofMesh.position.set(0, 1.1, -0.5);
         roofMesh.castShadow = true;
@@ -319,7 +323,7 @@ export class Car {
             wrapper.rotation.y = Math.PI + this.carModelYawOffsetRadians;
         }
 
-        applyCarPaint(wrapper, this.carColor, this.clonedMaterials);
+        this.paintRefs = applyCarPaint(wrapper, this.carColor, this.clonedMaterials);
 
         this.brakeLightMaterials.length = 0;
         this.boostFlashMaterials.length = 0;
@@ -583,6 +587,8 @@ export class Car {
         this.previousBoostTier = 0;
         this.boostFlashIntensity = 0;
         this.currentFrictionMultiplier = 1.0;
+        // Reset dirt overlay on race restart
+        this.setDirtIntensity(0);
         this.controller.reset();
         this.previousAudioSpeed = 0;
         this.lastBrakeTriggerAtMs = 0;
@@ -597,6 +603,19 @@ export class Car {
 
     public getSpeed = () => {
         return this.controller.getSpeed();
+    };
+
+    /**
+     * Set the dirt intensity for all body paint materials (0 = clean, 1 = fully dirty).
+     * Called each frame by the game loop, scaling with race progress (lap / totalLaps).
+     * Resets to 0 on race restart.
+     *
+     * @param value - Dirt intensity in range [0, 1]
+     */
+    public setDirtIntensity = (value: number): void => {
+        for (const ref of this.paintRefs) {
+            ref.setDirtIntensity(value);
+        }
     };
 
     public setMovementMultiplier = (multiplier: number) => {
