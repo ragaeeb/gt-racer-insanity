@@ -1,5 +1,60 @@
 @import "tailwindcss";
 
+/* ============================================================
+   GT RACER INSANITY — DESIGN TOKENS
+   ============================================================ */
+:root {
+    --gt-cyan: #00e5ff;
+    --gt-cyan-mid: rgba(0, 229, 255, 0.4);
+    --gt-cyan-dim: rgba(0, 229, 255, 0.12);
+    --gt-electric: #4de2ff;
+    --gt-gold: #d0b378;
+    --gt-gold-light: #ebd4a0;
+    --gt-green: #00ffa3;
+    --gt-red: #ff1744;
+    --gt-amber: #ffc107;
+    --gt-purple: #c084fc;
+    --gt-blue-badge: #60b0ff;
+    --gt-bg-void: #020408;
+    --gt-bg-deep: #060a14;
+    --gt-bg-panel: rgba(2, 8, 20, 0.93);
+    --gt-text: #c8e8ff;
+    --gt-text-dim: rgba(130, 190, 230, 0.55);
+    --gt-border: rgba(0, 229, 255, 0.22);
+    --gt-border-bright: rgba(0, 229, 255, 0.65);
+    --gt-glow-sm: 0 0 10px rgba(0, 229, 255, 0.3);
+    --gt-glow-md: 0 0 22px rgba(0, 229, 255, 0.4);
+    --gt-glow-lg: 0 0 45px rgba(0, 229, 255, 0.25);
+}
+
+/* ============================================================
+   CUSTOM UTILITIES (Tailwind v4)
+   ============================================================ */
+@utility cyber-grid {
+    background-image:
+        linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px);
+    background-size: 60px 60px;
+}
+
+@utility scan-lines {
+    background-image: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 229, 255, 0.018) 2px,
+        rgba(0, 229, 255, 0.018) 4px
+    );
+}
+
+@utility neon-border {
+    border: 1px solid var(--gt-border);
+    box-shadow: var(--gt-glow-sm), inset 0 0 20px rgba(0, 229, 255, 0.03);
+}
+
+/* ============================================================
+   BASE LAYOUT
+   ============================================================ */
 html,
 body,
 #app {
@@ -22,6 +77,9 @@ canvas {
     width: 100%;
 }
 
+/* ============================================================
+   GAME UI SHELL
+   ============================================================ */
 #game-ui {
     height: 100%;
     left: 0;
@@ -32,95 +90,177 @@ canvas {
     z-index: 10;
 }
 
+/* ============================================================
+   HUD PANEL — TELEMETRY MODULE
+   ============================================================ */
 #hud-panel {
-    background: rgba(6, 18, 30, 0.46);
-    border: 1px solid rgba(173, 224, 255, 0.35);
-    border-radius: 12px;
+    background: var(--gt-bg-panel);
+    background-image: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0, 229, 255, 0.012) 3px,
+        rgba(0, 229, 255, 0.012) 4px
+    );
+    border: 1px solid var(--gt-border);
+    border-radius: 4px;
+    box-shadow:
+        0 0 25px rgba(0, 229, 255, 0.08),
+        inset 0 0 30px rgba(0, 229, 255, 0.03),
+        0 8px 32px rgba(0, 0, 0, 0.7);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 7px;
     left: 20px;
-    min-width: 220px;
-    padding: 12px;
+    min-width: 230px;
+    padding: 14px;
+    padding-top: 10px;
     position: absolute;
     top: 20px;
 }
 
+#hud-panel::before {
+    content: 'GT // TELEMETRY';
+    display: block;
+    font-family: 'Courier New', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.18em;
+    color: rgba(0, 229, 255, 0.35);
+    text-transform: uppercase;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.1);
+    margin-bottom: 2px;
+}
+
+/* ============================================================
+   HUD — SPEED
+   ============================================================ */
 #speed {
-    color: #f4f6ff;
-    font-family: monospace;
-    font-size: 1.15rem;
+    color: var(--gt-cyan);
+    font-family: 'Courier New', monospace;
+    font-size: 1.65rem;
     font-weight: 700;
     letter-spacing: 0.04em;
-    text-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+    text-shadow:
+        0 0 10px rgba(0, 229, 255, 0.7),
+        0 0 25px rgba(0, 229, 255, 0.3);
+    line-height: 1.1;
 }
 
+/* ============================================================
+   HUD — LAP / POSITION
+   ============================================================ */
 #lap-position {
-    color: #f4f6ff;
-    font-family: monospace;
-    font-size: 1rem;
-    letter-spacing: 0.04em;
-    text-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+    color: var(--gt-text);
+    font-family: 'Courier New', monospace;
+    font-size: 0.95rem;
+    letter-spacing: 0.06em;
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.2);
 }
 
+/* ============================================================
+   HUD — TRACK NAME
+   ============================================================ */
 #track-name {
-    color: #ffd2a2;
-    font-family: monospace;
-    font-size: 0.9rem;
-    letter-spacing: 0.04em;
-    text-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+    color: var(--gt-text-dim);
+    font-family: 'Courier New', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
 }
 
+/* ============================================================
+   HUD — CONNECTION STATUS
+   ============================================================ */
 #connection-status {
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    color: #f4f6ff;
-    font-family: monospace;
-    font-size: 0.85rem;
-    letter-spacing: 0.04em;
-    padding: 6px 10px;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid var(--gt-border);
+    border-radius: 3px;
+    color: var(--gt-text);
+    display: inline-flex;
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    gap: 6px;
+    letter-spacing: 0.1em;
+    padding: 5px 9px;
     text-transform: uppercase;
     width: fit-content;
 }
 
+#connection-status::before {
+    content: '';
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
 #connection-status[data-status='connected'] {
-    border-color: rgba(0, 255, 204, 0.55);
-    color: #9dfde9;
+    border-color: rgba(0, 255, 163, 0.45);
+    color: var(--gt-green);
+}
+
+#connection-status[data-status='connected']::before {
+    box-shadow: 0 0 6px var(--gt-green);
+    animation: pulse-dot 2s ease-in-out infinite;
 }
 
 #connection-status[data-status='reconnecting'],
 #connection-status[data-status='connecting'] {
-    border-color: rgba(255, 187, 0, 0.6);
-    color: #ffdf84;
+    border-color: rgba(255, 193, 7, 0.45);
+    color: var(--gt-amber);
+}
+
+#connection-status[data-status='reconnecting']::before,
+#connection-status[data-status='connecting']::before {
+    box-shadow: 0 0 6px var(--gt-amber);
+    animation: pulse-dot 0.6s ease-in-out infinite;
 }
 
 #connection-status[data-status='disconnected'] {
-    border-color: rgba(255, 0, 85, 0.6);
-    color: #ff8bb0;
+    border-color: rgba(255, 23, 68, 0.45);
+    color: var(--gt-red);
 }
 
+#connection-status[data-status='disconnected']::before {
+    box-shadow: 0 0 6px var(--gt-red);
+}
+
+/* ============================================================
+   HUD — CONTROLS
+   ============================================================ */
 #control-mode-toggle,
 #diagnostics-toggle,
 #diagnostics-level {
     align-items: center;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 8px;
-    color: #f4f6ff;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(0, 229, 255, 0.13);
+    border-radius: 3px;
+    color: var(--gt-text-dim);
     display: inline-flex;
-    font-family: monospace;
-    font-size: 0.85rem;
-    gap: 8px;
-    letter-spacing: 0.04em;
-    padding: 6px 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.68rem;
+    gap: 7px;
+    letter-spacing: 0.07em;
+    padding: 5px 8px;
     pointer-events: auto;
+    text-transform: uppercase;
     user-select: none;
     width: fit-content;
+    transition: border-color 0.2s;
+}
+
+#control-mode-toggle:hover,
+#diagnostics-toggle:hover {
+    border-color: rgba(0, 229, 255, 0.3);
 }
 
 #control-mode-toggle input,
 #diagnostics-toggle input {
+    accent-color: var(--gt-cyan);
     margin: 0;
 }
 
@@ -130,80 +270,170 @@ canvas {
 }
 
 #diagnostics-level-select {
-    background: rgba(0, 0, 0, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 6px;
-    color: #f4f6ff;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(0, 229, 255, 0.2);
+    border-radius: 3px;
+    color: var(--gt-text);
     cursor: pointer;
-    font-family: monospace;
-    font-size: 0.8rem;
-    letter-spacing: 0.04em;
-    padding: 4px 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    padding: 3px 6px;
     pointer-events: auto;
 }
 
 #diagnostics-level-select:disabled {
     cursor: not-allowed;
-    opacity: 0.55;
+    opacity: 0.4;
 }
 
+/* ============================================================
+   HUD — DEBUG LOG BUTTON
+   ============================================================ */
 #generate-debug-log-btn {
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 8px;
-    color: #f4f6ff;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(0, 229, 255, 0.13);
+    border-radius: 3px;
+    color: var(--gt-text-dim);
     cursor: pointer;
-    font-family: monospace;
-    font-size: 0.8rem;
-    letter-spacing: 0.04em;
-    padding: 6px 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    padding: 5px 9px;
     pointer-events: auto;
     text-transform: uppercase;
-    transition: border-color 0.2s ease, color 0.2s ease;
+    transition: all 0.2s ease;
 }
 
 #generate-debug-log-btn:hover {
-    border-color: rgba(77, 226, 255, 0.55);
-    color: #9dfde9;
+    border-color: rgba(0, 229, 255, 0.5);
+    color: var(--gt-cyan);
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.5);
 }
 
+/* ============================================================
+   HUD — APP VERSION
+   ============================================================ */
 #app-version {
     background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(0, 255, 204, 0.35);
-    border-radius: 8px;
+    border: 1px solid rgba(0, 229, 255, 0.18);
+    border-radius: 3px;
     bottom: 20px;
-    color: #9dfde9;
-    font-family: monospace;
-    font-size: 0.9rem;
+    color: rgba(0, 229, 255, 0.4);
+    font-family: 'Courier New', monospace;
+    font-size: 0.65rem;
     left: 20px;
-    letter-spacing: 0.04em;
-    padding: 6px 10px;
+    letter-spacing: 0.1em;
+    padding: 4px 8px;
     position: absolute;
+    text-transform: uppercase;
 }
 
+/* ============================================================
+   HUD — PLAYER NAME BADGE
+   ============================================================ */
 #player-name-badge {
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(77, 226, 255, 0.45);
-    border-radius: 8px;
-    color: #9dfde9;
-    font-family: monospace;
-    font-size: 0.85rem;
-    letter-spacing: 0.04em;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(0, 229, 255, 0.28);
+    border-radius: 3px;
+    color: rgba(0, 229, 255, 0.75);
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.07em;
     max-width: 240px;
     overflow: hidden;
-    padding: 6px 10px;
+    padding: 5px 9px;
     text-overflow: ellipsis;
     white-space: nowrap;
     width: fit-content;
 }
 
+#player-name-badge::before {
+    content: 'PILOT ▸ ';
+    color: rgba(0, 229, 255, 0.35);
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+}
+
+/* ============================================================
+   HUD — EFFECT INDICATORS
+   ============================================================ */
+#effect-indicators {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.effect-badge {
+    border: 1px solid;
+    border-radius: 2px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.65rem;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    padding: 3px 7px;
+    text-transform: uppercase;
+    animation: effect-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.effect-boost {
+    background: rgba(0, 120, 255, 0.15);
+    border-color: rgba(80, 150, 255, 0.6);
+    color: var(--gt-blue-badge);
+    box-shadow: 0 0 8px rgba(0, 120, 255, 0.35), inset 0 0 6px rgba(0, 120, 255, 0.1);
+}
+
+.effect-flat-tire {
+    background: rgba(200, 50, 30, 0.15);
+    border-color: rgba(255, 80, 50, 0.6);
+    color: #ff8060;
+    box-shadow: 0 0 8px rgba(200, 50, 30, 0.35), inset 0 0 6px rgba(200, 50, 30, 0.1);
+}
+
+.effect-stunned {
+    background: rgba(180, 120, 0, 0.15);
+    border-color: rgba(255, 193, 7, 0.6);
+    color: var(--gt-amber);
+    box-shadow: 0 0 8px rgba(180, 120, 0, 0.35), inset 0 0 6px rgba(180, 120, 0, 0.1);
+}
+
+.effect-slowed {
+    background: rgba(100, 60, 160, 0.15);
+    border-color: rgba(157, 78, 221, 0.6);
+    color: var(--gt-purple);
+    box-shadow: 0 0 8px rgba(100, 60, 160, 0.35), inset 0 0 6px rgba(100, 60, 160, 0.1);
+}
+
+/* ============================================================
+   HUD — GAME OVER OVERLAY
+   ============================================================ */
 #game-over {
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid #ff0055;
-    border-radius: 12px;
-    box-shadow: 0 0 20px #ff0055, inset 0 0 20px #ff0055;
+    background: rgba(2, 6, 18, 0.97);
+    background-image:
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 3px,
+            rgba(0, 229, 255, 0.018) 3px,
+            rgba(0, 229, 255, 0.018) 4px
+        ),
+        repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 59px,
+            rgba(0, 229, 255, 0.012) 59px,
+            rgba(0, 229, 255, 0.012) 60px
+        );
+    border: 1px solid rgba(0, 229, 255, 0.35);
+    border-radius: 4px;
+    box-shadow:
+        0 0 60px rgba(0, 229, 255, 0.12),
+        inset 0 0 60px rgba(0, 229, 255, 0.04),
+        0 0 120px rgba(0, 0, 0, 0.9);
     left: 50%;
-    padding: 40px;
+    min-width: 360px;
+    padding: 44px 52px;
     pointer-events: auto;
     position: absolute;
     text-align: center;
@@ -212,84 +442,101 @@ canvas {
 }
 
 #game-over h1 {
-    color: #ff0055;
-    margin-bottom: 12px;
+    color: var(--gt-cyan);
+    font-family: 'Courier New', monospace;
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    margin-bottom: 24px;
     margin-top: 0;
-    text-shadow: 0 0 10px #ff0055;
+    text-shadow:
+        0 0 15px rgba(0, 229, 255, 0.7),
+        0 0 30px rgba(0, 229, 255, 0.3);
+    text-transform: uppercase;
+}
+
+#game-over h1::before {
+    content: '// ';
+    opacity: 0.4;
 }
 
 #race-result-summary,
 #race-result-position,
 #race-result-laps,
 #race-result-track {
-    color: #f4f6ff;
-    font-family: monospace;
-    margin: 6px 0;
+    color: var(--gt-text);
+    font-family: 'Courier New', monospace;
+    font-size: 0.88rem;
+    letter-spacing: 0.07em;
+    margin: 8px 0;
+}
+
+#race-result-summary {
+    color: var(--gt-gold-light);
+    font-size: 0.95rem;
+    margin-bottom: 14px;
+    text-shadow: 0 0 10px rgba(208, 179, 120, 0.4);
 }
 
 #game-over button {
-    background: #ff0055;
-    border: none;
-    border-radius: 6px;
-    color: white;
+    background: linear-gradient(
+        135deg,
+        rgba(0, 229, 255, 0.15),
+        rgba(0, 229, 255, 0.07)
+    );
+    border: 1px solid var(--gt-cyan);
+    border-radius: 3px;
+    color: var(--gt-cyan);
     cursor: pointer;
-    font-size: 1.2rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
     font-weight: bold;
-    padding: 12px 24px;
+    letter-spacing: 0.18em;
+    margin-top: 24px;
+    padding: 12px 36px;
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.5);
     text-transform: uppercase;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 15px rgba(0, 229, 255, 0.1);
 }
 
 #game-over button:hover {
-    background: #ff3377;
-    box-shadow: 0 0 15px #ff0055;
-    transform: scale(1.05);
+    background: rgba(0, 229, 255, 0.12);
+    box-shadow: 0 0 25px rgba(0, 229, 255, 0.35);
+    transform: scale(1.03);
 }
 
-#effect-indicators {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 6px;
-}
-
-.effect-badge {
-    border-radius: 4px;
-    color: white;
-    font-family: monospace;
-    font-size: 0.75rem;
-    font-weight: bold;
-    letter-spacing: 0.5px;
-    padding: 3px 8px;
-    text-transform: uppercase;
-    animation: effect-pulse 1s ease-in-out infinite alternate;
-}
-
-.effect-boost {
-    background: rgba(0, 120, 255, 0.85);
-    box-shadow: 0 0 8px rgba(0, 120, 255, 0.5);
-}
-
-.effect-flat-tire {
-    background: rgba(200, 50, 30, 0.85);
-    box-shadow: 0 0 8px rgba(200, 50, 30, 0.5);
-}
-
-.effect-stunned {
-    background: rgba(180, 120, 0, 0.85);
-    box-shadow: 0 0 8px rgba(180, 120, 0, 0.5);
-}
-
-.effect-slowed {
-    background: rgba(100, 60, 160, 0.85);
-    box-shadow: 0 0 8px rgba(100, 60, 160, 0.5);
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
 }
 
 @keyframes effect-pulse {
-    from { opacity: 0.85; }
+    from { opacity: 0.8; }
     to { opacity: 1; }
 }
 
+@keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 15px rgba(0, 229, 255, 0.15), inset 0 0 20px rgba(0, 229, 255, 0.04); }
+    50% { box-shadow: 0 0 25px rgba(0, 229, 255, 0.25), inset 0 0 30px rgba(0, 229, 255, 0.07); }
+}
+
+@keyframes scan-move {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 120px; }
+}
+
+@keyframes title-glow {
+    0%, 100% { filter: drop-shadow(0 0 20px rgba(0, 229, 255, 0.3)); }
+    50% { filter: drop-shadow(0 0 35px rgba(0, 229, 255, 0.5)); }
+}
+
+/* ============================================================
+   UTILITY
+   ============================================================ */
 .hidden {
     display: none !important;
 }
