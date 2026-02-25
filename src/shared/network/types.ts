@@ -1,4 +1,5 @@
-import type { ClientInputFrame, InputFramePayload, InputFrameControlState } from '@/shared/network/inputFrame';
+import type { ClientInputFrame, InputFrameControlState, InputFramePayload } from '@/shared/network/inputFrame';
+import type { ProtocolVersion } from '@/shared/network/protocolVersion';
 import type {
     CheckpointState,
     PlayerRaceProgress,
@@ -7,7 +8,6 @@ import type {
     SnapshotPlayerState,
     StatusEffectInstance,
 } from '@/shared/network/snapshot';
-import type { ProtocolVersion } from '@/shared/network/protocolVersion';
 
 export type PlayerState = {
     id: string;
@@ -50,7 +50,8 @@ export type RaceEventKind =
     | 'ability_activated'
     | 'hazard_triggered'
     | 'powerup_collected'
-    | 'collision_bump';
+    | 'collision_bump'
+    | 'projectile_hit';
 
 export type RaceEventPayload = {
     kind: RaceEventKind;

@@ -1,6 +1,7 @@
 import { getHazardManifestById } from '@/shared/game/hazard/hazardManifest';
 import { getPowerupManifestById } from '@/shared/game/powerup/powerupManifest';
 import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
+import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
 import type { ClientInputFrame } from '@/shared/network/inputFrame';
 import type { ServerSnapshotPayload } from '@/shared/network/snapshot';
 import type { AbilityActivatePayload, RaceEventPayload } from '@/shared/network/types';
@@ -8,11 +9,13 @@ import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 import { applyAbilityActivation } from './abilitySystem';
 import { CollisionManager } from './collisionManager';
 import { applyDriveStep, drainStartedCollisions, syncPlayerMotionFromRigidBody } from './collisionSystem';
+import { checkDeployableCollisions, spawnDeployable, updateDeployables } from './deployableSystem';
 import { tickStatusEffects } from './effectSystem';
 import { applyHazardTriggers, type HazardTrigger } from './hazardSystem';
 import { InputQueue } from './inputQueue';
 import { PlayerManager } from './playerManager';
 import { applyPowerupTriggers, type PowerupTrigger } from './powerupSystem';
+import { createProjectile, stepAllProjectiles } from './projectileSystem';
 import { RaceProgressTracker } from './raceProgressTracker';
 import { createRapierWorld } from './rapierWorld';
 import { buildServerSnapshot } from './snapshotBuilder';
@@ -51,6 +54,9 @@ export class RoomSimulation {
     private readonly trackManifest;
     private readonly trackBoundaryX: number;
     private readonly totalTrackLengthMeters: number;
+    private readonly combatTuning = DEFAULT_GAMEPLAY_TUNING.combat;
+    private readonly deployInputPressedByPlayerId = new Map<string, boolean>();
+    private readonly deployableLifetimeTicks: number;
     private obstacleColliderHandles = new Set<number>();
     private tickMetrics = {
         lastTickDurationMs: 0,
@@ -63,6 +69,10 @@ export class RoomSimulation {
         this.rapierContext = createRapierWorld(this.dtSeconds);
         this.trackManifest = getTrackManifestById(options.trackId);
         this.trackBoundaryX = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
+        this.deployableLifetimeTicks = Math.max(
+            1,
+            Math.round(this.combatTuning.oilSlickLifetimeMs / 1000 / this.dtSeconds),
+        );
 
         const trackColliders = buildTrackColliders(this.rapierContext.rapier, this.rapierContext.world, {
             seed: options.seed,
@@ -219,6 +229,22 @@ export class RoomSimulation {
                 continue;
             }
 
+            // Projectile-delivery abilities spawn a homing projectile
+            if (resolved.spawnProjectile) {
+                const sourcePlayer = this.state.players.get(resolved.sourcePlayerId);
+                if (sourcePlayer) {
+                    const projectile = createProjectile(
+                        sourcePlayer,
+                        this.state.players,
+                        this.state.activeProjectiles,
+                        this.combatTuning,
+                    );
+                    if (projectile) {
+                        this.state.activeProjectiles.push(projectile);
+                    }
+                }
+            }
+
             this.pushRaceEvent({
                 kind: 'ability_activated',
                 metadata: {
@@ -274,6 +300,43 @@ export class RoomSimulation {
         }
     };
 
+    private processDeployableInputs = () => {
+        for (const player of this.state.players.values()) {
+            const isDeployPressed = player.inputState.boost;
+            const wasDeployPressed = this.deployInputPressedByPlayerId.get(player.id) ?? false;
+
+            if (isDeployPressed && !wasDeployPressed) {
+                const deployable = spawnDeployable(
+                    'oil-slick',
+                    player,
+                    this.state.activeDeployables.length,
+                    this.deployableLifetimeTicks,
+                    this.combatTuning,
+                    this.totalTrackLengthMeters,
+                );
+                if (deployable) {
+                    this.state.activeDeployables.push(deployable);
+                }
+            }
+
+            this.deployInputPressedByPlayerId.set(player.id, isDeployPressed);
+        }
+    };
+
+    private processDeployables = () => {
+        const deployableTriggers = checkDeployableCollisions(
+            this.state.activeDeployables,
+            Array.from(this.state.players.values()),
+            this.combatTuning,
+        );
+
+        for (const trigger of deployableTriggers) {
+            this.hazardTriggerQueue.push(trigger);
+        }
+
+        updateDeployables(this.state.activeDeployables, 1);
+    };
+
     public joinPlayer = (
         playerId: string,
         playerName: string,
@@ -294,6 +357,7 @@ export class RoomSimulation {
             });
         }
 
+        this.deployInputPressedByPlayerId.set(player.id, false);
         return player;
     };
 
@@ -301,6 +365,7 @@ export class RoomSimulation {
         this.playerManager.removePlayer(playerId);
         this.inputQueue.clearPlayer(playerId);
         this.collisionManager.clearForPlayer(playerId);
+        this.deployInputPressedByPlayerId.delete(playerId);
     };
 
     public queueInputFrame = (playerId: string, frame: ClientInputFrame) => {
@@ -324,6 +389,7 @@ export class RoomSimulation {
         for (const player of this.state.players.values()) {
             this.playerManager.resetPlayerForRestart(player, playerIndex);
             this.inputQueue.clearPlayer(player.id);
+            this.deployInputPressedByPlayerId.set(player.id, false);
             playerIndex += 1;
         }
 
@@ -336,6 +402,8 @@ export class RoomSimulation {
 
         this.state.activePowerups = this.buildActivePowerups(this.state.raceState.totalLaps);
         this.state.hazards = this.buildHazards(this.state.raceState.totalLaps);
+        this.state.activeProjectiles.length = 0;
+        this.state.activeDeployables.length = 0;
 
         this.state.raceState.status = 'running';
         this.state.raceState.winnerPlayerId = null;
@@ -381,6 +449,11 @@ export class RoomSimulation {
 
             applyDriveStep({ dtSeconds: this.dtSeconds, nowMs, player, rigidBody });
         }
+
+        this.processDeployableInputs();
+
+        // Step projectiles (pure math — no Rapier bodies, AD-02)
+        stepAllProjectiles(this.state, this.dtSeconds, nowMs, this.combatTuning, this.pushRaceEvent);
 
         this.rapierContext.world.step(this.rapierContext.eventQueue);
 
@@ -431,6 +504,7 @@ export class RoomSimulation {
         this.checkHazardCollisions(nowMs);
         this.checkPowerupCollisions(nowMs);
         this.processAbilityQueue(nowMs);
+        this.processDeployables();
         this.processHazardQueue(nowMs);
         this.processPowerupQueue(nowMs);
 

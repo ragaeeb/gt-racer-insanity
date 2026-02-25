@@ -12,6 +12,8 @@ import { useNetworkConnection } from '@/client/game/hooks/useNetworkConnection';
 import { useRaceSession } from '@/client/game/hooks/useRaceSession';
 import { SceneEnvironment } from '@/client/game/scene/environment/SceneEnvironment';
 import { getSceneEnvironmentProfile } from '@/client/game/scene/environment/sceneEnvironmentProfiles';
+import { HomingProjectiles } from '@/client/game/scene/HomingProjectiles';
+import { OilSlickDeployables } from '@/client/game/scene/OilSlickDeployables';
 import { SpikeShotProjectiles } from '@/client/game/scene/SpikeShotProjectiles';
 import { InputManager } from '@/client/game/systems/InputManager';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
@@ -98,7 +100,9 @@ export const RaceWorld = ({
     return (
         <>
             <SceneEnvironment profileId={sceneEnvironmentId} sunLightRef={dirLightRef} />
+            <OilSlickDeployables />
             <SpikeShotProjectiles />
+            <HomingProjectiles />
         </>
     );
 };

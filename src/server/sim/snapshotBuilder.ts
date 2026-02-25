@@ -1,7 +1,16 @@
-import type { ServerSnapshotPayload, SnapshotHazardState, SnapshotPlayerState, SnapshotPowerupState } from '@/shared/network/snapshot';
 import type { SimRoomState } from '@/server/sim/types';
+import type {
+    ServerSnapshotPayload,
+    SnapshotDeployableState,
+    SnapshotHazardState,
+    SnapshotPlayerState,
+    SnapshotPowerupState,
+    SnapshotProjectileState,
+} from '@/shared/network/snapshot';
 
-const toSnapshotPlayerState = (player: SimRoomState['players'] extends Map<string, infer U> ? U : never): SnapshotPlayerState => {
+const toSnapshotPlayerState = (
+    player: SimRoomState['players'] extends Map<string, infer U> ? U : never,
+): SnapshotPlayerState => {
     return {
         activeEffects: player.activeEffects,
         colorId: player.colorId,
@@ -50,6 +59,34 @@ export const buildServerSnapshot = (roomState: SimRoomState, serverTimeMs: numbe
         z: h.position.z,
     }));
 
+    // Sparse arrays — omit when empty to save bandwidth
+    const projectiles: SnapshotProjectileState[] | undefined =
+        roomState.activeProjectiles.length > 0
+            ? roomState.activeProjectiles.map((p) => ({
+                  id: p.id,
+                  ownerId: p.ownerId,
+                  targetId: p.targetId,
+                  x: p.position.x,
+                  z: p.position.z,
+                  velX: p.velocity.x,
+                  velZ: p.velocity.z,
+                  ttlTicks: p.ttlTicks,
+              }))
+            : undefined;
+
+    const deployables: SnapshotDeployableState[] | undefined =
+        roomState.activeDeployables.length > 0
+            ? roomState.activeDeployables.map((d) => ({
+                  id: d.id,
+                  kind: d.kind,
+                  ownerId: d.ownerId,
+                  x: d.position.x,
+                  z: d.position.z,
+                  radius: d.radius,
+                  lifetimeTicks: d.remainingTicks,
+              }))
+            : undefined;
+
     return {
         hazards,
         players,
@@ -58,5 +95,7 @@ export const buildServerSnapshot = (roomState: SimRoomState, serverTimeMs: numbe
         roomId: roomState.roomId,
         seq: roomState.snapshotSeq,
         serverTimeMs,
+        ...(projectiles ? { projectiles } : {}),
+        ...(deployables ? { deployables } : {}),
     };
 };

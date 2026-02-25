@@ -128,6 +128,15 @@ E2E tests:
 - The latest regression coverage (unit tests for interpolation, log-freezing detection, and the aggressive multiplayer E2E so we can catch freezes early) gives a quick safety net before landing tweaks to the simulation loop.
 - HUD toasts, effect badges, and consistent `hudStore` actions keep visual feedback in sync when new powerups or hazards are introduced, so hook them in whenever a new effect is added.
 
+## Vehicle Abilities (Combat)
+Each vehicle class is equipped with a distinct combat ability triggered by the `E` key (subject to cooldowns):
+- **Sport**: **Turbo Boost** — INSTANT speed surge for a short burst window.
+- **Muscle**: **Ram Wave** — INSTANT impulse wave that slows nearby opponents.
+- **Patrol**: **Homing EMP** — Fires a HOMING PROJECTILE that curves and tracks the nearest opponent. On hit, the opponent is stunned (cannot steer) for 1.5s.
+- **Truck**: **Spike Burst** — INSTANT launch of spikes in a forward cone to flatten tires.
+
+Additionally, players can deploy **Oil Slicks** behind them using the `boost` input, which applies a slippery/slowed effect to opponents driving through them.
+
 ## Car Models
 - Multiplayer cars now cycle by player ID across multiple models.
 - Models are sourced from Poly Pizza (Quaternius pack), all `CC0 1.0`:

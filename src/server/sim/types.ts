@@ -33,7 +33,7 @@ export type ActiveHazard = {
 };
 
 export type ActiveDeployable = {
-    id: string;
+    id: number;
     ownerId: string;
     kind: 'oil-slick';
     position: { x: number; z: number };
