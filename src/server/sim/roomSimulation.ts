@@ -377,7 +377,7 @@ export class RoomSimulation {
                 continue;
             }
 
-            applyDriveStep({ dtSeconds: this.dtSeconds, player, rigidBody });
+            applyDriveStep({ dtSeconds: this.dtSeconds, nowMs, player, rigidBody });
         }
 
         this.rapierContext.world.step(this.rapierContext.eventQueue);

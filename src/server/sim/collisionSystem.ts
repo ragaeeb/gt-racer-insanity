@@ -1,5 +1,7 @@
 import type { EventQueue, RigidBody } from '@dimforge/rapier3d-compat';
+import { updateDriftState } from '@/server/sim/driftSystem';
 import { getVehicleClassManifestById } from '@/shared/game/vehicle/vehicleClassManifest';
+import { DEFAULT_DRIFT_CONFIG } from '@/shared/game/vehicle/driftConfig';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
 import type { SimPlayerState } from '@/server/sim/types';
 
@@ -15,6 +17,7 @@ type MotionMultipliers = {
 
 type DriveStepArgs = {
     dtSeconds: number;
+    nowMs: number;
     player: SimPlayerState;
     rigidBody: RigidBody;
 };
@@ -103,7 +106,7 @@ const applySteering = (
 
 const MAX_IMPULSE_ACCELERATION_FACTOR = 3;
 
-export const applyDriveStep = ({ dtSeconds, player, rigidBody }: DriveStepArgs) => {
+export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveStepArgs) => {
     const multipliers = getMotionMultipliers(player);
 
     applyScalarSpeed(player, dtSeconds, multipliers.movementMultiplier);
@@ -127,7 +130,9 @@ export const applyDriveStep = ({ dtSeconds, player, rigidBody }: DriveStepArgs) 
     const deltaForward = clamp(rawDelta, -maxDelta, maxDelta);
     const impulseForward = deltaForward * rigidBody.mass();
 
-    const lateralDamping = currentLateralSpeed * rigidBody.mass() * 0.65;
+    // Drift-state-driven lateral damping (replaces hard-coded 0.65)
+    const driftResult = updateDriftState(player, nowMs, DEFAULT_DRIFT_CONFIG);
+    const lateralDamping = currentLateralSpeed * rigidBody.mass() * driftResult.lateralFrictionMultiplier;
 
     rigidBody.applyImpulse(
         {
@@ -137,6 +142,15 @@ export const applyDriveStep = ({ dtSeconds, player, rigidBody }: DriveStepArgs) 
         },
         true
     );
+
+    // Apply drift exit boost impulse if granted
+    if (driftResult.boostImpulse > 0) {
+        const boostForce = driftResult.boostImpulse * rigidBody.mass();
+        rigidBody.applyImpulse(
+            { x: forwardX * boostForce, y: 0, z: forwardZ * boostForce },
+            true,
+        );
+    }
 };
 
 export const syncPlayerMotionFromRigidBody = (
