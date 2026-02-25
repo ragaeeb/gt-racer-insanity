@@ -170,36 +170,56 @@ export class CollisionManager {
             return;
         }
 
-        const slowerPlayer = Math.abs(playerA.motion.speed) <= Math.abs(playerB.motion.speed) ? playerA : playerB;
-        const fasterPlayer = slowerPlayer === playerA ? playerB : playerA;
+        // Use rigid body mass for momentum-based victim selection.
+        // Heavier cars at the same speed have more momentum and "win" the collision.
+        const rbA = this.rigidBodyById.get(playerA.id);
+        const rbB = this.rigidBodyById.get(playerB.id);
+        const massA = rbA?.mass() ?? 1;
+        const massB = rbB?.mass() ?? 1;
+
+        const momentumA = massA * Math.abs(playerA.motion.speed);
+        const momentumB = massB * Math.abs(playerB.motion.speed);
+
+        // The car with lower momentum is the "bumped" victim.
+        // At equal momentum, fall back to speed (lighter car loses).
+        const bumpedPlayer = momentumA <= momentumB ? playerA : playerB;
+        const rammerPlayer = bumpedPlayer === playerA ? playerB : playerA;
+        const rammerMass = rammerPlayer === playerA ? massA : massB;
+        const bumpedMass = bumpedPlayer === playerA ? massA : massB;
 
         const forceMagnitude = contactForces?.get(pairKey);
         applyPlayerBumpResponse(playerA, playerB, this.rigidBodyById, forceMagnitude);
 
         this.bumpPairCooldown.set(pairKey, nowMs + BUMP_PAIR_COOLDOWN_MS);
-        this.bumpDriveRecoveryByPlayerId.set(fasterPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_RAMMER);
-        this.bumpDriveRecoveryByPlayerId.set(slowerPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_BUMPED);
+        this.bumpDriveRecoveryByPlayerId.set(rammerPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_RAMMER);
+        this.bumpDriveRecoveryByPlayerId.set(bumpedPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_BUMPED);
 
-        const flipCooldownUntil = this.bumpFlipCooldownByPlayerId.get(slowerPlayer.id) ?? 0;
-        const didFlip = nowMs >= flipCooldownUntil;
+        // Flip is gated on mass ratio: the rammer must have at least FLIP_MASS_RATIO_MIN
+        // of the victim's mass to trigger a flip. A 1050 kg sport car cannot flip an
+        // 1800 kg truck (ratio 0.58 < 0.65), but a truck can flip a sport car (1.71 ≥ 0.65).
+        const FLIP_MASS_RATIO_MIN = 0.65;
+        const massRatio = rammerMass / bumpedMass;
+        const flipCooldownUntil = this.bumpFlipCooldownByPlayerId.get(bumpedPlayer.id) ?? 0;
+        const didFlip = nowMs >= flipCooldownUntil && massRatio >= FLIP_MASS_RATIO_MIN;
         if (didFlip) {
-            applyStatusEffectToPlayer(slowerPlayer, 'flipped', nowMs);
-            this.bumpFlipCooldownByPlayerId.set(slowerPlayer.id, nowMs + BUMP_FLIP_COOLDOWN_MS);
+            applyStatusEffectToPlayer(bumpedPlayer, 'flipped', nowMs);
+            this.bumpFlipCooldownByPlayerId.set(bumpedPlayer.id, nowMs + BUMP_FLIP_COOLDOWN_MS);
         }
 
-        const isBigImpact = impactSpeed >= BIG_IMPACT_SPEED_MPS;
-        const stunnedPlayerId = isBigImpact ? slowerPlayer.id : null;
+        // Stun is also gated on mass ratio: a lighter car can't stun a heavier one.
+        const isBigImpact = impactSpeed >= BIG_IMPACT_SPEED_MPS && massRatio >= FLIP_MASS_RATIO_MIN;
+        const stunnedPlayerId = isBigImpact ? bumpedPlayer.id : null;
         if (isBigImpact) {
-            applyStatusEffectToPlayer(slowerPlayer, 'stunned', nowMs, 1, COLLISION_STUN_DURATION_MS);
+            applyStatusEffectToPlayer(bumpedPlayer, 'stunned', nowMs, 1, COLLISION_STUN_DURATION_MS);
         }
 
         this.emitEvent({
             kind: 'collision_bump',
             metadata: {
                 againstPlayerId: pair.secondPlayerId,
-                flippedPlayerId: didFlip ? slowerPlayer.id : null,
+                flippedPlayerId: didFlip ? bumpedPlayer.id : null,
                 rammerDriveLockMs: BUMP_DRIVE_RECOVERY_MS_RAMMER,
-                rammerPlayerId: fasterPlayer.id,
+                rammerPlayerId: rammerPlayer.id,
                 stunnedPlayerId,
             },
             playerId: pair.firstPlayerId,

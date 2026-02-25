@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import type { RigidBody } from '@dimforge/rapier3d-compat';
+import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
+import type { RaceEventPayload } from '@/shared/network/types';
+import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
+import { CollisionManager } from '../collisionManager';
 import { applyPlayerBumpResponse } from '../collisionSystem';
 import type { SimPlayerState } from '../types';
-import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
-import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 
 type Vector3 = { x: number; y: number; z: number };
 
@@ -86,18 +88,46 @@ const planarSpeed = (rigidBody: RigidBody) => {
     return Math.hypot(velocity.x, velocity.z);
 };
 
-/** Compute total impulse magnitude applied to a mock rigid body */
-const totalImpulseMagnitude = (rb: RigidBody): number => {
-    const log = (rb as unknown as { _impulseLog: Vector3[] })._impulseLog;
-    // Sum all impulse vectors (there may be multiple applyImpulse calls due to dampAndClamp)
-    let totalX = 0;
-    let totalZ = 0;
-    for (const imp of log) {
-        totalX += imp.x;
-        totalZ += imp.z;
-    }
-    return Math.hypot(totalX, totalZ);
+/**
+ * Builds a minimal CollisionManager test rig with two players and their
+ * corresponding mock rigid bodies.
+ */
+const buildCollisionRig = (opts: {
+    playerA: SimPlayerState;
+    playerB: SimPlayerState;
+    massA: number;
+    massB: number;
+}) => {
+    const players = new Map<string, SimPlayerState>([
+        [opts.playerA.id, opts.playerA],
+        [opts.playerB.id, opts.playerB],
+    ]);
+
+    const bodyA = createMockRigidBody({
+        mass: opts.massA,
+        translation: { x: 0, y: 0, z: 0 },
+    });
+    const bodyB = createMockRigidBody({
+        mass: opts.massB,
+        translation: { x: 0, y: 0, z: 4 },
+    });
+
+    const rigidBodyById = new Map<string, RigidBody>([
+        [opts.playerA.id, bodyA],
+        [opts.playerB.id, bodyB],
+    ]);
+
+    const events: RaceEventPayload[] = [];
+    const emitEvent = (event: RaceEventPayload) => {
+        events.push(event);
+    };
+
+    const manager = new CollisionManager(players, rigidBodyById, emitEvent, 'test-room');
+
+    return { manager, players, events, bodyA, bodyB };
 };
+
+// ─── Physics impulse tests ───────────────────────────────────────────────────
 
 describe('Mass-Based Collision Impulse', () => {
     it('should produce higher impulse to sport car when truck hits it', () => {
@@ -176,23 +206,16 @@ describe('Mass-Based Collision Impulse', () => {
 
         // Post-bump speed must be bounded by dampAndClamp (MAX_POST_BUMP_SPEED_MPS = 4.5)
         // This confirms the entire chain: MAX_IMPULSE clamp + velocity damping prevent explosion
-        const sportFinalSpeed = planarSpeed(sportBody);
-        const truckFinalSpeed = planarSpeed(truckBody);
-        expect(sportFinalSpeed).toBeLessThanOrEqual(5);
-        expect(truckFinalSpeed).toBeLessThanOrEqual(5);
+        expect(planarSpeed(sportBody)).toBeLessThanOrEqual(5);
+        expect(planarSpeed(truckBody)).toBeLessThanOrEqual(5);
 
-        // Also verify via impulse log that individual directional impulse components stay bounded.
-        // The total impulse to sportBody (heavier attacker hitting it) should use clamped base.
+        // The applied impulse vector to sport body must also remain bounded
         const sportImpulseLog = (sportBody as unknown as { _impulseLog: Vector3[] })._impulseLog;
         const mainImpulse = sportImpulseLog[0];
-        // The directional (non-lateral) component along dz should be clamped
-        // Since cars are separated along z, dz ≈ 1, so |impulse.z| ≈ totalImpulseB
-        // totalImpulseB = impulseToB + reactionToB, where impulseToB ≤ MAX_IMPULSE = 800
-        // and reactionToB = impulseToA * 0.3 where impulseToA ≤ 800
-        // Max total = 800 + 800*0.3 = 1040 (directional) + lateral
-        // The combined vector magnitude should be bounded
+        // totalImpulseB = impulseToB (≤800) + reactionToB (≤800*0.3 = 240) + lateral fraction
+        // Combined vector magnitude must stay well below physics-explosion territory
         const totalMag = Math.hypot(mainImpulse.x, mainImpulse.z);
-        expect(totalMag).toBeLessThanOrEqual(1500); // well below physics-explosion territory
+        expect(totalMag).toBeLessThanOrEqual(1500);
     });
 
     it('should scale impulse by contact force magnitude', () => {
@@ -250,12 +273,8 @@ describe('Mass-Based Collision Impulse', () => {
 
         applyPlayerBumpResponse(truckPlayer, sportPlayer, rigidBodyMap);
 
-        // Truck should barely move compared to sport car after bump
-        const truckSpeed = planarSpeed(truckBody);
-        const sportSpeed = planarSpeed(sportBody);
-
         // The truck's post-bump speed should be meaningfully less than the sport car's
-        expect(truckSpeed).toBeLessThan(sportSpeed);
+        expect(planarSpeed(truckBody)).toBeLessThan(planarSpeed(sportBody));
     });
 
     it('should not explode with extreme mass ratio (1.8:1.0 at max speed)', () => {
@@ -282,15 +301,11 @@ describe('Mass-Based Collision Impulse', () => {
         // With max contact force
         applyPlayerBumpResponse(truckPlayer, sportPlayer, rigidBodyMap, 5000);
 
-        // Post-bump speeds must remain within sane bounds
-        // The dampAndClamp function caps to MAX_POST_BUMP_SPEED_MPS = 4.5
-        const truckFinalSpeed = planarSpeed(truckBody);
-        const sportFinalSpeed = planarSpeed(sportBody);
-
-        expect(truckFinalSpeed).toBeLessThanOrEqual(5); // reasonable bound
-        expect(sportFinalSpeed).toBeLessThanOrEqual(5); // reasonable bound
-        expect(truckFinalSpeed).toBeGreaterThanOrEqual(0);
-        expect(sportFinalSpeed).toBeGreaterThanOrEqual(0);
+        // Post-bump speeds must remain within sane bounds (dampAndClamp caps to 4.5 m/s)
+        expect(planarSpeed(truckBody)).toBeLessThanOrEqual(5);
+        expect(planarSpeed(sportBody)).toBeLessThanOrEqual(5);
+        expect(planarSpeed(truckBody)).toBeGreaterThanOrEqual(0);
+        expect(planarSpeed(sportBody)).toBeGreaterThanOrEqual(0);
     });
 
     it('should work without contact force magnitude (backward compatibility)', () => {
@@ -322,10 +337,6 @@ describe('Mass-Based Collision Impulse', () => {
     });
 
     it('should use force normalisation base of 500 for scaling', () => {
-        const playerA = createPlayer('A', 'sport', 15);
-        const playerB = createPlayer('B', 'sport', 15);
-
-        // Exactly at normalisation base: forceScale should be 1.0
         const bodyA = createMockRigidBody({
             mass: 1050,
             translation: { x: 0, y: 0, z: 0 },
@@ -334,7 +345,6 @@ describe('Mass-Based Collision Impulse', () => {
             mass: 1050,
             translation: { x: 0, y: 0, z: 4 },
         });
-
         const bodyA2 = createMockRigidBody({
             mass: 1050,
             translation: { x: 0, y: 0, z: 0 },
@@ -344,9 +354,11 @@ describe('Mass-Based Collision Impulse', () => {
             translation: { x: 0, y: 0, z: 4 },
         });
 
+        const pA1 = createPlayer('A', 'sport', 15);
+        const pB1 = createPlayer('B', 'sport', 15);
         const map1 = new Map<string, RigidBody>([
-            [playerA.id, bodyA],
-            [playerB.id, bodyB],
+            [pA1.id, bodyA],
+            [pB1.id, bodyB],
         ]);
         const pA2 = createPlayer('A', 'sport', 15);
         const pB2 = createPlayer('B', 'sport', 15);
@@ -355,8 +367,8 @@ describe('Mass-Based Collision Impulse', () => {
             [pB2.id, bodyB2],
         ]);
 
-        applyPlayerBumpResponse(playerA, playerB, map1, 500); // forceScale = 1.0
-        applyPlayerBumpResponse(pA2, pB2, map2);              // no force = default 1.0
+        applyPlayerBumpResponse(pA1, pB1, map1, 500); // forceScale = 1.0
+        applyPlayerBumpResponse(pA2, pB2, map2); // no force = default 1.0
 
         // At normalisation base of 500, result should match no-force case
         const speed1 = planarSpeed(bodyB);
@@ -366,9 +378,6 @@ describe('Mass-Based Collision Impulse', () => {
     });
 
     it('should cap force scale at 2.0 to prevent oversized impulses', () => {
-        const playerA = createPlayer('A', 'sport', 15);
-        const playerB = createPlayer('B', 'sport', 15);
-
         // Force magnitude 2000 → scale = 2000/500 = 4.0, but capped at 2.0
         const bodyHuge = createMockRigidBody({
             mass: 1050,
@@ -378,7 +387,6 @@ describe('Mass-Based Collision Impulse', () => {
             mass: 1050,
             translation: { x: 0, y: 0, z: 4 },
         });
-
         // Force magnitude 1000 → scale = 1000/500 = 2.0 (at exact cap)
         const bodyCap = createMockRigidBody({
             mass: 1050,
@@ -395,7 +403,6 @@ describe('Mass-Based Collision Impulse', () => {
             [pA1.id, bodyHuge],
             [pB1.id, bodyHuge2],
         ]);
-
         const pA2 = createPlayer('A', 'sport', 15);
         const pB2 = createPlayer('B', 'sport', 15);
         const map2 = new Map<string, RigidBody>([
@@ -411,5 +418,169 @@ describe('Mass-Based Collision Impulse', () => {
         const speed2 = planarSpeed(bodyCap2);
         const ratio = Math.min(speed1, speed2) / Math.max(speed1, speed2);
         expect(ratio).toBeGreaterThan(0.95);
+    });
+});
+
+// ─── Mass-aware flip/stun effect tests ──────────────────────────────────────
+// Tests the full bump pipeline via CollisionManager to verify that flip and
+// stun effects respect mass ratio, not just speed.
+
+describe('Mass-Aware Collision Effects', () => {
+    it('should flip sport car when truck rams it (high mass ratio)', () => {
+        const truckPlayer = createPlayer('truck', 'truck', 25);
+        const sportPlayer = createPlayer('sport', 'sport', 10);
+
+        const { manager, players } = buildCollisionRig({
+            playerA: truckPlayer,
+            playerB: sportPlayer,
+            massA: 1800,
+            massB: 1050,
+        });
+
+        manager.processBumpCollisions([{ firstPlayerId: 'sport', secondPlayerId: 'truck' }], [], 1000);
+
+        // Sport car should be flipped
+        const sportState = players.get('sport')!;
+        const hasFlipped = sportState.activeEffects.some((e) => e.effectType === 'flipped');
+        expect(hasFlipped).toBe(true);
+    });
+
+    it('should NOT flip truck when sport car rams it (insufficient mass ratio)', () => {
+        // Sport car (1050 kg) at high speed rams truck (1800 kg) at low speed
+        // Mass ratio = 1050/1800 = 0.583 < 0.65 threshold → NO flip
+        const sportPlayer = createPlayer('sport', 'sport', 30);
+        const truckPlayer = createPlayer('truck', 'truck', 5);
+
+        const { manager, players } = buildCollisionRig({
+            playerA: sportPlayer,
+            playerB: truckPlayer,
+            massA: 1050,
+            massB: 1800,
+        });
+
+        manager.processBumpCollisions([{ firstPlayerId: 'sport', secondPlayerId: 'truck' }], [], 1000);
+
+        // Truck should NOT be flipped — sport car doesn't have enough mass
+        const truckState = players.get('truck')!;
+        const hasFlipped = truckState.activeEffects.some((e) => e.effectType === 'flipped');
+        expect(hasFlipped).toBe(false);
+    });
+
+    it('should flip when same-mass cars collide (mass ratio = 1.0)', () => {
+        const playerA = createPlayer('A', 'sport', 20);
+        const playerB = createPlayer('B', 'sport', 10);
+
+        const { manager, players } = buildCollisionRig({
+            playerA,
+            playerB,
+            massA: 1050,
+            massB: 1050,
+        });
+
+        manager.processBumpCollisions([{ firstPlayerId: 'A', secondPlayerId: 'B' }], [], 1000);
+
+        // With equal mass, B (lower momentum) should be flipped
+        const playerBState = players.get('B')!;
+        const hasFlipped = playerBState.activeEffects.some((e) => e.effectType === 'flipped');
+        expect(hasFlipped).toBe(true);
+    });
+
+    it('should NOT flip truck even when sport car is at extreme speed', () => {
+        // Sport car at 44 m/s (max), truck at 5 m/s
+        // Sport momentum: 1050 * 44 = 46200 → sport has higher momentum → truck is "bumped"
+        // BUT mass ratio = 1050/1800 = 0.583 < 0.65 → NO flip regardless
+        const sportPlayer = createPlayer('sport', 'sport', 44);
+        const truckPlayer = createPlayer('truck', 'truck', 5);
+
+        const { manager, players } = buildCollisionRig({
+            playerA: sportPlayer,
+            playerB: truckPlayer,
+            massA: 1050,
+            massB: 1800,
+        });
+
+        manager.processBumpCollisions([{ firstPlayerId: 'sport', secondPlayerId: 'truck' }], [], 1000);
+
+        const truckState = players.get('truck')!;
+        const hasFlipped = truckState.activeEffects.some((e) => e.effectType === 'flipped');
+        expect(hasFlipped).toBe(false);
+    });
+
+    it('should use momentum to determine victim (heavier car wins at equal speed)', () => {
+        // Both at same speed, truck has more mass → more momentum → sport is the victim
+        // Truck momentum: 1800 * 15 = 27000  /  Sport momentum: 1050 * 15 = 15750
+        const truckPlayer = createPlayer('truck', 'truck', 15);
+        const sportPlayer = createPlayer('sport', 'sport', 15);
+
+        const { manager, events } = buildCollisionRig({
+            playerA: truckPlayer,
+            playerB: sportPlayer,
+            massA: 1800,
+            massB: 1050,
+        });
+
+        manager.processBumpCollisions([{ firstPlayerId: 'sport', secondPlayerId: 'truck' }], [], 1000);
+
+        // The emitted event should name the truck as the rammer
+        const bumpEvent = events.find((e) => e.kind === 'collision_bump');
+        expect(bumpEvent).toBeDefined();
+        expect(bumpEvent?.metadata?.rammerPlayerId).toBe('truck');
+    });
+
+    it('should NOT stun truck when sport car rams it at high speed (mass-gated stun)', () => {
+        // Impact speed >= 20 m/s (big impact) but mass ratio < 0.65 → no stun
+        const sportPlayer = createPlayer('sport', 'sport', 25);
+        const truckPlayer = createPlayer('truck', 'truck', 5);
+
+        const { manager, players } = buildCollisionRig({
+            playerA: sportPlayer,
+            playerB: truckPlayer,
+            massA: 1050,
+            massB: 1800,
+        });
+
+        manager.processBumpCollisions([{ firstPlayerId: 'sport', secondPlayerId: 'truck' }], [], 1000);
+
+        const truckState = players.get('truck')!;
+        const hasStunned = truckState.activeEffects.some((e) => e.effectType === 'stunned');
+        expect(hasStunned).toBe(false);
+    });
+
+    it('should stun sport car when truck rams it at high speed (mass-gated stun)', () => {
+        // Truck at 25 m/s, sport at 5 m/s → big impact (25 >= 20)
+        // Mass ratio = 1800/1050 = 1.71 >= 0.65 → stun applies
+        const truckPlayer = createPlayer('truck', 'truck', 25);
+        const sportPlayer = createPlayer('sport', 'sport', 5);
+
+        const { manager, players } = buildCollisionRig({
+            playerA: truckPlayer,
+            playerB: sportPlayer,
+            massA: 1800,
+            massB: 1050,
+        });
+
+        manager.processBumpCollisions([{ firstPlayerId: 'sport', secondPlayerId: 'truck' }], [], 1000);
+
+        const sportState = players.get('sport')!;
+        const hasStunned = sportState.activeEffects.some((e) => e.effectType === 'stunned');
+        expect(hasStunned).toBe(true);
+    });
+
+    it('should allow muscle car to flip truck (mass ratio 1300/1800 = 0.72 >= 0.65)', () => {
+        const musclePlayer = createPlayer('muscle', 'muscle', 25);
+        const truckPlayer = createPlayer('truck', 'truck', 5);
+
+        const { manager, players } = buildCollisionRig({
+            playerA: musclePlayer,
+            playerB: truckPlayer,
+            massA: 1300,
+            massB: 1800,
+        });
+
+        manager.processBumpCollisions([{ firstPlayerId: 'muscle', secondPlayerId: 'truck' }], [], 1000);
+
+        const truckState = players.get('truck')!;
+        const hasFlipped = truckState.activeEffects.some((e) => e.effectType === 'flipped');
+        expect(hasFlipped).toBe(true);
     });
 });
