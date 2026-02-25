@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { DEFAULT_GAMEPLAY_TUNING } from '../src/shared/game/tuning/gameplayTuning';
 import {
     type GTDebugState,
     joinRace,
@@ -8,6 +9,9 @@ import {
     waitForCarsToMoveForward,
     waitForMultiplayerReady,
 } from './e2e-helpers';
+
+const OIL_SLICK_LIFETIME_MS = Math.round((DEFAULT_GAMEPLAY_TUNING.combat.deployableOilSlickLifetimeTicks / 60) * 1000);
+const OIL_SLICK_LIFETIME_TOLERANCE_MS = 3_000;
 
 const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
@@ -105,14 +109,19 @@ test.describe('e2e combat - oil slick', () => {
             await setDrivingKeyState(pageA, 'Space', false);
 
             await waitForDebugState(pageA, (s) => s.deployableCount > 0, 4_000, 'oil slick deployable to appear');
+            const appearedAtMs = Date.now();
             const state = await waitForDebugState(
                 pageA,
                 (s) => s.deployableCount === 0,
                 13_000,
                 'oil slick deployable to despawn',
             );
+            const despawnedAtMs = Date.now();
+            const observedLifetimeMs = despawnedAtMs - appearedAtMs;
             expect(state?.isRunning).toBe(true);
             expect(state.deployableCount).toBe(0);
+            expect(observedLifetimeMs).toBeGreaterThanOrEqual(OIL_SLICK_LIFETIME_MS - OIL_SLICK_LIFETIME_TOLERANCE_MS);
+            expect(observedLifetimeMs).toBeLessThanOrEqual(OIL_SLICK_LIFETIME_MS + OIL_SLICK_LIFETIME_TOLERANCE_MS);
         } finally {
             await Promise.allSettled([pageA.close(), pageB.close()]);
         }
@@ -179,6 +188,7 @@ test.describe('e2e combat - EMP projectile', () => {
         try {
             await joinRace(page, roomId, 'Solo Player', { vehicleLabel: 'Patrol' });
             await waitForCarSpawn(page);
+            await waitForDebugState(page, (s) => s.vehicleId === 'patrol', 5_000, 'patrol vehicle selection');
 
             const before = await readDebugState(page);
             await setDrivingKeyState(page, 'KeyE', true);

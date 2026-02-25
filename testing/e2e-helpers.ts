@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 export const STARTUP_TIMEOUT_MS = 90_000;
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export type GTDebugState = {
     activeEffectIds: string[];
@@ -60,9 +61,10 @@ export const joinRace = async (
     await page.focus('body');
     await page.locator('#player-name-input').fill(name);
     if (options?.vehicleLabel) {
+        const escapedVehicleLabel = escapeRegex(options.vehicleLabel);
         const vehicleClassFieldset = page.locator('fieldset').filter({ hasText: 'VEHICLE CLASS' }).first();
         await vehicleClassFieldset
-            .getByRole('button', { name: new RegExp(`^\\s*${options.vehicleLabel}\\b`, 'i') })
+            .getByRole('button', { name: new RegExp(`^\\s*${escapedVehicleLabel}\\b`, 'i') })
             .click();
     }
     await page.locator('#player-name-confirm').click();
