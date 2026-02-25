@@ -74,6 +74,8 @@ export class RoomSimulation {
 
         this.state = {
             activePowerups: this.buildActivePowerups(options.totalLaps),
+            activeProjectiles: [],
+            activeDeployables: [],
             hazards: this.buildHazards(options.totalLaps),
             players: new Map(),
             raceEvents: [],

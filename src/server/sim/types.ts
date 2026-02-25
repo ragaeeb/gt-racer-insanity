@@ -32,8 +32,31 @@ export type ActiveHazard = {
     position: { x: number; z: number };
 };
 
+export type ActiveDeployable = {
+    id: string;
+    ownerId: string;
+    kind: 'oil-slick';
+    position: { x: number; z: number };
+    radius: number;
+    lifetimeTicks: number;
+    remainingTicks: number;
+    triggered: boolean;
+};
+
+export type ActiveProjectile = {
+    id: number;
+    ownerId: string;
+    targetId: string | null;
+    position: { x: number; z: number };
+    velocity: { x: number; z: number };
+    ttlTicks: number;
+    speed: number;
+};
+
 export type SimRoomState = {
     activePowerups: ActivePowerup[];
+    activeProjectiles: ActiveProjectile[];
+    activeDeployables: ActiveDeployable[];
     hazards: ActiveHazard[];
     players: Map<string, SimPlayerState>;
     raceEvents: RaceEventPayload[];
