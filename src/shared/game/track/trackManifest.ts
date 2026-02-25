@@ -136,7 +136,7 @@ export const getSegmentFrictionForDistance = (track: TrackManifest, distanceMete
     }
 
     // Wrap distance into a single lap
-    const lapDistance = distanceMeters % track.lengthMeters;
+    const lapDistance = ((distanceMeters % track.lengthMeters) + track.lengthMeters) % track.lengthMeters;
 
     let accumulated = 0;
     for (const segment of track.segments) {

@@ -65,6 +65,11 @@ export class EngineLayerManager {
     private readonly highSound?: THREE.PositionalAudio;
     private lastDominantLayer: DominantLayer = 'idle';
     private shiftDipRemainingMs = 0;
+    private idleBaseRate = 1;
+    private midBaseRate = 1;
+    private highBaseRate = 1;
+    private shiftDipRate = 1;
+    private dopplerRate = 1;
 
     constructor(
         listener: THREE.AudioListener,
@@ -86,7 +91,20 @@ export class EngineLayerManager {
         sound.setRefDistance(10);
         sound.setLoop(true);
         sound.setVolume(0);
-        sound.play();
+
+        if (listener.context.state === 'suspended') {
+            listener.context
+                .resume()
+                .then(() => {
+                    sound.play();
+                })
+                .catch((err: unknown) => {
+                    console.warn('AudioContext resume failed, audio layer will not loop', err);
+                });
+        } else {
+            sound.play();
+        }
+
         return sound;
     };
 
@@ -111,12 +129,13 @@ export class EngineLayerManager {
         }
 
         this.shiftDipRemainingMs = Math.max(0, this.shiftDipRemainingMs - dt * 1000);
-        const shiftDip = this.shiftDipRemainingMs > 0 ? this.tuning.gearShiftPitchDip : 1;
+        this.shiftDipRate = this.shiftDipRemainingMs > 0 ? this.tuning.gearShiftPitchDip : 1;
         const normalizedSpeed = clamp01(maxSpeed > 0 ? speed / maxSpeed : 0);
 
-        this.idleSound?.setPlaybackRate((0.82 + normalizedSpeed * 0.18) * shiftDip);
-        this.midSound?.setPlaybackRate((0.9 + normalizedSpeed * 0.25) * shiftDip);
-        this.highSound?.setPlaybackRate((1.02 + normalizedSpeed * 0.38) * shiftDip);
+        this.idleBaseRate = 0.82 + normalizedSpeed * 0.18;
+        this.midBaseRate = 0.9 + normalizedSpeed * 0.25;
+        this.highBaseRate = 1.02 + normalizedSpeed * 0.38;
+        this.applyCombinedPlaybackRates();
     };
 
     private resolveDominantLayer = (gains: LayerGains): DominantLayer => {
@@ -160,9 +179,32 @@ export class EngineLayerManager {
      * @param rate - Playback rate multiplier (e.g., 1.0 = normal, >1 = higher pitch, <1 = lower pitch)
      */
     public setPlaybackRate = (rate: number) => {
+        this.dopplerRate = rate;
+        this.applyCombinedPlaybackRates();
+    };
+
+    private applyCombinedPlaybackRates = () => {
+        const multiplier = this.shiftDipRate * this.dopplerRate;
+        this.idleSound?.setPlaybackRate(this.idleBaseRate * multiplier);
+        this.midSound?.setPlaybackRate(this.midBaseRate * multiplier);
+        this.highSound?.setPlaybackRate(this.highBaseRate * multiplier);
+    };
+
+    /**
+     * Connect all audio layers through the mix state's engine gain node.
+     * This enables race-phase-based volume control.
+     */
+    public connectToMixState = (mixStateManager?: import('./mixStateManager').MixStateManager) => {
+        if (!mixStateManager) {
+            return;
+        }
+        const channels = mixStateManager.getChannels();
+        const engineGain = channels.engine;
+
         for (const sound of [this.idleSound, this.midSound, this.highSound]) {
             if (sound) {
-                sound.setPlaybackRate(rate);
+                sound.gain.disconnect();
+                sound.gain.connect(engineGain as unknown as globalThis.AudioNode);
             }
         }
     };

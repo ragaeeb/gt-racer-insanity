@@ -43,9 +43,9 @@ export type AudioTuning = {
     mix: {
         /** Cross-fade duration in seconds between race phase transitions */
         crossfadeDurationSec: number;
-        preRace: { music: number; engine: number; effects: number };
-        racing: { music: number; engine: number; effects: number };
-        postRace: { music: number; engine: number; effects: number };
+        preRace: { musicGain: number; engineGain: number; effectsGain: number };
+        racing: { musicGain: number; engineGain: number; effectsGain: number };
+        postRace: { musicGain: number; engineGain: number; effectsGain: number };
     };
 };
 
@@ -88,9 +88,9 @@ export const DEFAULT_GAMEPLAY_TUNING: GameplayTuningConfig = {
         },
         mix: {
             crossfadeDurationSec: 0.5,
-            preRace: { music: 0.8, engine: 0.3, effects: 0.5 },
-            racing: { music: 0.4, engine: 0.7, effects: 0.8 },
-            postRace: { music: 0.9, engine: 0.2, effects: 0.5 },
+            preRace: { musicGain: 0.8, engineGain: 0.3, effectsGain: 0.5 },
+            racing: { musicGain: 0.4, engineGain: 0.7, effectsGain: 0.8 },
+            postRace: { musicGain: 0.9, engineGain: 0.2, effectsGain: 0.5 },
         },
     },
     combat: {},

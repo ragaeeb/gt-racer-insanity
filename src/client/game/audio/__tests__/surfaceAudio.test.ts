@@ -5,6 +5,7 @@ import {
     calculateRumbleVolume,
     DEFAULT_SURFACE_AUDIO_TUNING,
 } from '../surfaceAudio';
+import { getTrackManifestById } from '@/shared/game/track/trackManifest';
 
 describe('Surface Audio — squeal volume', () => {
     it('should return 0 when not drifting', () => {
@@ -100,5 +101,28 @@ describe('Surface Audio — rumble volume', () => {
     it('should peak near gravelRumbleVolume for extremely low friction', () => {
         const vol = calculateRumbleVolume(0.0);
         expect(vol).toBeCloseTo(DEFAULT_SURFACE_AUDIO_TUNING.gravelRumbleVolume, 5);
+    });
+});
+
+describe('Surface Audio — real track friction integration checks', () => {
+    const canyonTrack = getTrackManifestById('canyon-sprint');
+    const canyonLowGrip = canyonTrack.segments.find((segment) => segment.id === 'seg-b')?.frictionMultiplier ?? 0.92;
+    const canyonHighGrip =
+        canyonTrack.segments.find((segment) => segment.id === 'seg-c')?.frictionMultiplier ?? 1.08;
+
+    it('should produce squeal on canyon low-grip asphalt section while drifting at speed', () => {
+        const squeal = calculateSquealVolume(40, canyonLowGrip, true);
+        expect(squeal).toBeGreaterThan(0);
+    });
+
+    it('should produce no gravel rumble on canyon low-grip asphalt section', () => {
+        const rumble = calculateRumbleVolume(canyonLowGrip);
+        expect(rumble).toBe(0);
+    });
+
+    it('should produce higher squeal pitch on canyon high-grip section than low-grip section', () => {
+        const lowGripPitch = calculateSquealPitch(canyonLowGrip);
+        const highGripPitch = calculateSquealPitch(canyonHighGrip);
+        expect(highGripPitch).toBeGreaterThan(lowGripPitch);
     });
 });

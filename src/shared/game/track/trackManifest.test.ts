@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'bun:test';
-import { calculateRumbleVolume, calculateSquealVolume } from '@/client/game/audio/surfaceAudio';
 import { getHazardManifestById } from '@/shared/game/hazard/hazardManifest';
 import { getPowerupManifestById } from '@/shared/game/powerup/powerupManifest';
 import {
@@ -146,48 +145,5 @@ describe('getSegmentFrictionForDistance — segment lookup for surface audio', (
                 expect(segment.frictionMultiplier).toBeLessThan(2.0);
             }
         }
-    });
-});
-
-describe('surface audio response to real track frictions', () => {
-    it('should produce squeal on canyon seg-b (friction 0.92 >= asphaltFrictionMin 0.9) when drifting at speed', () => {
-        // Canyon seg-b has friction 0.92 — technically still "asphalt" per our threshold (0.9)
-        // so squeal fires when drifting
-        const squeal = calculateSquealVolume(40, 0.92, true);
-        expect(squeal).toBeGreaterThan(0);
-    });
-
-    it('should produce NO gravel rumble on canyon seg-b (friction 0.92 >= gravelFrictionMax 0.8)', () => {
-        // 0.92 is not low enough to count as gravel — the rumble threshold is 0.8
-        const rumble = calculateRumbleVolume(0.92);
-        expect(rumble).toBe(0);
-    });
-
-    it('should produce gravel rumble on a hypothetical 0.5-friction surface', () => {
-        const rumble = calculateRumbleVolume(0.5);
-        expect(rumble).toBeGreaterThan(0);
-    });
-
-    it('should produce NO squeal on a hypothetical 0.5-friction surface even when drifting', () => {
-        // 0.5 < asphaltFrictionMin(0.9) → squeal silenced (loose surface, no screech)
-        const squeal = calculateSquealVolume(40, 0.5, true);
-        expect(squeal).toBe(0);
-    });
-
-    it('should produce highest-pitch squeal on high-grip seg-c of canyon (friction 1.08)', () => {
-        const pitchLowFriction = 0.7 + 0.92 * 0.3; // canyon seg-b
-        const pitchHighFriction = 0.7 + 1.08 * 0.3; // canyon seg-c
-        expect(pitchHighFriction).toBeGreaterThan(pitchLowFriction);
-    });
-
-    it('should produce no squeal when speed is below threshold even when drifting on asphalt', () => {
-        // Speed 10 < asphaltSquealThreshold 15
-        const squeal = calculateSquealVolume(10, 1.0, true);
-        expect(squeal).toBe(0);
-    });
-
-    it('should produce no squeal when not drifting regardless of speed and surface', () => {
-        const squeal = calculateSquealVolume(60, 1.0, false);
-        expect(squeal).toBe(0);
     });
 });

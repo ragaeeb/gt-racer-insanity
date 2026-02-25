@@ -76,10 +76,13 @@ export const calculateRumbleVolume = (
     frictionMultiplier: number,
     tuning: SurfaceAudioTuning = DEFAULT_SURFACE_AUDIO_TUNING,
 ): number => {
-    if (frictionMultiplier >= tuning.gravelFrictionMax) {
+    const safeFriction = Number.isFinite(frictionMultiplier) ? THREE.MathUtils.clamp(frictionMultiplier, 0, 1) : 1;
+
+    if (safeFriction >= tuning.gravelFrictionMax) {
         return 0;
     }
-    return (1.0 - frictionMultiplier) * tuning.gravelRumbleVolume;
+
+    return THREE.MathUtils.clamp((1.0 - safeFriction) * tuning.gravelRumbleVolume, 0, tuning.gravelRumbleVolume);
 };
 
 export class SurfaceAudioManager {
@@ -170,6 +173,27 @@ export class SurfaceAudioManager {
         }
         if (this.rumbleSound) {
             this.rumbleSound.disconnect();
+        }
+    };
+
+    /**
+     * Connect all surface audio layers through the mix state's effects gain node.
+     * This enables race-phase-based volume control for tire sounds.
+     */
+    public connectToMixState = (mixStateManager?: import('./mixStateManager').MixStateManager) => {
+        if (!mixStateManager) {
+            return;
+        }
+        const channels = mixStateManager.getChannels();
+        const effectsGain = channels.effects;
+
+        if (this.squealSound) {
+            this.squealSound.gain.disconnect();
+            this.squealSound.gain.connect(effectsGain as unknown as globalThis.AudioNode);
+        }
+        if (this.rumbleSound) {
+            this.rumbleSound.gain.disconnect();
+            this.rumbleSound.gain.connect(effectsGain as unknown as globalThis.AudioNode);
         }
     };
 }

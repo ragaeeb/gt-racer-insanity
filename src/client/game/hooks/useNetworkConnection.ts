@@ -275,6 +275,12 @@ export const useNetworkConnection = ({
                     mixStateManagerRef.current = new MixStateManager(audioContext);
                 }
                 mixStateManagerRef.current.setPhase('pre-race');
+
+                // Wire all cars to the mix state manager for race-phase-based audio
+                session.localCar?.setMixStateManager(mixStateManagerRef.current);
+                session.opponents.forEach((opponentCar) => {
+                    opponentCar.setMixStateManager(mixStateManagerRef.current!);
+                });
             }
         });
 

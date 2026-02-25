@@ -30,6 +30,8 @@ export const SpikeShotProjectiles = () => {
         return () => {
             geometry.dispose();
             material.dispose();
+            geometryRef.current = null;
+            materialRef.current = null;
         };
     }, [geometry, material]);
 

@@ -88,8 +88,16 @@ export class MixStateManager {
         const now = this.musicGainNode.context.currentTime;
         const end = now + this.tuning.crossfadeDurationSec;
 
+        this.musicGainNode.gain.cancelScheduledValues(now);
+        this.musicGainNode.gain.setValueAtTime(this.musicGainNode.gain.value, now);
         this.musicGainNode.gain.linearRampToValueAtTime(mix.musicGain, end);
+
+        this.engineGainNode.gain.cancelScheduledValues(now);
+        this.engineGainNode.gain.setValueAtTime(this.engineGainNode.gain.value, now);
         this.engineGainNode.gain.linearRampToValueAtTime(mix.engineGain, end);
+
+        this.effectsGainNode.gain.cancelScheduledValues(now);
+        this.effectsGainNode.gain.setValueAtTime(this.effectsGainNode.gain.value, now);
         this.effectsGainNode.gain.linearRampToValueAtTime(mix.effectsGain, end);
     };
 

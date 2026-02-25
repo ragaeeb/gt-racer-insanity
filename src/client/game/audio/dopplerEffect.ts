@@ -12,35 +12,33 @@
  */
 
 import * as THREE from 'three';
-
-const SPEED_OF_SOUND = 343; // m/s at sea level
-const DOPPLER_COEFFICIENT = 0.4; // dampening factor to prevent nausea
-const DOPPLER_MIN_RATE = 0.5;
-const DOPPLER_MAX_RATE = 2.0;
+import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
 
 /**
  * Calculate the Doppler pitch shift rate based on relative velocity.
  *
  * @param relativeVelocity - Velocity relative to listener (positive = receding, negative = approaching)
- * @returns Playback rate multiplier clamped between 0.5 and 2.0
+ * @param config - The Doppler tuning configuration
+ * @returns Playback rate multiplier clamped between config.minRate and config.maxRate
  */
-export const calculateDopplerRate = (relativeVelocity: number): number => {
+export const calculateDopplerRate = (
+    relativeVelocity: number,
+    config = DEFAULT_GAMEPLAY_TUNING.audio.doppler,
+): number => {
     // Avoid division by zero with small epsilon
     const epsilon = 0.001;
 
     // Doppler formula: rate = speedOfSound / (speedOfSound + relativeVelocity)
     // When approaching (relativeVelocity < 0): denominator decreases → rate > 1 (higher pitch)
     // When receding (relativeVelocity > 0): denominator increases → rate < 1 (lower pitch)
-    const dopplerRate = SPEED_OF_SOUND / (SPEED_OF_SOUND + relativeVelocity + epsilon);
+    const dopplerRate = config.speedOfSound / (config.speedOfSound + relativeVelocity + epsilon);
 
-    // Apply coefficient as a divisor to dampen the effect while preserving direction
-    // scaledRate = 1 + (dopplerRate - 1) / coefficient
-    // This ensures rate > 1 for approaching and rate < 1 for receding
+    // Damp the effect around 1.0 while preserving direction.
     const deviation = dopplerRate - 1;
-    const scaledRate = 1 + deviation / DOPPLER_COEFFICIENT;
+    const scaledRate = 1 + deviation * config.coefficient;
 
     // Clamp to prevent audio artifacts
-    return Math.max(DOPPLER_MIN_RATE, Math.min(DOPPLER_MAX_RATE, scaledRate));
+    return Math.max(config.minRate, Math.min(config.maxRate, scaledRate));
 };
 
 /**
@@ -69,10 +67,3 @@ export const calculateRadialVelocity = (
     // Negative = source moving toward listener (approaching)
     return relativeVelocity.dot(toSource);
 };
-
-export const DOPPLER_CONFIG = {
-    speedOfSound: SPEED_OF_SOUND,
-    coefficient: DOPPLER_COEFFICIENT,
-    minRate: DOPPLER_MIN_RATE,
-    maxRate: DOPPLER_MAX_RATE,
-} as const;

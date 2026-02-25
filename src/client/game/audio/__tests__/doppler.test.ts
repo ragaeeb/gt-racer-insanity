@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { calculateDopplerRate } from '../dopplerEffect';
+import * as THREE from 'three';
+import { calculateDopplerRate, calculateRadialVelocity } from '../dopplerEffect';
 
 describe('Doppler Effect', () => {
     it('should increase pitch when car approaches listener', () => {
@@ -45,5 +46,38 @@ describe('Doppler Effect', () => {
         // Very small velocities should not cause issues
         const rate = calculateDopplerRate(0.001);
         expect(rate).toBeCloseTo(1.0, 1);
+    });
+});
+
+describe('calculateRadialVelocity', () => {
+    // We are listener, stationary at origin
+    const listenerPos = new THREE.Vector3(0, 0, 0);
+    const listenerVel = new THREE.Vector3(0, 0, 0);
+
+    it('should return a negative velocity when source is moving toward listener', () => {
+        const sourcePos = new THREE.Vector3(100, 0, 0); // 100m away on X axis
+        const sourceVel = new THREE.Vector3(-20, 0, 0); // moving toward origin at 20m/s
+
+        const radialVel = calculateRadialVelocity(sourcePos, sourceVel, listenerPos, listenerVel);
+        expect(radialVel).toBeLessThan(0);
+        expect(radialVel).toBeCloseTo(-20, 2);
+    });
+
+    it('should return a positive velocity when source is moving away from listener', () => {
+        const sourcePos = new THREE.Vector3(100, 0, 0); // 100m away on X axis
+        const sourceVel = new THREE.Vector3(20, 0, 0); // moving away from origin at 20m/s
+
+        const radialVel = calculateRadialVelocity(sourcePos, sourceVel, listenerPos, listenerVel);
+        expect(radialVel).toBeGreaterThan(0);
+        expect(radialVel).toBeCloseTo(20, 2);
+    });
+
+    it('should return 0 when source and listener are co-located', () => {
+        const sourcePos = new THREE.Vector3(0, 0, 0); // exact same position
+        const sourceVel = new THREE.Vector3(10, 0, 0); // moving, but co-located
+
+        // At co-located position, direction vector becomes (0,0,0) resulting in dot product 0
+        const radialVel = calculateRadialVelocity(sourcePos, sourceVel, listenerPos, listenerVel);
+        expect(radialVel).toBe(0);
     });
 });

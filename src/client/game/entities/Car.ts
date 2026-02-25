@@ -16,6 +16,7 @@ export const SUSPENSION_BOUNCE_AMPLITUDE = 0.015;
 const AUDIO_FADE_RATE = 1.2;
 const FLIP_PROGRESS_DT_CAP_MS = 120;
 const FLIP_TOTAL_ROTATIONS = 1;
+const DOPPLER_DT_EPS = 1e-6;
 
 export const advanceFlipElapsedMs = (elapsedMs: number, dt: number) => {
     const frameStepMs = Math.min(Math.max(dt * 1000, 0), FLIP_PROGRESS_DT_CAP_MS);
@@ -66,16 +67,23 @@ export class Car {
     private lastBrakeTriggerAtMs = 0;
     private audioFadeMultiplier = 1;
     private isAudioFadingOut = false;
+    private mixStateManager?: import('@/client/game/audio/mixStateManager').MixStateManager;
 
     // Doppler velocity tracking for remote cars
     private previousPosition = new THREE.Vector3();
     private currentVelocity = new THREE.Vector3();
+    private hasDopplerSample = false;
+    // Pre-allocated scratch vectors to avoid per-frame GC pressure
+    private scratchPositionDelta = new THREE.Vector3();
+    private scratchToSource = new THREE.Vector3();
+    private scratchRelativeVelocity = new THREE.Vector3();
 
     private hasLoadedGLTF: boolean = false;
     private fallbackMeshes: THREE.Object3D[] = [];
     private readonly clonedMaterials = new Set<THREE.Material>();
     private readonly carColor = new THREE.Color(0xff0055);
     private readonly brakeLightMaterials: THREE.MeshStandardMaterial[] = [];
+    private readonly boostFlashMaterials: THREE.MeshStandardMaterial[] = [];
     private suspensionTime = 0;
     private gltfWrapper: THREE.Group | null = null;
     private nameTagSprite?: THREE.Sprite;
@@ -172,6 +180,7 @@ export class Car {
                 DEFAULT_GAMEPLAY_TUNING.audio.rpm,
             );
             this.engineLayerManager.attachTo(this.mesh);
+            this.engineLayerManager.connectToMixState(this.mixStateManager);
         }
 
         if (this.assets.brake && !this.brakeSound) {
@@ -181,6 +190,8 @@ export class Car {
             this.brakeSound.setLoop(false);
             this.brakeSound.setVolume(0.0);
             this.mesh.add(this.brakeSound);
+            // Wire brake sound through effects gain node
+            this.connectSoundToMixState(this.brakeSound, 'effects');
         }
 
         if (!this.surfaceAudio) {
@@ -194,8 +205,42 @@ export class Car {
                 DEFAULT_GAMEPLAY_TUNING.audio.surface,
             );
             this.surfaceAudio.attachTo(this.mesh);
+            this.surfaceAudio.connectToMixState(this.mixStateManager);
         }
     }
+
+    /**
+     * Set the mix state manager for this car's audio.
+     * Should be called after the Car is created, before the race starts.
+     * This enables race-phase-based audio mixing.
+     */
+    public setMixStateManager = (manager: import('@/client/game/audio/mixStateManager').MixStateManager) => {
+        this.mixStateManager = manager;
+        // Re-wire audio if already setup
+        if (this.engineLayerManager) {
+            this.engineLayerManager.connectToMixState(manager);
+        }
+        if (this.surfaceAudio) {
+            this.surfaceAudio.connectToMixState(manager);
+        }
+        if (this.brakeSound) {
+            this.connectSoundToMixState(this.brakeSound, 'effects');
+        }
+    };
+
+    /**
+     * Connect a THREE.PositionalAudio through the mix state's gain node.
+     */
+    private connectSoundToMixState = (sound: THREE.PositionalAudio, channel: 'music' | 'engine' | 'effects') => {
+        if (!this.mixStateManager || !this.listener) {
+            return;
+        }
+        const channels = this.mixStateManager.getChannels();
+        const gainNode = channels[channel];
+        // Disconnect from default chain and reconnect through mix gain
+        sound.gain.disconnect();
+        sound.gain.connect(gainNode as unknown as globalThis.AudioNode);
+    };
 
     private disposeFallbackVisuals() {
         for (const fallbackMesh of this.fallbackMeshes) {
@@ -239,6 +284,8 @@ export class Car {
         roofMesh.position.set(0, 1.1, -0.5);
         roofMesh.castShadow = true;
 
+        this.boostFlashMaterials.length = 0;
+        this.boostFlashMaterials.push(bodyMat, roofMat);
         this.fallbackMeshes.push(bodyMesh, roofMesh);
         this.mesh.add(bodyMesh);
         this.mesh.add(roofMesh);
@@ -275,6 +322,8 @@ export class Car {
         applyCarPaint(wrapper, this.carColor, this.clonedMaterials);
 
         this.brakeLightMaterials.length = 0;
+        this.boostFlashMaterials.length = 0;
+        const boostFlashMaterialSet = new Set<THREE.MeshStandardMaterial>();
         wrapper.traverse((child) => {
             if (!(child as THREE.Mesh).isMesh) {
                 return;
@@ -282,8 +331,16 @@ export class Car {
             const mesh = child as THREE.Mesh;
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             for (const mat of materials) {
-                if (mat instanceof THREE.MeshStandardMaterial && BRAKE_LIGHT_MATERIAL_RE.test(mat.name)) {
+                if (!(mat instanceof THREE.MeshStandardMaterial)) {
+                    continue;
+                }
+                if (BRAKE_LIGHT_MATERIAL_RE.test(mat.name)) {
                     this.brakeLightMaterials.push(mat);
+                    continue;
+                }
+                if (!boostFlashMaterialSet.has(mat)) {
+                    boostFlashMaterialSet.add(mat);
+                    this.boostFlashMaterials.push(mat);
                 }
             }
         });
@@ -419,19 +476,9 @@ export class Car {
             return;
         }
 
-        this.mesh.traverse((child) => {
-            if (!(child instanceof THREE.Mesh)) {
-                return;
-            }
-            const mats = Array.isArray(child.material) ? child.material : [child.material];
-            for (const mat of mats) {
-                // Skip brake-light materials — their emissive intensity is managed by
-                // updateBrakeLights and must not be overwritten by the boost flash.
-                if (mat instanceof THREE.MeshStandardMaterial && !this.brakeLightMaterials.includes(mat)) {
-                    mat.emissiveIntensity = this.boostFlashIntensity;
-                }
-            }
-        });
+        for (const mat of this.boostFlashMaterials) {
+            mat.emissiveIntensity = this.boostFlashIntensity;
+        }
 
         this.boostFlashIntensity *= 0.88; // ~10-frame decay at 60 fps
         if (this.boostFlashIntensity < 0.02) {
@@ -444,7 +491,7 @@ export class Car {
             this.setupAudio();
         }
 
-        if (!this.engineLayerManager || !this.brakeSound) {
+        if (!this.engineLayerManager) {
             return;
         }
 
@@ -452,7 +499,7 @@ export class Car {
             this.audioFadeMultiplier = Math.max(0, this.audioFadeMultiplier - dt * AUDIO_FADE_RATE);
             if (this.audioFadeMultiplier <= 0) {
                 this.engineLayerManager.stop();
-                if (this.brakeSound.isPlaying) {
+                if (this.brakeSound && this.brakeSound.isPlaying) {
                     this.brakeSound.stop();
                 }
                 this.surfaceAudio?.update(0, 1.0, false); // silence squeal/rumble
@@ -478,7 +525,7 @@ export class Car {
             ? this.controller.isBraking() && currentSpeed > 1.5
             : decelerationFactor > 0.25 && currentSpeed > 3;
         const nowMs = performance.now();
-        if (shouldTriggerBrake && nowMs - this.lastBrakeTriggerAtMs > 450 && fade > 0.1) {
+        if (this.brakeSound && shouldTriggerBrake && nowMs - this.lastBrakeTriggerAtMs > 450 && fade > 0.1) {
             if (this.brakeSound.isPlaying) {
                 this.brakeSound.stop();
             }
@@ -541,6 +588,7 @@ export class Car {
         this.lastBrakeTriggerAtMs = 0;
         this.audioFadeMultiplier = 1;
         this.isAudioFadingOut = false;
+        this.hasDopplerSample = false;
         this.visual.applyTransform(this.mesh, this.position, this.rotationY);
 
         this.engineLayerManager?.restart();
@@ -574,19 +622,34 @@ export class Car {
             return;
         }
 
-        // Calculate velocity from position delta (frame-over-frame)
-        const positionDelta = new THREE.Vector3().subVectors(this.position, this.previousPosition);
-        this.currentVelocity.copy(positionDelta).divideScalar(dt);
+        if (!Number.isFinite(dt) || dt <= DOPPLER_DT_EPS) {
+            this.currentVelocity.set(0, 0, 0);
+            this.engineLayerManager.setPlaybackRate(1);
+            this.previousPosition.copy(this.position);
+            return;
+        }
 
-        // Calculate line-of-sight direction from listener to source
-        const toSource = new THREE.Vector3().subVectors(this.position, listenerPosition).normalize();
+        if (!this.hasDopplerSample) {
+            this.currentVelocity.set(0, 0, 0);
+            this.engineLayerManager.setPlaybackRate(1);
+            this.previousPosition.copy(this.position);
+            this.hasDopplerSample = true;
+            return;
+        }
 
-        // Calculate relative velocity (source - listener)
-        const relativeVelocity = new THREE.Vector3().subVectors(this.currentVelocity, listenerVelocity);
+        // Calculate velocity from position delta (frame-over-frame) using scratch vector
+        this.scratchPositionDelta.subVectors(this.position, this.previousPosition);
+        this.currentVelocity.copy(this.scratchPositionDelta).divideScalar(dt);
+
+        // Calculate line-of-sight direction from listener to source using scratch vector
+        this.scratchToSource.subVectors(this.position, listenerPosition).normalize();
+
+        // Calculate relative velocity (source - listener) using scratch vector
+        this.scratchRelativeVelocity.subVectors(this.currentVelocity, listenerVelocity);
 
         // Project onto line-of-sight (radial velocity)
         // Positive = receding, Negative = approaching
-        const radialVelocity = relativeVelocity.dot(toSource);
+        const radialVelocity = this.scratchRelativeVelocity.dot(this.scratchToSource);
 
         // Calculate Doppler rate and apply to engine audio
         const dopplerRate = calculateDopplerRate(radialVelocity);

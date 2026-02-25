@@ -49,6 +49,8 @@ const interpolate = (from: InterpolationState, to: InterpolationState, alpha: nu
 
 export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) => {
     const wallClampCountRef = useRef(0);
+    const listenerPositionRef = useRef(new THREE.Vector3());
+    const listenerVelocityRef = useRef(new THREE.Vector3());
     const previousLocalFlippedRef = useRef(false);
     const lastLocalFlipAppliedAtMsRef = useRef<number | null>(null);
     const lastFrameAtMsRef = useRef<number | null>(null);
@@ -300,17 +302,16 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
             opponentCar.targetRotationY = interpolatedState.rotationY;
         }
 
+        const localSpeed = localCar.getSpeed();
+        listenerPositionRef.current.copy(localCar.mesh.position);
+        listenerVelocityRef.current.set(
+            Math.sin(localCar.rotationY) * localSpeed,
+            0,
+            Math.cos(localCar.rotationY) * localSpeed,
+        );
+
         for (const [, opponentCar] of session.opponents) {
-            // Get listener (local player) position and calculate approximate velocity
-            const listenerPosition = localCar.mesh.position.clone();
-            const localSpeed = localCar.getSpeed();
-            // Approximate local car velocity direction from its rotation
-            const listenerVelocity = new THREE.Vector3(
-                Math.sin(localCar.rotationY) * localSpeed,
-                0,
-                Math.cos(localCar.rotationY) * localSpeed,
-            );
-            opponentCar.update(dt, listenerPosition, listenerVelocity);
+            opponentCar.update(dt, listenerPositionRef.current, listenerVelocityRef.current);
         }
     });
 
