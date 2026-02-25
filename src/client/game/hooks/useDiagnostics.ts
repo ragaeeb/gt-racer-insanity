@@ -286,6 +286,12 @@ export const useDiagnostics = (
         const correction = session.lastCorrection;
         const localSnapshot = session.latestLocalSnapshot;
 
+        // Draw call tracking (per frame)
+        const drawCalls = gl.info.render.calls;
+        capture.drawCallsMax = Math.max(capture.drawCallsMax, drawCalls);
+        capture.drawCallsSampleCount += 1;
+        capture.drawCallsSum += drawCalls;
+
         // Find nearest opponent
         let nearest: NearestOpponent | null = null;
         for (const [opponentId, opponentCar] of session.opponents) {
@@ -351,12 +357,6 @@ export const useDiagnostics = (
                 capture.correctionPositionErrorMaxMeters,
                 correction?.positionError ?? 0,
             );
-
-            // Draw call tracking
-            const drawCalls = gl.info.render.calls;
-            capture.drawCallsMax = Math.max(capture.drawCallsMax, drawCalls);
-            capture.drawCallsSampleCount += 1;
-            capture.drawCallsSum += drawCalls;
 
             if (lastSnapshotAgeMs !== null) {
                 capture.snapshotAgeCount += 1;

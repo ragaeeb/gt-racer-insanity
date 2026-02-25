@@ -199,10 +199,14 @@ export class SceneryManager {
         const matrix = new THREE.Matrix4();
 
         for (const [matIdx, group] of buildingsByMaterial) {
-            if (group.length === 0) continue;
+            if (group.length === 0) {
+                continue;
+            }
 
             const mat = this.buildingMaterials[matIdx];
-            if (!mat) continue;
+            if (!mat) {
+                continue;
+            }
 
             const instancedMesh = new THREE.InstancedMesh(unitGeo, mat, group.length);
             instancedMesh.castShadow = true;
@@ -246,7 +250,9 @@ export class SceneryManager {
         const halfWidth = this.trackWidth / 2;
         const count = Math.floor(this.trackLength / STREET_LIGHT_INTERVAL);
 
-        if (count === 0) return;
+        if (count === 0) {
+            return;
+        }
 
         const poleGeo = new THREE.CylinderGeometry(0.15, 0.15, 8, 6);
         const poleMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
@@ -319,6 +325,12 @@ export class SceneryManager {
 
     private placeTrafficCones = () => {
         const halfWidth = this.trackWidth / 2;
+        const count = Math.floor(this.trackLength / 30);
+
+        if (count === 0) {
+            return;
+        }
+
         const coneGeo = new THREE.ConeGeometry(0.25, 0.6, 6);
         const coneMat = new THREE.MeshStandardMaterial({
             color: this.palette.decorationPrimary,
@@ -326,10 +338,6 @@ export class SceneryManager {
         });
         this.geometries.push(coneGeo);
         this.materials.push(coneMat);
-
-        const count = Math.floor(this.trackLength / 30);
-
-        if (count === 0) return;
 
         const cones: ConeDescriptor[] = [];
         for (let i = 0; i < count; i++) {
@@ -347,11 +355,7 @@ export class SceneryManager {
         const matrix = new THREE.Matrix4();
         for (let i = 0; i < cones.length; i++) {
             const c = cones[i];
-            matrix.compose(
-                new THREE.Vector3(c.x, c.y, c.z),
-                new THREE.Quaternion(),
-                new THREE.Vector3(1, 1, 1),
-            );
+            matrix.compose(new THREE.Vector3(c.x, c.y, c.z), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
             instancedMesh.setMatrixAt(i, matrix);
         }
 
@@ -365,6 +369,12 @@ export class SceneryManager {
 
     private placeRockPillars = () => {
         const halfWidth = this.trackWidth / 2;
+        const zones = Math.floor(this.trackLength / 50);
+
+        if (zones === 0) {
+            return;
+        }
+
         const pillarGeo = new THREE.CylinderGeometry(1.5, 2.5, 1, 8);
         const pillarMat = new THREE.MeshStandardMaterial({
             color: this.palette.rockColor,
@@ -373,10 +383,6 @@ export class SceneryManager {
         });
         this.geometries.push(pillarGeo);
         this.materials.push(pillarMat);
-
-        const zones = Math.floor(this.trackLength / 50);
-
-        if (zones === 0) return;
 
         const pillars: PillarDescriptor[] = [];
         for (let i = 0; i < zones; i++) {
@@ -415,6 +421,12 @@ export class SceneryManager {
 
     private placeMesaFormations = () => {
         const halfWidth = this.trackWidth / 2;
+        const zones = Math.floor(this.trackLength / 80);
+
+        if (zones === 0) {
+            return;
+        }
+
         const mesaGeo = new THREE.BoxGeometry(1, 1, 1);
         const mesaMat = new THREE.MeshStandardMaterial({
             color: this.palette.decorationSecondary,
@@ -422,10 +434,6 @@ export class SceneryManager {
         });
         this.geometries.push(mesaGeo);
         this.materials.push(mesaMat);
-
-        const zones = Math.floor(this.trackLength / 80);
-
-        if (zones === 0) return;
 
         const mesas: MesaDescriptor[] = [];
         for (let i = 0; i < zones; i++) {

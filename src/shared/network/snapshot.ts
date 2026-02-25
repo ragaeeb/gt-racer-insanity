@@ -209,7 +209,7 @@ export const serializeSnapshot = (snapshot: ServerSnapshotPayload & { projectile
         ]),
         snapshot.powerups.map(p => [p.id, p.powerupId, p.isActive, p.x, p.z]),
         snapshot.hazards.map(h => [h.id, h.hazardId, h.x, h.z]),
-        snapshot.projectiles ? snapshot.projectiles.map(pr => [pr.id, pr.ownerId, pr.targetId, pr.x, pr.z, pr.velX, pr.velZ, pr.ttlTicks]) : undefined,
-        snapshot.deployables ? snapshot.deployables.map(d => [d.id, d.kind, d.ownerId, d.x, d.z, d.radius, d.lifetimeTicks]) : undefined
+        snapshot.projectiles?.map(pr => [pr.id, pr.ownerId, pr.targetId, pr.x, pr.z, pr.velX, pr.velZ, pr.ttlTicks]) ?? [],
+        snapshot.deployables?.map(d => [d.id, d.kind, d.ownerId, d.x, d.z, d.radius, d.lifetimeTicks]) ?? []
     ];
 };

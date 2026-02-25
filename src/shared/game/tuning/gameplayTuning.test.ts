@@ -11,7 +11,7 @@ describe('GameplayTuningConfig', () => {
 
     it('should be serializable to JSON', () => {
         const json = JSON.stringify(DEFAULT_GAMEPLAY_TUNING);
-        expect(json).toBeDefined();
+        expect(json).toBe('{"drift":{},"collision":{},"audio":{},"combat":{}}');
         const parsed = JSON.parse(json);
         expect(parsed).toEqual(DEFAULT_GAMEPLAY_TUNING);
     });

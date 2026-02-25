@@ -34,6 +34,7 @@ type AbilityActivationEnvelope = {
 
 const POWERUP_PICKUP_RADIUS = 4;
 const HAZARD_CAR_HALF_LENGTH = 2;
+const TICK_OVERRUN_THRESHOLD_MS = 5;
 
 export class RoomSimulation {
     private readonly dtSeconds: number;
@@ -417,7 +418,7 @@ export class RoomSimulation {
         const tickDuration = performance.now() - tickStart;
         this.tickMetrics.lastTickDurationMs = tickDuration;
         this.tickMetrics.tickDurationMaxMs = Math.max(this.tickMetrics.tickDurationMaxMs, tickDuration);
-        if (tickDuration > 5) {
+        if (tickDuration > TICK_OVERRUN_THRESHOLD_MS) {
             this.tickMetrics.tickOverrunCount += 1;
         }
     };
