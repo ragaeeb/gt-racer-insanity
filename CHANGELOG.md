@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.14.0...v1.15.0) (2026-02-25)
+
+
+### Features
+
+* **combat:** Snapshot Protocol Extensions for Combat ([#49](https://github.com/ragaeeb/gt-racer-insanity/issues/49)) ([5874859](https://github.com/ragaeeb/gt-racer-insanity/commit/5874859231d5d08fc327d54d9690b5c289708a84))
+
 # [1.13.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.12.0...v1.13.0) (2026-02-25)
 
 
