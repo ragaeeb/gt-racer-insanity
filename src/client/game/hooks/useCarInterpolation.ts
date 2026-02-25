@@ -288,7 +288,16 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
         }
 
         for (const [, opponentCar] of session.opponents) {
-            opponentCar.update(dt);
+            // Get listener (local player) position and calculate approximate velocity
+            const listenerPosition = localCar.mesh.position.clone();
+            const localSpeed = localCar.getSpeed();
+            // Approximate local car velocity direction from its rotation
+            const listenerVelocity = new THREE.Vector3(
+                Math.sin(localCar.rotationY) * localSpeed,
+                0,
+                Math.cos(localCar.rotationY) * localSpeed,
+            );
+            opponentCar.update(dt, listenerPosition, listenerVelocity);
         }
     });
 

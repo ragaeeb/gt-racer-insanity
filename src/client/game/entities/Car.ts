@@ -1,10 +1,14 @@
 import * as THREE from 'three';
+import { calculateDopplerRate } from '@/client/game/audio/dopplerEffect';
+import { EngineLayerManager } from '@/client/game/audio/engineLayerManager';
+import { SurfaceAudioManager } from '@/client/game/audio/surfaceAudio';
 import { CarController } from '@/client/game/entities/CarController';
 import { CarVisual } from '@/client/game/entities/CarVisual';
 import { applyCarPaint } from '@/client/game/paintSystem';
 import type { InputManager } from '@/client/game/systems/InputManager';
 import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 import { FLIPPED_DURATION_MS } from '@/shared/game/effects/statusEffectManifest';
+import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
 import { DriftState } from '@/shared/game/vehicle/driftConfig';
 
 const BRAKE_LIGHT_MATERIAL_RE = /^(BrakeLight|TailLights?)$/i;
@@ -51,14 +55,17 @@ export class Car {
     private readonly visual = new CarVisual();
 
     // Audio
-    private engineSound?: THREE.PositionalAudio;
-    private accelSound?: THREE.PositionalAudio;
-    private drivingSound?: THREE.PositionalAudio;
+    private engineLayerManager?: EngineLayerManager;
+    private surfaceAudio?: SurfaceAudioManager;
     private brakeSound?: THREE.PositionalAudio;
     private previousAudioSpeed = 0;
     private lastBrakeTriggerAtMs = 0;
     private audioFadeMultiplier = 1;
     private isAudioFadingOut = false;
+
+    // Doppler velocity tracking for remote cars
+    private previousPosition = new THREE.Vector3();
+    private currentVelocity = new THREE.Vector3();
 
     private hasLoadedGLTF: boolean = false;
     private fallbackMeshes: THREE.Object3D[] = [];
@@ -79,6 +86,13 @@ export class Car {
     public driftBoostTier: number = 0;
     private previousBoostTier: number = 0;
     private boostFlashIntensity: number = 0;
+
+    /**
+     * Friction multiplier of the current track segment the car occupies.
+     * Should be updated by the owner each frame from TrackSegmentManifest.frictionMultiplier.
+     * Defaults to 1.0 (standard asphalt).
+     */
+    public currentFrictionMultiplier: number = 1.0;
 
     constructor(
         private scene: THREE.Scene,
@@ -143,34 +157,17 @@ export class Car {
             return;
         }
 
-        if (this.assets.engine && !this.engineSound) {
-            this.engineSound = new THREE.PositionalAudio(this.listener);
-            this.engineSound.setBuffer(this.assets.engine);
-            this.engineSound.setRefDistance(10);
-            this.engineSound.setLoop(true);
-            this.engineSound.setVolume(1.0);
-            this.mesh.add(this.engineSound);
-            this.engineSound.play();
-        }
-
-        if (this.assets.accelerate && !this.accelSound) {
-            this.accelSound = new THREE.PositionalAudio(this.listener);
-            this.accelSound.setBuffer(this.assets.accelerate);
-            this.accelSound.setRefDistance(10);
-            this.accelSound.setLoop(true);
-            this.accelSound.setVolume(0.0);
-            this.mesh.add(this.accelSound);
-            this.accelSound.play();
-        }
-
-        if (this.assets.driving && !this.drivingSound) {
-            this.drivingSound = new THREE.PositionalAudio(this.listener);
-            this.drivingSound.setBuffer(this.assets.driving);
-            this.drivingSound.setRefDistance(10);
-            this.drivingSound.setLoop(true);
-            this.drivingSound.setVolume(0.0);
-            this.mesh.add(this.drivingSound);
-            this.drivingSound.play();
+        if (!this.engineLayerManager && (this.assets.engine || this.assets.accelerate || this.assets.driving)) {
+            this.engineLayerManager = new EngineLayerManager(
+                this.listener,
+                {
+                    idle: this.assets.engine,
+                    mid: this.assets.accelerate,
+                    high: this.assets.driving,
+                },
+                DEFAULT_GAMEPLAY_TUNING.audio.rpm,
+            );
+            this.engineLayerManager.attachTo(this.mesh);
         }
 
         if (this.assets.brake && !this.brakeSound) {
@@ -180,6 +177,13 @@ export class Car {
             this.brakeSound.setLoop(false);
             this.brakeSound.setVolume(0.0);
             this.mesh.add(this.brakeSound);
+        }
+
+        if (!this.surfaceAudio) {
+            // Squeal and rumble audio buffers are optional — the manager degrades gracefully
+            // when no buffers are provided (volumes stay at 0).
+            this.surfaceAudio = new SurfaceAudioManager(this.listener, {}, DEFAULT_GAMEPLAY_TUNING.audio.surface);
+            this.surfaceAudio.attachTo(this.mesh);
         }
     }
 
@@ -279,7 +283,7 @@ export class Car {
         this.hasLoadedGLTF = true;
     }
 
-    public update(dt: number) {
+    public update(dt: number, listenerPosition?: THREE.Vector3, listenerVelocity?: THREE.Vector3) {
         this.updateFlipAnimation(dt);
 
         if (this.isLocalPlayer && this.inputManager) {
@@ -294,6 +298,11 @@ export class Car {
         this.updateDriftTilt();
         this.updateBoostFlash();
         this.updateAudio(dt);
+
+        // Apply Doppler effect for remote cars
+        if (!this.isLocalPlayer && listenerPosition && listenerVelocity) {
+            this.updateDoppler(listenerPosition, listenerVelocity, dt);
+        }
     }
 
     public setFlipped = (isFlipped: boolean): boolean => {
@@ -421,21 +430,20 @@ export class Car {
     }
 
     private updateAudio(dt: number) {
-        if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) {
+        if (!this.engineLayerManager || !this.brakeSound) {
             this.setupAudio();
         }
 
-        if (!this.engineSound || !this.accelSound || !this.drivingSound || !this.brakeSound) {
+        if (!this.engineLayerManager || !this.brakeSound) {
             return;
         }
 
         if (this.isAudioFadingOut) {
             this.audioFadeMultiplier = Math.max(0, this.audioFadeMultiplier - dt * AUDIO_FADE_RATE);
             if (this.audioFadeMultiplier <= 0) {
-                for (const sound of [this.engineSound, this.accelSound, this.drivingSound, this.brakeSound]) {
-                    if (sound.isPlaying) {
-                        sound.stop();
-                    }
+                this.engineLayerManager.stop();
+                if (this.brakeSound.isPlaying) {
+                    this.brakeSound.stop();
                 }
                 return;
             }
@@ -449,29 +457,12 @@ export class Car {
         const maxSpeed = this.controller.getMaxSpeed();
         const normalizedSpeed = normalizeAudioSpeed(currentSpeed, maxSpeed);
         const speedDelta = currentSpeed - this.previousAudioSpeed;
-        const accelerationFactor = THREE.MathUtils.clamp(speedDelta / 8, 0, 1);
         const decelerationFactor = THREE.MathUtils.clamp(-speedDelta / 8, 0, 1);
         const fade = this.audioFadeMultiplier;
+        this.engineLayerManager.update(currentSpeed, maxSpeed, dt, fade);
 
-        const idleVolume = Math.max(0, 0.7 - normalizedSpeed * 0.9) * fade;
-        const drivingVolume = THREE.MathUtils.smoothstep(normalizedSpeed, 0.08, 0.95) * 0.8 * fade;
-        const throttleWeight = this.isLocalPlayer
-            ? this.controller.isAccelerating()
-                ? 1
-                : 0
-            : speedDelta > 0.2
-              ? 1
-              : 0;
-        const accelVolume =
-            THREE.MathUtils.clamp(normalizedSpeed * 0.3 + throttleWeight * 0.5 + accelerationFactor * 0.5, 0, 1) * fade;
-
-        this.engineSound.setVolume(finiteOr(idleVolume, 0));
-        this.drivingSound.setVolume(finiteOr(drivingVolume, 0));
-        this.accelSound.setVolume(finiteOr(accelVolume, 0));
-        this.engineSound.setPlaybackRate(finiteOr(0.9 + normalizedSpeed * 0.2, 1));
-        this.drivingSound.setPlaybackRate(finiteOr(0.85 + normalizedSpeed * 0.4, 1));
-        this.accelSound.setPlaybackRate(finiteOr(0.8 + normalizedSpeed * 0.6, 1));
-
+        const isDrifting = this.driftState === DriftState.DRIFTING;
+        this.surfaceAudio?.update(currentSpeed, this.currentFrictionMultiplier, isDrifting);
         const shouldTriggerBrake = this.isLocalPlayer
             ? this.controller.isBraking() && currentSpeed > 1.5
             : decelerationFactor > 0.25 && currentSpeed > 3;
@@ -533,6 +524,7 @@ export class Car {
         this.driftBoostTier = 0;
         this.previousBoostTier = 0;
         this.boostFlashIntensity = 0;
+        this.currentFrictionMultiplier = 1.0;
         this.controller.reset();
         this.previousAudioSpeed = 0;
         this.lastBrakeTriggerAtMs = 0;
@@ -540,15 +532,8 @@ export class Car {
         this.isAudioFadingOut = false;
         this.visual.applyTransform(this.mesh, this.position, this.rotationY);
 
-        if (this.engineSound && !this.engineSound.isPlaying) {
-            this.engineSound.play();
-        }
-        if (this.accelSound && !this.accelSound.isPlaying) {
-            this.accelSound.play();
-        }
-        if (this.drivingSound && !this.drivingSound.isPlaying) {
-            this.drivingSound.play();
-        }
+        this.engineLayerManager?.restart();
+        this.surfaceAudio?.restart();
     }
 
     public getSpeed = () => {
@@ -563,32 +548,48 @@ export class Car {
         this.isAudioFadingOut = true;
     };
 
+    /**
+     * Update Doppler effect for remote car engine sounds.
+     * Should be called each frame for remote cars with listener position and velocity.
+     * Local player car does NOT have Doppler applied.
+     *
+     * @param listenerPosition - Position of the local player/camera
+     * @param listenerVelocity - Velocity of the local player/camera
+     * @param dt - Delta time in seconds
+     */
+    public updateDoppler = (listenerPosition: THREE.Vector3, listenerVelocity: THREE.Vector3, dt: number) => {
+        // Only apply Doppler to remote cars, not local player
+        if (this.isLocalPlayer || !this.engineLayerManager) {
+            return;
+        }
+
+        // Calculate velocity from position delta (frame-over-frame)
+        const positionDelta = new THREE.Vector3().subVectors(this.position, this.previousPosition);
+        this.currentVelocity.copy(positionDelta).divideScalar(dt);
+
+        // Calculate line-of-sight direction from listener to source
+        const toSource = new THREE.Vector3().subVectors(this.position, listenerPosition).normalize();
+
+        // Calculate relative velocity (source - listener)
+        const relativeVelocity = new THREE.Vector3().subVectors(this.currentVelocity, listenerVelocity);
+
+        // Project onto line-of-sight (radial velocity)
+        // Positive = receding, Negative = approaching
+        const radialVelocity = relativeVelocity.dot(toSource);
+
+        // Calculate Doppler rate and apply to engine audio
+        const dopplerRate = calculateDopplerRate(radialVelocity);
+        this.engineLayerManager.setPlaybackRate(dopplerRate);
+
+        // Store current position for next frame
+        this.previousPosition.copy(this.position);
+    };
+
     public dispose() {
-        if (this.engineSound) {
-            if (this.engineSound.isPlaying) {
-                this.engineSound.stop();
-            }
-            this.mesh.remove(this.engineSound);
-            this.engineSound.disconnect();
-            this.engineSound = undefined;
-        }
-
-        if (this.accelSound) {
-            if (this.accelSound.isPlaying) {
-                this.accelSound.stop();
-            }
-            this.mesh.remove(this.accelSound);
-            this.accelSound.disconnect();
-            this.accelSound = undefined;
-        }
-
-        if (this.drivingSound) {
-            if (this.drivingSound.isPlaying) {
-                this.drivingSound.stop();
-            }
-            this.mesh.remove(this.drivingSound);
-            this.drivingSound.disconnect();
-            this.drivingSound = undefined;
+        if (this.engineLayerManager) {
+            this.engineLayerManager.stop();
+            this.engineLayerManager.disconnectFrom(this.mesh);
+            this.engineLayerManager = undefined;
         }
 
         if (this.brakeSound) {
@@ -598,6 +599,12 @@ export class Car {
             this.mesh.remove(this.brakeSound);
             this.brakeSound.disconnect();
             this.brakeSound = undefined;
+        }
+
+        if (this.surfaceAudio) {
+            this.surfaceAudio.dispose();
+            this.surfaceAudio.detachFrom(this.mesh);
+            this.surfaceAudio = undefined;
         }
 
         if (this.nameTagSprite) {
