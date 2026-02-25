@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.11.0...v1.12.0) (2026-02-25)
+
+
+### Features
+
+* **puddle:** Add new puddle hazard and color picker paintjob with landing page refresh ([#22](https://github.com/ragaeeb/gt-racer-insanity/issues/22)) ([75c6297](https://github.com/ragaeeb/gt-racer-insanity/commit/75c6297ca45161c82ac28b43d5b1e0641923212d))
+
 # [1.11.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.10.0...v1.11.0) (2026-02-24)
 
 
