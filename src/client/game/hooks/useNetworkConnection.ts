@@ -1,9 +1,9 @@
 import { useThree } from '@react-three/fiber';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type * as THREE from 'three';
 import { MixStateManager } from '@/client/game/audio/mixStateManager';
 import { Car } from '@/client/game/entities/Car';
-import type { CarAssetsBundle, InterpolationState, RaceSession, RaceWorldCallbacks } from '@/client/game/hooks/types';
+import type { CarAssetsBundle, InterpolationState, RaceSession } from '@/client/game/hooks/types';
 import {
     DEFAULT_SCENE_ENVIRONMENT_ID,
     getSceneEnvironmentProfileIdForTrackTheme,
@@ -34,7 +34,7 @@ import {
     vehicleManifestToPhysicsConfig,
 } from '@/shared/game/vehicle/vehicleClassManifest';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
-import type { PlayerState, ServerSnapshotPayload } from '@/shared/network/types';
+import type { ConnectionStatus, PlayerState, RaceState, ServerSnapshotPayload } from '@/shared/network/types';
 import { seededRandom } from '@/shared/utils/prng';
 
 const SHAKE_SPIKE_GRACE_PERIOD_MS = 1800;
@@ -67,7 +67,9 @@ export const buildSpikeShotFxPayload = (
 type UseNetworkConnectionParams = {
     audioListenerRef: React.RefObject<THREE.AudioListener | null>;
     carAssetsBundle: CarAssetsBundle;
-    callbacks: RaceWorldCallbacks;
+    onConnectionStatusChange: (status: ConnectionStatus) => void;
+    onGameOverChange: (isGameOver: boolean) => void;
+    onRaceStateChange: (state: RaceState | null) => void;
     playerName: string;
     resetNonce: number;
     roomId: string;
@@ -79,7 +81,9 @@ type UseNetworkConnectionParams = {
 export const useNetworkConnection = ({
     audioListenerRef,
     carAssetsBundle,
-    callbacks,
+    onConnectionStatusChange,
+    onGameOverChange,
+    onRaceStateChange,
     playerName,
     resetNonce,
     roomId,
@@ -87,25 +91,22 @@ export const useNetworkConnection = ({
     selectedVehicleId,
     sessionRef,
 }: UseNetworkConnectionParams) => {
-    const { scene, camera } = useThree();
+    const { scene } = useThree();
     const [sceneEnvironmentId, setSceneEnvironmentId] =
         useState<SceneEnvironmentProfileId>(DEFAULT_SCENE_ENVIRONMENT_ID);
     const opponentFlipAppliedAtByPlayerIdRef = useRef(new Map<string, number>());
     const mixStateManagerRef = useRef<MixStateManager | null>(null);
     const session = sessionRef.current;
 
-    const applyTrackPresentation = useCallback(
-        (trackId: string) => {
-            const trackManifest = getTrackManifestById(trackId);
-            session.activeTrackId = trackManifest.id;
-            setSceneEnvironmentId(getSceneEnvironmentProfileIdForTrackTheme(trackManifest.themeId));
-            useHudStore.getState().setTrackLabel(trackManifest.label);
-            return trackManifest.id;
-        },
-        [session],
-    );
+    const applyTrackPresentation = (trackId: string) => {
+        const trackManifest = getTrackManifestById(trackId);
+        session.activeTrackId = trackManifest.id;
+        setSceneEnvironmentId(getSceneEnvironmentProfileIdForTrackTheme(trackManifest.themeId));
+        useHudStore.getState().setTrackLabel(trackManifest.label);
+        return trackManifest.id;
+    };
 
-    const clearCars = useCallback(() => {
+    const clearCars = () => {
         if (session.localCar) {
             session.localCar.dispose();
             session.localCar = null;
@@ -117,62 +118,56 @@ export const useNetworkConnection = ({
         session.opponents.clear();
         session.opponentInterpolationBuffers.clear();
         opponentFlipAppliedAtByPlayerIdRef.current.clear();
-    }, [session]);
+    };
 
-    const createOpponent = useCallback(
-        (player: PlayerState, snapshotPlayer?: { colorId?: string; vehicleId?: string }) => {
-            if (session.opponents.has(player.id)) {
-                return;
-            }
+    const createOpponent = (player: PlayerState, snapshotPlayer?: { colorId?: string; vehicleId?: string }) => {
+        if (session.opponents.has(player.id)) {
+            return;
+        }
 
-            const { modelVariants, assets } = carAssetsBundle;
-            const modelIndex = snapshotPlayer?.vehicleId
-                ? vehicleClassToModelIndex(snapshotPlayer.vehicleId)
-                : playerIdToVehicleIndex(player.id, modelVariants.length);
-            const modelVariant = modelVariants[modelIndex] ?? modelVariants[0];
-            const hsl = snapshotPlayer?.colorId
-                ? colorIdToHSL(snapshotPlayer.colorId)
-                : { h: playerIdToHue(player.id), s: 1.0, l: 0.5 };
+        const { modelVariants, assets } = carAssetsBundle;
+        const modelIndex = snapshotPlayer?.vehicleId
+            ? vehicleClassToModelIndex(snapshotPlayer.vehicleId)
+            : playerIdToVehicleIndex(player.id, modelVariants.length);
+        const modelVariant = modelVariants[modelIndex] ?? modelVariants[0];
+        const hsl = snapshotPlayer?.colorId
+            ? colorIdToHSL(snapshotPlayer.colorId)
+            : { h: playerIdToHue(player.id), s: 1.0, l: 0.5 };
 
-            const opponentCar = new Car(
-                scene,
-                null,
-                hsl,
-                audioListenerRef.current ?? undefined,
-                assets,
-                modelVariant.scene,
-                modelVariant.yawOffsetRadians,
-                player.name,
-            );
+        const opponentCar = new Car(
+            scene,
+            null,
+            hsl,
+            audioListenerRef.current ?? undefined,
+            assets,
+            modelVariant.scene,
+            modelVariant.yawOffsetRadians,
+            player.name,
+        );
 
-            opponentCar.isLocalPlayer = false;
-            opponentCar.position.set(player.x, player.y, player.z);
-            opponentCar.rotationY = player.rotationY;
-            opponentCar.targetPosition.set(player.x, player.y, player.z);
-            opponentCar.targetRotationY = player.rotationY;
+        opponentCar.isLocalPlayer = false;
+        opponentCar.position.set(player.x, player.y, player.z);
+        opponentCar.rotationY = player.rotationY;
+        opponentCar.targetPosition.set(player.x, player.y, player.z);
+        opponentCar.targetRotationY = player.rotationY;
 
-            session.opponents.set(player.id, opponentCar);
-            session.opponentInterpolationBuffers.set(player.id, createInterpolationBuffer<InterpolationState>());
-        },
-        [audioListenerRef, carAssetsBundle, scene, session],
-    );
+        session.opponents.set(player.id, opponentCar);
+        session.opponentInterpolationBuffers.set(player.id, createInterpolationBuffer<InterpolationState>());
+    };
 
-    const removeOpponent = useCallback(
-        (playerId: string) => {
-            const opponentCar = session.opponents.get(playerId);
-            if (!opponentCar) {
-                return;
-            }
+    const removeOpponent = (playerId: string) => {
+        const opponentCar = session.opponents.get(playerId);
+        if (!opponentCar) {
+            return;
+        }
 
-            opponentCar.dispose();
-            session.opponents.delete(playerId);
-            session.opponentInterpolationBuffers.delete(playerId);
-            opponentFlipAppliedAtByPlayerIdRef.current.delete(playerId);
-        },
-        [session],
-    );
+        opponentCar.dispose();
+        session.opponents.delete(playerId);
+        session.opponentInterpolationBuffers.delete(playerId);
+        opponentFlipAppliedAtByPlayerIdRef.current.delete(playerId);
+    };
 
-    const resetSessionState = useCallback(() => {
+    const resetSessionState = () => {
         session.localInputSequence = 0;
         session.cruiseLatchActive = false;
         session.lastCollisionEventAtMs = null;
@@ -192,7 +187,7 @@ export const useNetworkConnection = ({
         session.lastCorrection = null;
         session.networkUpdateTimer = 0;
         opponentFlipAppliedAtByPlayerIdRef.current.clear();
-    }, [session]);
+    };
 
     useEffect(() => {
         const { modelVariants, assets } = carAssetsBundle;
@@ -206,7 +201,7 @@ export const useNetworkConnection = ({
         const unsubscribeConnectionStatus = networkManager.onConnectionStatus((status) => {
             session.connectionStatus = status;
             useRuntimeStore.getState().setConnectionStatus(status);
-            callbacks.onConnectionStatusChange(status);
+            onConnectionStatusChange(status);
         });
 
         networkManager.onRoomJoined((seed, players, roomJoinedPayload) => {
@@ -268,8 +263,8 @@ export const useNetworkConnection = ({
             }
 
             resetSessionState();
-            callbacks.onRaceStateChange(null);
-            callbacks.onGameOverChange(false);
+            onRaceStateChange(null);
+            onGameOverChange(false);
             session.isRunning = true;
             useHudStore.getState().setSpeedKph(0);
 
@@ -431,7 +426,7 @@ export const useNetworkConnection = ({
             const startedAtMs = performance.now();
             try {
                 useRuntimeStore.getState().applySnapshot(snapshot);
-                callbacks.onRaceStateChange(snapshot.raceState);
+                onRaceStateChange(snapshot.raceState);
 
                 if (snapshot.raceState.trackId !== session.activeTrackId) {
                     const nextTrackId = applyTrackPresentation(snapshot.raceState.trackId);
@@ -540,7 +535,7 @@ export const useNetworkConnection = ({
 
                 if (snapshot.raceState.status === 'finished' && session.isRunning) {
                     session.isRunning = false;
-                    callbacks.onGameOverChange(true);
+                    onGameOverChange(true);
                     session.localCar?.fadeOutAudio();
                     for (const [, opponent] of session.opponents) {
                         opponent.fadeOutAudio();
@@ -562,8 +557,8 @@ export const useNetworkConnection = ({
             unsubscribeConnectionStatus();
             unsubscribeRaceEvent();
             session.connectionStatus = 'disconnected';
-            callbacks.onConnectionStatusChange('disconnected');
-            callbacks.onRaceStateChange(null);
+            onConnectionStatusChange('disconnected');
+            onRaceStateChange(null);
             useRuntimeStore.getState().setConnectionStatus('disconnected');
             useRuntimeStore.getState().setLocalPlayerId(null);
             networkManager.disconnect();
@@ -572,16 +567,12 @@ export const useNetworkConnection = ({
             mixStateManagerRef.current = null;
         };
     }, [
-        applyTrackPresentation,
         audioListenerRef,
         carAssetsBundle,
-        callbacks,
-        camera,
-        clearCars,
-        createOpponent,
+        onConnectionStatusChange,
+        onGameOverChange,
+        onRaceStateChange,
         playerName,
-        removeOpponent,
-        resetSessionState,
         roomId,
         scene,
         selectedColorId,
@@ -607,13 +598,12 @@ export const useNetworkConnection = ({
         trackManager.reset();
 
         resetSessionState();
-        callbacks.onRaceStateChange(null);
-        callbacks.onGameOverChange(false);
+        onRaceStateChange(null);
+        onGameOverChange(false);
         session.isRunning = true;
         useHudStore.getState().setSpeedKph(0);
         session.shakeSpikeGraceUntilMs = Date.now() + SHAKE_SPIKE_GRACE_PERIOD_MS;
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- camera not used in reset logic
-    }, [callbacks, resetNonce, resetSessionState, session]);
+    }, [onGameOverChange, onRaceStateChange, resetNonce, session]);
 
     return sceneEnvironmentId;
 };

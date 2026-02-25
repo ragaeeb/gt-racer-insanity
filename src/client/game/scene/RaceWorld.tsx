@@ -1,7 +1,6 @@
 import { useControls } from 'leva';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type * as THREE from 'three';
-import type { RaceWorldCallbacks } from '@/client/game/hooks/types';
 import { useAbilityEmitter } from '@/client/game/hooks/useAbilityEmitter';
 import { useAudioListener } from '@/client/game/hooks/useAudioListener';
 import { useCameraFollow } from '@/client/game/hooks/useCameraFollow';
@@ -42,8 +41,12 @@ export const RaceWorld = ({
     selectedVehicleId,
 }: RaceWorldProps) => {
     const dirLightRef = useRef<THREE.DirectionalLight>(null);
+    const inputManagerRef = useRef<InputManager | null>(null);
+    if (!inputManagerRef.current) {
+        inputManagerRef.current = new InputManager();
+    }
+    const inputManager = inputManagerRef.current;
 
-    const inputManager = useMemo(() => new InputManager(), []);
     useEffect(() => {
         inputManager.setCruiseControlEnabled(cruiseControlEnabled);
     }, [cruiseControlEnabled, inputManager]);
@@ -53,19 +56,12 @@ export const RaceWorld = ({
     const audioListenerRef = useAudioListener();
     const sessionRef = useRaceSession(inputManager);
 
-    const callbacks = useMemo<RaceWorldCallbacks>(
-        () => ({
-            onConnectionStatusChange,
-            onGameOverChange,
-            onRaceStateChange,
-        }),
-        [onConnectionStatusChange, onGameOverChange, onRaceStateChange],
-    );
-
     const sceneEnvironmentId = useNetworkConnection({
         audioListenerRef,
         carAssetsBundle,
-        callbacks,
+        onConnectionStatusChange,
+        onGameOverChange,
+        onRaceStateChange,
         playerName,
         resetNonce,
         roomId,
@@ -74,7 +70,7 @@ export const RaceWorld = ({
         sessionRef,
     });
 
-    const activeSceneEnvironment = useMemo(() => getSceneEnvironmentProfile(sceneEnvironmentId), [sceneEnvironmentId]);
+    const activeSceneEnvironment = getSceneEnvironmentProfile(sceneEnvironmentId);
 
     // Hook order matters: interpolation updates car state -> input emits -> ability emits -> camera follows -> diagnostics captures
     const wallClampCountRef = useCarInterpolation(sessionRef);

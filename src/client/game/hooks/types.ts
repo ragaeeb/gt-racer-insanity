@@ -5,7 +5,7 @@ import type { InterpolationBuffer } from '@/client/game/systems/interpolationSys
 import type { SceneryManager } from '@/client/game/systems/SceneryManager';
 import type { TrackManager } from '@/client/game/systems/TrackManager';
 import type { NetworkManager } from '@/client/network/NetworkManager';
-import type { ConnectionStatus, RaceState, SnapshotPlayerState } from '@/shared/network/types';
+import type { ConnectionStatus, SnapshotPlayerState } from '@/shared/network/types';
 
 export type CarModelVariant = {
     scene: THREE.Group;
@@ -62,12 +62,6 @@ export type RaceSession = {
     sceneryManager: SceneryManager | null;
     shakeSpikeGraceUntilMs: number;
     trackManager: TrackManager | null;
-};
-
-export type RaceWorldCallbacks = {
-    onConnectionStatusChange: (status: ConnectionStatus) => void;
-    onGameOverChange: (isGameOver: boolean) => void;
-    onRaceStateChange: (state: RaceState | null) => void;
 };
 
 export type CarAssetsBundle = {

@@ -57,6 +57,7 @@
         "@types/react-dom": "^19.2.3",
         "@types/three": "^0.183.1",
         "@vitejs/plugin-react": "^5.1.4",
+        "babel-plugin-react-compiler": "^1.0.0",
         "fast-check": "^4.5.3",
         "leva": "^0.10.1",
         "playwright": "^1.58.2",

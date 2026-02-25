@@ -5,9 +5,7 @@ import React, {
     memo,
     type SetStateAction,
     Suspense,
-    useCallback,
     useEffect,
-    useMemo,
     useState,
 } from 'react';
 import { Toaster, toast } from 'sonner';
@@ -181,9 +179,9 @@ const RaceSceneCanvas = memo(
         selectedColorId,
         selectedVehicleId,
     }: RaceSceneCanvasProps) => {
-        const handleCreated = useCallback(({ gl }: RootState) => {
+        const handleCreated = ({ gl }: RootState) => {
             gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        }, []);
+        };
 
         useEffect(() => {
             // TODO(gt-212): Remove this temporary suppression after upgrading Three.js/Rapier.
@@ -747,14 +745,11 @@ export const App = () => {
     const pendingToasts = useHudStore((state) => state.pendingToasts);
     const clearPendingToast = useHudStore((state) => state.clearPendingToast);
     const latestSnapshot = useRuntimeStore((state) => state.latestSnapshot);
-    const roomIdFromUrl = useMemo(() => new URLSearchParams(routeSearch).get('room') ?? '', [routeSearch]);
-    const winnerName = useMemo(() => {
-        if (!raceState?.winnerPlayerId) {
-            return null;
-        }
-        const winnerSnapshot = latestSnapshot?.players.find((player) => player.id === raceState.winnerPlayerId);
-        return winnerSnapshot?.name ?? raceState.winnerPlayerId;
-    }, [latestSnapshot, raceState]);
+    const roomIdFromUrl = new URLSearchParams(routeSearch).get('room') ?? '';
+    const winnerName = raceState?.winnerPlayerId
+        ? (latestSnapshot?.players.find((player) => player.id === raceState.winnerPlayerId)?.name ??
+          raceState.winnerPlayerId)
+        : null;
 
     useEffect(() => {
         if (pendingToasts.length === 0) {
@@ -894,11 +889,11 @@ export const App = () => {
         }
     };
 
-    const handleGenerateDebugLog = useCallback(() => {
+    const handleGenerateDebugLog = () => {
         getDiagControls()?.downloadReport();
-    }, []);
+    };
 
-    const handleDiagnosticsEnabledChange = useCallback((enabled: boolean) => {
+    const handleDiagnosticsEnabledChange = (enabled: boolean) => {
         setDiagnosticsEnabled(enabled);
         window.localStorage.setItem('gt-diag', enabled ? 'true' : 'false');
         if (enabled) {
@@ -906,14 +901,14 @@ export const App = () => {
             return;
         }
         getDiagControls()?.disable();
-    }, []);
+    };
 
-    const handleDiagnosticsVerbosityChange = useCallback((verbosity: DiagnosticsVerbosity) => {
+    const handleDiagnosticsVerbosityChange = (verbosity: DiagnosticsVerbosity) => {
         setDiagnosticsVerbosity(verbosity);
         const isVerbose = verbosity === 'verbose';
         window.localStorage.setItem('gt-diag-verbose', isVerbose ? 'true' : 'false');
         getDiagControls()?.setVerbose(isVerbose);
-    }, []);
+    };
 
     /* ── Landing page ── */
     if (routePath === '/') {

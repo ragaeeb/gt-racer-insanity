@@ -31,7 +31,7 @@ Multiplayer racing game with a server-authoritative V2 simulation stack, finite 
 - Multi-car catalog rotation by player ID (not only color differences).
 - Sunny day and canyon-dusk environment profiles (`sceneEnvironmentProfiles`) for level/theme swaps; scenery rebuilds on track change.
 - HUD includes speed, lap, position, effect badges (boosted/flat tire/stunned/slowed), and a queued toast pipeline.
-- Layered car audio: idle engine, acceleration, driving loop, brake one-shot; audio fades out when the race finishes (dt-based).
+- Layered car audio: RPM-crossfaded idle/mid/high loops with build-in pitch dip on gear shifts plus brake impact cue; audio fades during race-end transitions.
 - Better car graphics: wheels rotate with speed, brake-light emissives pulse while braking, and suspension subtly bounces as speed changes.
 - Deterministic scenery builds alongside tracks via `SceneryManager`, with instanced buildings, street lights, and hazards that depend on track themes.
 - Diagnostic instrumentation (`useDiagnostics`) exposes `__GT_DEBUG__`/`__GT_DIAG__`, toggleable via `?diag=1` or localStorage `gt-diag`, so we can capture long-task/frame-gap data during freeze investigations.
@@ -46,6 +46,7 @@ Multiplayer racing game with a server-authoritative V2 simulation stack, finite 
 - `Tailwind CSS` + shadcn-style component patterns for app UI
 - `TypeScript` with `ESNext` target
 - `bun:test` for unit tests
+- React Compiler (`babel-plugin-react-compiler`) keeping React 19 hooks concise
 
 ## Quick Start
 ```bash

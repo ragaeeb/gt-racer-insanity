@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -45,37 +45,46 @@ const buildWrappedCar = (
     return wrapper;
 };
 
+const disposeWrappedCar = (wrappedCar: THREE.Group) => {
+    wrappedCar.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.geometry?.dispose();
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            for (const mat of materials) {
+                if (mat instanceof THREE.MeshStandardMaterial && mat.map) {
+                    mat.map.dispose();
+                }
+                mat?.dispose();
+            }
+        }
+    });
+};
+
 const CarModel = ({ modelPath, colorId }: CarModelProps) => {
     const gltf = useGLTF(modelPath);
-    const wrapped = useMemo(
-        () => buildWrappedCar(gltf.scene, modelPath, colorId),
-        [gltf.scene, modelPath, colorId],
-    );
-    const baseYaw = useMemo(() => wrapped.rotation.y, [wrapped]);
+    const wrappedRef = useRef<THREE.Group | null>(null);
+    const wrappedKeyRef = useRef('');
+    const baseYawRef = useRef(0);
+    const wrappedKey = `${gltf.scene.uuid}:${modelPath}:${colorId}`;
+
+    if (!wrappedRef.current || wrappedKeyRef.current !== wrappedKey) {
+        wrappedRef.current = buildWrappedCar(gltf.scene, modelPath, colorId);
+        wrappedKeyRef.current = wrappedKey;
+        baseYawRef.current = wrappedRef.current.rotation.y;
+    }
+
+    const wrapped = wrappedRef.current;
 
     useFrame((_, dt) => {
         wrapped.rotation.y += dt * 0.45;
-        if (wrapped.rotation.y > baseYaw + Math.PI * 2) {
+        if (wrapped.rotation.y > baseYawRef.current + Math.PI * 2) {
             wrapped.rotation.y -= Math.PI * 2;
         }
     });
 
     useEffect(() => {
-        return () => {
-            wrapped.traverse((child) => {
-                if ((child as THREE.Mesh).isMesh) {
-                    const mesh = child as THREE.Mesh;
-                    mesh.geometry?.dispose();
-                    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                    for (const mat of materials) {
-                        if (mat instanceof THREE.MeshStandardMaterial && mat.map) {
-                            mat.map.dispose();
-                        }
-                        mat?.dispose();
-                    }
-                }
-            });
-        };
+        return () => disposeWrappedCar(wrapped);
     }, [wrapped]);
 
     return <primitive object={wrapped} />;
