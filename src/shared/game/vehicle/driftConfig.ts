@@ -12,11 +12,7 @@ export type DriftConfig = {
     initiationSpeedThreshold: number;
     /** 0–1 — minimum steering angle to enter drift */
     initiationSteerThreshold: number;
-    /**
-     * ms — time in INITIATING before falling back to GRIPPING.
-     * TODO: this field is defined but not yet consumed by updateDriftState;
-     * currently INITIATING→GRIPPING only triggers on speed/steer loss.
-     */
+    /** ms — max time in INITIATING before falling back to GRIPPING. */
     initiatingToGrippingTimeMs: number;
     /** ms — time in INITIATING before transitioning to DRIFTING */
     initiatingToDriftingTimeMs: number;

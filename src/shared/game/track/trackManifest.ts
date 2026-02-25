@@ -118,3 +118,34 @@ export const getTrackManifestIds = (): TrackId[] => {
 export const isTrackId = (trackId: string): trackId is TrackId => {
     return TRACK_MANIFESTS.some((track) => track.id === trackId);
 };
+
+/**
+ * Returns the frictionMultiplier of the track segment the car is currently on,
+ * based on how far it has travelled along the track.
+ *
+ * Distance is taken modulo the single-lap length so it wraps correctly across laps.
+ * Falls back to 1.0 (standard asphalt) if the track has no segments.
+ *
+ * @param track - The active TrackManifest
+ * @param distanceMeters - The car's total race distance from PlayerRaceProgress.distanceMeters
+ * @returns frictionMultiplier in the range defined by the manifest (e.g. 0.92–1.08)
+ */
+export const getSegmentFrictionForDistance = (track: TrackManifest, distanceMeters: number): number => {
+    if (track.segments.length === 0) {
+        return 1.0;
+    }
+
+    // Wrap distance into a single lap
+    const lapDistance = ((distanceMeters % track.lengthMeters) + track.lengthMeters) % track.lengthMeters;
+
+    let accumulated = 0;
+    for (const segment of track.segments) {
+        accumulated += segment.lengthMeters;
+        if (lapDistance < accumulated) {
+            return segment.frictionMultiplier;
+        }
+    }
+
+    // Past end of last segment (rounding) — use last segment's friction
+    return track.segments[track.segments.length - 1]!.frictionMultiplier;
+};

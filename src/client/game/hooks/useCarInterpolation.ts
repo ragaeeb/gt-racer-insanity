@@ -14,7 +14,11 @@ import {
 } from '@/client/game/systems/correctionSystem';
 import { sampleInterpolationBuffer } from '@/client/game/systems/interpolationSystem';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
-import { DEFAULT_TRACK_WIDTH_METERS } from '@/shared/game/track/trackManifest';
+import {
+    DEFAULT_TRACK_WIDTH_METERS,
+    getSegmentFrictionForDistance,
+    getTrackManifestById,
+} from '@/shared/game/track/trackManifest';
 import { DriftState } from '@/shared/game/vehicle/driftConfig';
 import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 
@@ -45,6 +49,8 @@ const interpolate = (from: InterpolationState, to: InterpolationState, alpha: nu
 
 export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) => {
     const wallClampCountRef = useRef(0);
+    const listenerPositionRef = useRef(new THREE.Vector3());
+    const listenerVelocityRef = useRef(new THREE.Vector3());
     const previousLocalFlippedRef = useRef(false);
     const lastLocalFlipAppliedAtMsRef = useRef<number | null>(null);
     const lastFrameAtMsRef = useRef<number | null>(null);
@@ -116,6 +122,15 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
         const localSnapshot = session.latestLocalSnapshot;
         if (localSnapshot) {
             localCar.syncAuthoritativeSpeed(localSnapshot.speed);
+
+            // Update surface friction for surface audio (squeal/rumble channels).
+            if (session.activeTrackId) {
+                const trackManifest = getTrackManifestById(session.activeTrackId);
+                localCar.currentFrictionMultiplier = getSegmentFrictionForDistance(
+                    trackManifest,
+                    localSnapshot.progress.distanceMeters,
+                );
+            }
 
             // Sync drift visual state from authoritative server snapshot.
             if (localSnapshot.driftState !== undefined) {
@@ -287,8 +302,16 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
             opponentCar.targetRotationY = interpolatedState.rotationY;
         }
 
+        const localSpeed = localCar.getSpeed();
+        listenerPositionRef.current.copy(localCar.mesh.position);
+        listenerVelocityRef.current.set(
+            Math.sin(localCar.rotationY) * localSpeed,
+            0,
+            Math.cos(localCar.rotationY) * localSpeed,
+        );
+
         for (const [, opponentCar] of session.opponents) {
-            opponentCar.update(dt);
+            opponentCar.update(dt, listenerPositionRef.current, listenerVelocityRef.current);
         }
     });
 

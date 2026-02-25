@@ -1,10 +1,10 @@
-import { Suspense, useEffect, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Suspense, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
 import { applyCarPaint } from '@/client/game/paintSystem';
-import { VEHICLE_CLASS_TO_CATALOG_ID, colorIdToHSL } from '@/client/game/vehicleSelections';
+import { colorIdToHSL, VEHICLE_CLASS_TO_CATALOG_ID } from '@/client/game/vehicleSelections';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 
 const getModelPathForVehicleClass = (vehicleClassId: VehicleClassId): string => {
@@ -23,11 +23,7 @@ type CarModelProps = {
     colorId: string;
 };
 
-const buildWrappedCar = (
-    sourceScene: THREE.Group,
-    modelPath: string,
-    colorId: string,
-): THREE.Group => {
+const buildWrappedCar = (sourceScene: THREE.Group, modelPath: string, colorId: string): THREE.Group => {
     const color = paintColorFromId(colorId);
     const scene = sourceScene.clone();
     const yawOffset = CAR_MODEL_CATALOG.find((c) => c.modelPath === modelPath)?.modelYawOffsetRadians ?? 0;
@@ -45,37 +41,46 @@ const buildWrappedCar = (
     return wrapper;
 };
 
+const disposeWrappedCar = (wrappedCar: THREE.Group) => {
+    wrappedCar.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.geometry?.dispose();
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            for (const mat of materials) {
+                if (mat && 'map' in mat && (mat as THREE.MeshStandardMaterial).map) {
+                    (mat as THREE.MeshStandardMaterial).map!.dispose();
+                }
+                mat?.dispose();
+            }
+        }
+    });
+};
+
 const CarModel = ({ modelPath, colorId }: CarModelProps) => {
     const gltf = useGLTF(modelPath);
-    const wrapped = useMemo(
-        () => buildWrappedCar(gltf.scene, modelPath, colorId),
-        [gltf.scene, modelPath, colorId],
-    );
-    const baseYaw = useMemo(() => wrapped.rotation.y, [wrapped]);
+    const wrappedRef = useRef<THREE.Group | null>(null);
+    const wrappedKeyRef = useRef('');
+    const baseYawRef = useRef(0);
+    const wrappedKey = `${gltf.scene.uuid}:${modelPath}:${colorId}`;
+
+    if (!wrappedRef.current || wrappedKeyRef.current !== wrappedKey) {
+        wrappedRef.current = buildWrappedCar(gltf.scene, modelPath, colorId);
+        wrappedKeyRef.current = wrappedKey;
+        baseYawRef.current = wrappedRef.current.rotation.y;
+    }
+
+    const wrapped = wrappedRef.current;
 
     useFrame((_, dt) => {
         wrapped.rotation.y += dt * 0.45;
-        if (wrapped.rotation.y > baseYaw + Math.PI * 2) {
+        if (wrapped.rotation.y > baseYawRef.current + Math.PI * 2) {
             wrapped.rotation.y -= Math.PI * 2;
         }
     });
 
     useEffect(() => {
-        return () => {
-            wrapped.traverse((child) => {
-                if ((child as THREE.Mesh).isMesh) {
-                    const mesh = child as THREE.Mesh;
-                    mesh.geometry?.dispose();
-                    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-                    for (const mat of materials) {
-                        if (mat instanceof THREE.MeshStandardMaterial && mat.map) {
-                            mat.map.dispose();
-                        }
-                        mat?.dispose();
-                    }
-                }
-            });
-        };
+        return () => disposeWrappedCar(wrapped);
     }, [wrapped]);
 
     return <primitive object={wrapped} />;

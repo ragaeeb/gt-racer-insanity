@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useAbilityFxStore } from '@/client/game/state/abilityFxStore';
 
@@ -9,24 +9,29 @@ const POOL_SIZE = 4;
 export const SpikeShotProjectiles = () => {
     const groupRef = useRef<THREE.Group>(null);
     const meshRefs = useRef<(THREE.Mesh | null)[]>([]);
-
-    const geometry = useMemo(() => new THREE.ConeGeometry(0.25, 0.8, 8), []);
-    const material = useMemo(
-        () =>
-            new THREE.MeshStandardMaterial({
-                color: 0xffcc00,
-                emissive: 0xff8800,
-                emissiveIntensity: 1.2,
-                metalness: 0.3,
-                roughness: 0.4,
-            }),
-        [],
-    );
+    const geometryRef = useRef<THREE.ConeGeometry | null>(null);
+    const materialRef = useRef<THREE.MeshStandardMaterial | null>(null);
+    if (!geometryRef.current) {
+        geometryRef.current = new THREE.ConeGeometry(0.25, 0.8, 8);
+    }
+    if (!materialRef.current) {
+        materialRef.current = new THREE.MeshStandardMaterial({
+            color: 0xffcc00,
+            emissive: 0xff8800,
+            emissiveIntensity: 1.2,
+            metalness: 0.3,
+            roughness: 0.4,
+        });
+    }
+    const geometry = geometryRef.current;
+    const material = materialRef.current;
 
     useEffect(() => {
         return () => {
             geometry.dispose();
             material.dispose();
+            geometryRef.current = null;
+            materialRef.current = null;
         };
     }, [geometry, material]);
 

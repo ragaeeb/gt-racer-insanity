@@ -6,6 +6,7 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 ## Stack
 - Runtime/package manager: `bun`
 - Client: `React + Vite + @react-three/fiber + three`
+- React 19 + React Compiler (`babel-plugin-react-compiler`) for automatic memoization
 - UI: `Tailwind CSS` + shadcn-style component patterns
 - Realtime server: `Bun + Socket.IO + @socket.io/bun-engine`
 - Language: `TypeScript` targeting `ESNext`
@@ -51,6 +52,7 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Player identity is part of shared network player state (`name` on `PlayerState`).
 - Scene presentation is defined through environment profiles in `src/client/game/scene/environment/sceneEnvironmentProfiles.ts`; scenery is rebuilt when the track changes (useNetworkConnection).
 - E2E tests are intentionally gated and should not run in default `bun test` flows.
+- Engine audio now relies on the new `EngineLayerManager` crossfading idle/mid/high loops with gear-shift pitch dips; keep audio/state logic under `src/client/game/audio`.
 
 ## Diagnostics
 - `src/client/game/hooks/useDiagnostics.ts` exposes `window.__GT_DEBUG__` (player/opponent positions, connection state) and `window.__GT_DIAG__` (frame-gap/long-task counters, report download) for runtime investigations.

@@ -187,6 +187,26 @@ describe('Drift State Machine', () => {
         expect(result.lateralFrictionMultiplier).toBe(DEFAULT_DRIFT_CONFIG.initiatingLateralFriction);
     });
 
+    it('should transition INITIATING -> GRIPPING when initiating timeout is reached before drifting threshold', () => {
+        const customConfig: DriftConfig = {
+            ...DEFAULT_DRIFT_CONFIG,
+            initiatingToDriftingTimeMs: 150,
+            initiatingToGrippingTimeMs: 80,
+        };
+        const player = mockPlayer({
+            speed: 15,
+            handbrake: true,
+            steering: 0.8,
+            driftContext: {
+                state: DriftState.INITIATING,
+                stateEnteredAtMs: 900,
+            },
+        });
+
+        updateDriftState(player, 990, customConfig); // 90ms in INITIATING
+        expect(player.driftContext.state).toBe(DriftState.GRIPPING);
+    });
+
     // ─── DRIFTING state tests ───
 
     it('should return low lateral friction (0.15) in DRIFTING state', () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getAbilityManifestById } from '@/shared/game/ability/abilityManifest';
 import { getVehicleClassManifestById } from '@/shared/game/vehicle/vehicleClassManifest';
 import { useHudStore } from '@/client/game/state/hudStore';
@@ -17,9 +17,8 @@ export const AbilityIndicator = () => {
     const ability = getAbilityManifestById(vehicleClass.abilityId);
     const readyAtMs = ability ? (cooldownMsByAbilityId[ability.id] ?? 0) : 0;
 
-    const computeRemaining = useCallback(() => Math.max(0, readyAtMs - Date.now()), [readyAtMs]);
-
     useEffect(() => {
+        const computeRemaining = () => Math.max(0, readyAtMs - Date.now());
         setRemainingMs(computeRemaining());
         if (readyAtMs <= Date.now()) { return; }
 
@@ -29,7 +28,7 @@ export const AbilityIndicator = () => {
             if (next <= 0) { clearInterval(interval); }
         }, 100);
         return () => clearInterval(interval);
-    }, [readyAtMs, computeRemaining]);
+    }, [readyAtMs]);
 
     if (!ability) { return null; }
 

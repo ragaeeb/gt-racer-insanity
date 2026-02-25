@@ -3,8 +3,11 @@ import { getHazardManifestById } from '@/shared/game/hazard/hazardManifest';
 import { getPowerupManifestById } from '@/shared/game/powerup/powerupManifest';
 import {
     DEFAULT_TRACK_WIDTH_METERS,
+    getSegmentFrictionForDistance,
     getTrackManifestById,
     getTrackManifestIds,
+    TRACK_MANIFESTS,
+    type TrackManifest,
 } from '@/shared/game/track/trackManifest';
 
 describe('track manifest spawn validation', () => {
@@ -79,6 +82,68 @@ describe('track manifest spawn validation', () => {
             const manifest = getTrackManifestById(trackId);
             const ids = manifest.hazardSpawns.map((s) => s.id);
             expect(new Set(ids).size).toBe(ids.length);
+        }
+    });
+});
+
+describe('getSegmentFrictionForDistance — segment lookup for surface audio', () => {
+    // sunset-loop: seg-a(0–300, f=1.0) | seg-b(300–600, f=0.95) | seg-c(600–900, f=1.05)
+    const SUNSET = getTrackManifestById('sunset-loop');
+    // canyon-sprint: seg-a(0–275, f=1.0) | seg-b(275–550, f=0.92) | seg-c(550–825, f=1.08) | seg-d(825–1100, f=1.0)
+    const CANYON = getTrackManifestById('canyon-sprint');
+
+    it('should return 1.0 at the very start of sunset-loop', () => {
+        expect(getSegmentFrictionForDistance(SUNSET, 0)).toBe(1);
+    });
+
+    it('should return seg-a friction (1.0) in the first 300m of sunset-loop', () => {
+        expect(getSegmentFrictionForDistance(SUNSET, 150)).toBe(1);
+    });
+
+    it('should return seg-b friction (0.95) between 300–600m of sunset-loop', () => {
+        expect(getSegmentFrictionForDistance(SUNSET, 400)).toBe(0.95);
+    });
+
+    it('should return seg-c friction (1.05) between 600–900m of sunset-loop', () => {
+        expect(getSegmentFrictionForDistance(SUNSET, 700)).toBe(1.05);
+    });
+
+    it('should wrap correctly to seg-a on the second lap of sunset-loop', () => {
+        // 900m = one lap; 900 + 50 = 50m into lap 2 → seg-a
+        expect(getSegmentFrictionForDistance(SUNSET, 950)).toBe(1);
+    });
+
+    it('should wrap correctly to seg-b on the second lap of sunset-loop', () => {
+        // 900 + 350 = 350m into lap 2 → seg-b
+        expect(getSegmentFrictionForDistance(SUNSET, 1250)).toBe(0.95);
+    });
+
+    it('should return canyon seg-b friction (0.92) — the reduced-traction section', () => {
+        // seg-b starts at 275m; 400m is in that zone
+        expect(getSegmentFrictionForDistance(CANYON, 400)).toBe(0.92);
+    });
+
+    it('should return canyon seg-c friction (1.08) — the high-grip section', () => {
+        // seg-c starts at 550m
+        expect(getSegmentFrictionForDistance(CANYON, 600)).toBe(1.08);
+    });
+
+    it('should return 1.0 for a track with no segments', () => {
+        const emptyTrack: TrackManifest = { ...SUNSET, segments: [] };
+        expect(getSegmentFrictionForDistance(emptyTrack, 500)).toBe(1.0);
+    });
+
+    it('should return last segment friction when distance is just before the track boundary', () => {
+        // 899m is inside seg-c (600–900m)
+        expect(getSegmentFrictionForDistance(SUNSET, 899)).toBe(1.05);
+    });
+
+    it('should have all segment frictions within a sane range for all real tracks', () => {
+        for (const track of TRACK_MANIFESTS) {
+            for (const segment of track.segments) {
+                expect(segment.frictionMultiplier).toBeGreaterThan(0.5);
+                expect(segment.frictionMultiplier).toBeLessThan(2.0);
+            }
         }
     });
 });

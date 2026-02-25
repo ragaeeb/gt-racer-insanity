@@ -58,6 +58,14 @@ export const updateDriftState = (player: SimPlayerState, nowMs: number, config: 
                 break;
             }
 
+            // Safety timeout: don't remain in INITIATING forever if tuning requests a fallback.
+            if (timeInState >= config.initiatingToGrippingTimeMs) {
+                ctx.state = DriftState.GRIPPING;
+                ctx.stateEnteredAtMs = nowMs;
+                ctx.boostTier = 0;
+                break;
+            }
+
             // Transition to DRIFTING after hold time
             if (timeInState >= config.initiatingToDriftingTimeMs) {
                 ctx.state = DriftState.DRIFTING;

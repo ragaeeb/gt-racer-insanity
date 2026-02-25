@@ -34,7 +34,14 @@ export default defineConfig({
         __APP_NAME__: JSON.stringify(packageJson.name ?? ''),
         __APP_VERSION__: JSON.stringify(packageJson.version),
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [
+        react({
+            babel: {
+                plugins: ['babel-plugin-react-compiler'],
+            },
+        }),
+        tailwindcss(),
+    ],
     resolve: {
         alias: {
             '@': fileURLToPath(new URL('./src', import.meta.url)),
