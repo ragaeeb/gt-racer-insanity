@@ -128,6 +128,9 @@ export const useDiagnostics = (
         captureRef.current = createDiagCaptureState();
         spikeCountRef.current = 0;
         contactEpisodeTracker.reset();
+        lastLogAtMsRef.current = 0;
+        lastSnapshotSeqRef.current = -1;
+        lastSpikeWarnAtMsRef.current = 0;
         maxFrameDtMsSinceLogRef.current = 0;
         longFrameCountSinceLogRef.current = 0;
         maxFrameGapMsSinceLogRef.current = 0;

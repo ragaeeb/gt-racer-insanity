@@ -62,7 +62,6 @@ export class PlayerManager {
         const collider = this.colliderById.get(playerId);
         if (collider) {
             this.colliderHandleToPlayerId.delete(collider.handle);
-            this.rapierContext.world.removeCollider(collider, true);
         }
 
         const rigidBody = this.rigidBodyById.get(playerId);
@@ -81,6 +80,9 @@ export class PlayerManager {
         colorId: string,
         playerIndex: number,
     ): SimPlayerState {
+        if (this.players.has(playerId)) {
+            this.removePlayer(playerId);
+        }
         const normalizedVehicleId = (vehicleId || 'sport') as VehicleClassId;
         this.createRigidBody(playerId, normalizedVehicleId, playerIndex);
         const rigidBody = this.rigidBodyById.get(playerId);

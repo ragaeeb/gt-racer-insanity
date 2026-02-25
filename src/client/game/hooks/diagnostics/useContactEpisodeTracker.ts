@@ -78,13 +78,7 @@ export const useContactEpisodeTracker = (): ContactEpisodeTrackerResult => {
             const closedOpponentId = episode.opponentId;
             const closedMinDistance = episode.minDistanceMeters;
 
-            episode.active = false;
-            episode.hadCollisionEvent = false;
-            episode.initialRelativeZ = 0;
-            episode.minDistanceMeters = Number.POSITIVE_INFINITY;
-            episode.opponentId = null;
-            episode.passThroughSuspected = false;
-            episode.startedAtMs = 0;
+            Object.assign(episode, createContactEpisodeState());
 
             if (wasPassThrough) {
                 return {

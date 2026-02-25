@@ -145,7 +145,7 @@ export const colorIdToHSL = (colorId: string): { h: number; s: number; l: number
     return { h: 0, s: 1.0, l: 0.5 };
 };
 
-/** Resolve a color ID to a CSS hsl() string for use in DOM elements. */
+/** Resolve a color ID to a CSS hex color string for use in DOM elements. */
 export const colorIdToHexString = (colorId: string): string => {
     const parsedHex = colorId.trim();
     if (isHexColorString(parsedHex)) {

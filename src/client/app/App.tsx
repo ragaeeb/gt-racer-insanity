@@ -1,5 +1,5 @@
 import { Canvas, type RootState } from '@react-three/fiber';
-import {
+import React, {
     Suspense,
     lazy,
     memo,
@@ -8,7 +8,6 @@ import {
     useMemo,
     useState,
     type Dispatch,
-    type FormEvent,
     type SetStateAction,
 } from 'react';
 import * as THREE from 'three';
@@ -31,31 +30,31 @@ const RaceWorld = lazy(async () => {
 });
 
 const GithubIcon = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6" aria-hidden="true" focusable="false">
         <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
     </svg>
 );
 
 const BunIcon = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10">
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10" aria-hidden="true" focusable="false">
         <path d="M12 22.596c6.628 0 12-4.338 12-9.688 0-3.318-2.057-6.248-5.219-7.986-1.286-.715-2.297-1.357-3.139-1.89C14.058 2.025 13.08 1.404 12 1.404c-1.097 0-2.334.785-3.966 1.821a49.92 49.92 0 0 1-2.816 1.697C2.057 6.66 0 9.59 0 12.908c0 5.35 5.372 9.687 12 9.687v.001ZM10.599 4.715c.334-.759.503-1.58.498-2.409 0-.145.202-.187.23-.029.658 2.783-.902 4.162-2.057 4.624-.124.048-.199-.121-.103-.209a5.763 5.763 0 0 0 1.432-1.977Zm2.058-.102a5.82 5.82 0 0 0-.782-2.306v-.016c-.069-.123.086-.263.185-.172 1.962 2.111 1.307 4.067.556 5.051-.082.103-.23-.003-.189-.126a5.85 5.85 0 0 0 .23-2.431Zm1.776-.561a5.727 5.727 0 0 0-1.612-1.806v-.014c-.112-.085-.024-.274.114-.218 2.595 1.087 2.774 3.18 2.459 4.407a.116.116 0 0 1-.049.071.11.11 0 0 1-.153-.026.122.122 0 0 1-.022-.083 5.891 5.891 0 0 0-.737-2.331Zm-5.087.561c-.617.546-1.282.76-2.063 1-.117 0-.195-.078-.156-.181 1.752-.909 2.376-1.649 2.999-2.778 0 0 .155-.118.188.085 0 .304-.349 1.329-.968 1.874Zm4.945 11.237a2.957 2.957 0 0 1-.937 1.553c-.346.346-.8.565-1.286.62a2.178 2.178 0 0 1-1.327-.62 2.955 2.955 0 0 1-.925-1.553.244.244 0 0 1 .064-.198.234.234 0 0 1 .193-.069h3.965a.226.226 0 0 1 .19.07c.05.053.073.125.063.197Zm-5.458-2.176a1.862 1.862 0 0 1-2.384-.245 1.98 1.98 0 0 1-.233-2.447c.207-.319.503-.566.848-.713a1.84 1.84 0 0 1 1.092-.11c.366.075.703.261.967.531a1.98 1.98 0 0 1 .408 2.114 1.931 1.931 0 0 1-.698.869v.001Zm8.495.005a1.86 1.86 0 0 1-2.381-.253 1.964 1.964 0 0 1-.547-1.366c0-.384.11-.76.32-1.079.207-.319.503-.567.849-.713a1.844 1.844 0 0 1 1.093-.108c.367.076.704.262.968.534a1.98 1.98 0 0 1 .4 2.117 1.932 1.932 0 0 1-.702.868Z" />
     </svg>
 );
 
 const ThreeIcon = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10">
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10" aria-hidden="true" focusable="false">
         <path d="M.38 0a.268.268 0 0 0-.256.332l2.894 11.716a.268.268 0 0 0 .01.04l2.89 11.708a.268.268 0 0 0 .447.128L23.802 7.15a.268.268 0 0 0-.112-.45l-5.784-1.667a.268.268 0 0 0-.123-.035L6.38 1.715a.268.268 0 0 0-.144-.04L.456.01A.268.268 0 0 0 .38 0zm.374.654L5.71 2.08 1.99 5.664zM6.61 2.34l4.864 1.4-3.65 3.515zm-.522.12l1.217 4.926-4.877-1.4zm6.28 1.538l4.878 1.404-3.662 3.53zm-.52.13l1.208 4.9-4.853-1.392zm6.3 1.534l4.947 1.424-3.715 3.574zm-.524.12l1.215 4.926-4.876-1.398zm-15.432.696l4.964 1.424-3.726 3.586zM8.047 8.15l4.877 1.4-3.66 3.527zm-.518.137l1.236 5.017-4.963-1.432zm6.274 1.535l4.965 1.425-3.73 3.586zm-.52.127l1.235 5.012-4.958-1.43zm-9.63 2.438l4.873 1.406-3.656 3.523zm5.854 1.687l4.863 1.403-3.648 3.51zm-.54.04l1.214 4.927-4.875-1.4zm-3.896 4.02l5.037 1.442-3.782 3.638z" />
     </svg>
 );
 
 const SocketIoIcon = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10">
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10" aria-hidden="true" focusable="false">
         <path d="M11.9362.0137a12.1694 12.1694 0 00-2.9748.378C4.2816 1.5547.5678 5.7944.0918 10.6012c-.59 4.5488 1.7079 9.2856 5.6437 11.6345 3.8608 2.4179 9.0926 2.3199 12.8734-.223 3.3969-2.206 5.5118-6.2277 5.3858-10.2845-.058-4.0159-2.31-7.9167-5.7588-9.9796C16.354.5876 14.1431.0047 11.9362.0137zm-.063 1.696c4.9448-.007 9.7886 3.8137 10.2815 8.9245.945 5.6597-3.7528 11.4125-9.4875 11.5795-5.4538.544-10.7245-4.0798-10.8795-9.5566-.407-4.4338 2.5159-8.8346 6.6977-10.2995a9.1126 9.1126 0 013.3878-.647zm5.0908 3.2248c-2.6869 2.0849-5.2598 4.3078-7.8886 6.4567 1.2029.017 2.4118.016 3.6208.01 1.41-2.165 2.8589-4.3008 4.2678-6.4667zm-5.6647 7.6536c-1.41 2.166-2.86 4.3088-4.2699 6.4737 2.693-2.0799 5.2548-4.3198 7.9017-6.4557a255.4132 255.4132 0 00-3.6318-.018z" />
     </svg>
 );
 
 const TailwindIcon = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10">
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10" aria-hidden="true" focusable="false">
         <path d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z" />
     </svg>
 );
@@ -199,14 +198,10 @@ const RaceSceneCanvas = memo(
 
 RaceSceneCanvas.displayName = 'RaceSceneCanvas';
 
-/* ============================================================
-   LANDING HERO
-   ============================================================ */
-
 type LandingHeroProps = {
     handleCreateNewGame: () => Promise<void>;
     handleJoinExistingGame: () => void;
-    handleJoinSubmit: (event: FormEvent<HTMLFormElement>) => void;
+    handleJoinSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
     homeError: string;
     isCheckingServer: boolean;
     joinRoomInput: string;
@@ -267,7 +262,7 @@ const LandingHero = ({
                 className="fixed top-[42vh] w-[800px] pointer-events-none z-50 transition-transform duration-75 ease-out"
                 style={{ transform: `translate3d(calc(100vw - ${carOffset}px), 0, 0)` }}
             >
-                <svg viewBox="0 0 500 150" className="w-[800px] h-auto">
+                <svg viewBox="0 0 500 150" className="w-[800px] h-auto" aria-hidden="true" focusable="false">
                     {/* Data stream lines — cyan */}
                     <path d="M500,100 L440,100 M480,80 L420,80 M490,120 L455,120" stroke="#00E5FF" strokeWidth="3" strokeLinecap="round" opacity="0.75" className="animate-pulse" />
                     <path d="M462,90 L385,90 M472,110 L405,110 M458,74 L398,74" stroke="#00E5FF" strokeWidth="1.5" strokeLinecap="round" opacity="0.4" />
@@ -508,21 +503,11 @@ const LandingHero = ({
                         {techStack.map((tech) => (
                             <div
                                 key={tech.name}
-                                className="group relative p-8 rounded overflow-hidden hover:-translate-y-2 transition-all duration-500"
+                                className="group relative p-8 rounded overflow-hidden hover:-translate-y-2 transition-all duration-500 hover:[border:1px_solid_rgba(0,229,255,0.4)] hover:[box-shadow:0_0_30px_rgba(0,229,255,0.1),0_8px_30px_rgba(0,0,0,0.6)]"
                                 style={{
                                     background: 'rgba(4,10,22,0.9)',
                                     border: '1px solid rgba(0,229,255,0.1)',
                                     boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-                                }}
-                                onMouseEnter={(e) => {
-                                    const el = e.currentTarget;
-                                    el.style.border = '1px solid rgba(0,229,255,0.4)';
-                                    el.style.boxShadow = '0 0 30px rgba(0,229,255,0.1), 0 8px 30px rgba(0,0,0,0.6)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    const el = e.currentTarget;
-                                    el.style.border = '1px solid rgba(0,229,255,0.1)';
-                                    el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
                                 }}
                             >
                                 {/* Hover gradient overlay */}
@@ -566,6 +551,7 @@ const LandingHero = ({
 
                     <div className="flex gap-5 mb-10">
                         <a
+                            aria-label="Open GT Racer Insanity repository on GitHub"
                             href="https://github.com/ragaeeb/gt-racer-insanity"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -765,14 +751,14 @@ export const App = () => {
 
     const handleJoinExistingGame = () => { setHomeError(''); setShowJoinPrompt(true); };
 
-    const handleJoinSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const handleJoinSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const sanitizedRoomId = sanitizeRoomId(joinRoomInput);
         if (!sanitizedRoomId) { return; }
         navigateTo('/lobby', sanitizedRoomId);
     };
 
-    const handleStartRace = (event: FormEvent<HTMLFormElement>) => {
+    const handleStartRace = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const nextName = sanitizePlayerName(nameInput);
         window.sessionStorage.setItem('gt-player-name-session', nextName);
@@ -856,7 +842,7 @@ export const App = () => {
 
                     {/* Name input */}
                     <div className="space-y-1.5">
-                        <label className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/40 uppercase block">
+                        <label htmlFor="player-name-input" className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/40 uppercase block">
                             CALLSIGN
                         </label>
                         <Input

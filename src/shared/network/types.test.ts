@@ -162,9 +162,27 @@ describe('network v2 validators', () => {
         };
 
         expect(isServerSnapshotPayload(minimalPayload)).toEqual(true);
-        expect(minimalPayload.roomId.length > 0).toEqual(true);
-        expect(minimalPayload.players.length).toEqual(1);
-        expect(minimalPayload.raceState.playerOrder.length).toEqual(1);
+        expect(
+            isServerSnapshotPayload({
+                ...minimalPayload,
+                roomId: 123,
+            })
+        ).toEqual(false);
+        expect(
+            isServerSnapshotPayload({
+                ...minimalPayload,
+                players: undefined,
+            })
+        ).toEqual(false);
+        expect(
+            isServerSnapshotPayload({
+                ...minimalPayload,
+                raceState: {
+                    ...minimalPayload.raceState,
+                    playerOrder: undefined,
+                },
+            })
+        ).toEqual(false);
     });
 
     it('should coerce unsupported protocol versions to latest', () => {

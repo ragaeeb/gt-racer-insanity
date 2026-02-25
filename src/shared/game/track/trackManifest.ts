@@ -1,3 +1,5 @@
+import type { HazardManifest } from '@/shared/game/hazard/hazardManifest';
+
 export type TrackId = 'sunset-loop' | 'canyon-sprint';
 
 export type TrackThemeId = 'sunny-day' | 'canyon-dusk';
@@ -21,8 +23,10 @@ export type TrackPowerupSpawn = {
     z: number;
 };
 
+export type HazardId = HazardManifest['id'];
+
 export type TrackHazardSpawn = {
-    hazardId: string;
+    hazardId: HazardId;
     id: string;
     x: number;
     z: number;

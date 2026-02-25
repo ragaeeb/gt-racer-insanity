@@ -129,7 +129,7 @@ describe('hazard collision detection', () => {
         const flipped = player?.activeEffects.find((effect) => effect.effectType === 'flipped');
         expect(stunned).toBeDefined();
         expect(flipped).toBeDefined();
-        expect((stunned?.expiresAtMs ?? 0) - (stunned?.appliedAtMs ?? 0)).toEqual(2_000);
+        expect(stunned!.expiresAtMs - stunned!.appliedAtMs).toEqual(2_000);
 
         const events = sim.drainRaceEvents();
         const hazardEvent = events.find((event) => event.kind === 'hazard_triggered');

@@ -6,6 +6,7 @@ import {
     type TrackThemeId,
 } from '@/shared/game/track/trackManifest';
 import type { SnapshotHazardState, SnapshotPowerupState } from '@/shared/network/snapshot';
+import { PUDDLE_TRAP_ID } from '@/shared/game/hazard/hazardManifest';
 import { generateTrackObstacles, type ObstacleDescriptor } from '@/shared/game/track/trackObstacles';
 
 type TrackSegment = {
@@ -388,7 +389,7 @@ export class TrackManager {
     private createPuddleTrap = (x: number, z: number): THREE.Group => {
         const group = new THREE.Group();
         group.position.set(x, 0.012, z);
-        group.name = 'puddle-trap';
+        group.name = PUDDLE_TRAP_ID;
 
         const puddleGeo = new THREE.CircleGeometry(2.1, 20);
         const puddleMat = new THREE.MeshStandardMaterial({
@@ -470,7 +471,7 @@ export class TrackManager {
                 continue;
             }
             const visual =
-                hazard.hazardId === 'puddle-trap'
+                hazard.hazardId === PUDDLE_TRAP_ID
                     ? this.createPuddleTrap(hazard.x, hazard.z)
                     : this.createSpikeStrip(hazard.x, hazard.z);
             this.scene.add(visual);

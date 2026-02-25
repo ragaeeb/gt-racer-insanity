@@ -95,8 +95,11 @@ describe('colorIdToHexString', () => {
 describe('isHexColorString', () => {
     it('should validate strict #RRGGBB values', () => {
         expect(isHexColorString('#00FF00')).toBeTrue();
+        expect(isHexColorString('#00ff00')).toBeTrue();
         expect(isHexColorString('#0f0')).toBeFalse();
         expect(isHexColorString('00FF00')).toBeFalse();
+        expect(isHexColorString('#00FF000')).toBeFalse();
+        expect(isHexColorString('#GGGGGG')).toBeFalse();
     });
 });
 

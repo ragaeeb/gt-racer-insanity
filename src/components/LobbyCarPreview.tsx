@@ -90,8 +90,9 @@ type SceneProps = {
 const PREVIEW_BG_COLOR = new THREE.Color(0x020810);
 const GROUND_COLOR = new THREE.Color(0x041020);
 const SKY_COLOR = new THREE.Color(0x003344);
+const RIM_LIGHT_COLOR = new THREE.Color(0x00e5ff);
 
-const PreviewScene = (_props: SceneProps) => {
+const PreviewScene = () => {
     return (
         <>
             <color attach="background" args={[PREVIEW_BG_COLOR.r, PREVIEW_BG_COLOR.g, PREVIEW_BG_COLOR.b]} />
@@ -100,7 +101,7 @@ const PreviewScene = (_props: SceneProps) => {
             {/* Main key light — warm */}
             <directionalLight position={[4, 6, 5]} intensity={1.4} />
             {/* Cyan rim light from left */}
-            <directionalLight position={[-4, 3, -2]} intensity={0.9} color={new THREE.Color(0x00e5ff)} />
+            <directionalLight position={[-4, 3, -2]} intensity={0.9} color={RIM_LIGHT_COLOR} />
             {/* Fill from right */}
             <directionalLight position={[3, 2, -4]} intensity={0.4} />
         </>
@@ -112,7 +113,7 @@ const FullScene = ({ vehicleClassId, colorId }: SceneProps) => {
     const modelPath = getModelPathForVehicleClass(vehicleClassId);
     return (
         <>
-            <PreviewScene vehicleClassId={vehicleClassId} colorId={colorId} />
+            <PreviewScene />
             <Suspense fallback={null}>
                 <CarModel modelPath={modelPath} colorId={colorId} />
             </Suspense>

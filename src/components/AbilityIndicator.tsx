@@ -48,10 +48,10 @@ export const AbilityIndicator = () => {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 marginTop: '4px',
-                color: isReady ? '#00E5FF' : '#FFC107',
+                color: isReady ? 'var(--gt-cyan)' : 'var(--gt-amber)',
                 textShadow: isReady
-                    ? '0 0 8px rgba(0,229,255,0.6)'
-                    : '0 0 8px rgba(255,193,7,0.5)',
+                    ? '0 0 8px rgba(0, 229, 255, 0.6)'
+                    : '0 0 8px rgba(255, 193, 7, 0.5)',
                 transition: 'color 0.3s, text-shadow 0.3s',
             }}
             title="Press E to use"

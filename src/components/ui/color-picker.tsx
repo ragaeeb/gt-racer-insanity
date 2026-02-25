@@ -1,10 +1,11 @@
-import { forwardRef, useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useState } from 'react';
 import { HexColorPicker } from 'react-colorful';
 import { cn } from '@/lib/utils';
 import type { ButtonProps } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { isHexColorString } from '@/client/game/vehicleSelections';
 
 type ColorPickerProps = {
     onBlur?: () => void;
@@ -12,18 +13,13 @@ type ColorPickerProps = {
     value: string;
 };
 
-const HEX_COLOR_RE = /^#([0-9A-F]{6})$/i;
-
 export const ColorPicker = forwardRef<
     HTMLInputElement,
     Omit<ButtonProps, 'onBlur' | 'onChange' | 'value'> & ColorPickerProps
 >(({ className, disabled, onBlur, onChange, size, value, ...props }, ref) => {
     const [open, setOpen] = useState(false);
-    const [draftValue, setDraftValue] = useState(value);
-
-    const parsedValue = useMemo(() => {
-        return value || '#ffffff';
-    }, [value]);
+    const parsedValue = value || '#ffffff';
+    const [draftValue, setDraftValue] = useState(() => value || '#ffffff');
 
     useEffect(() => {
         setDraftValue(parsedValue);
@@ -60,7 +56,7 @@ export const ColorPicker = forwardRef<
                     onChange={(event) => {
                         const next = event.currentTarget.value.toUpperCase();
                         setDraftValue(next);
-                        if (HEX_COLOR_RE.test(next)) {
+                        if (isHexColorString(next)) {
                             onChange(next);
                         }
                     }}

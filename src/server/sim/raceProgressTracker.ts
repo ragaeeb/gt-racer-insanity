@@ -3,6 +3,7 @@ import { advanceRaceProgress } from '@/shared/game/track/raceProgress';
 import type { getTrackManifestById } from '@/shared/game/track/trackManifest';
 import type { RaceState } from '@/shared/network/snapshot';
 import type { RaceEventPayload } from '@/shared/network/types';
+import { PLAYER_COLLIDER_HALF_LENGTH_METERS } from '@/shared/physics/constants';
 
 type TrackManifest = ReturnType<typeof getTrackManifestById>;
 
@@ -13,8 +14,6 @@ export type MutableRaceState = {
     totalLaps: number;
     winnerPlayerId: string | null;
 };
-
-const PLAYER_PROGRESS_FORWARD_OFFSET_METERS = 2.2;
 
 /**
  * Advances a single player's lap/distance progress each simulation tick and
@@ -55,7 +54,7 @@ export class RaceProgressTracker {
         const hasWrappedAllLaps = player.progress.lap >= raceState.totalLaps;
         const isOnFinalLap = player.progress.lap >= raceState.totalLaps - 1;
         const reachedRaceEndByFrontBumper =
-            player.motion.positionZ + PLAYER_PROGRESS_FORWARD_OFFSET_METERS >= this.totalTrackLengthMeters;
+            player.motion.positionZ + PLAYER_COLLIDER_HALF_LENGTH_METERS >= this.totalTrackLengthMeters;
         const hasClearedFinalCheckpoint = player.progress.checkpointIndex >= this.trackManifest.checkpoints.length - 1;
 
         if (!hasWrappedAllLaps && isOnFinalLap && hasClearedFinalCheckpoint && reachedRaceEndByFrontBumper) {
