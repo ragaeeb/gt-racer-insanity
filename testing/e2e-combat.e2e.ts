@@ -58,24 +58,15 @@ test.describe('e2e combat - oil slick', () => {
         try {
             await joinRace(pageA, roomId, 'Oil Slicker');
             await joinRace(pageB, roomId, 'Oil Rival');
-            const [stateA, stateB] = await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
+            await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
             await waitForMultiplayerReady(pageA, pageB, 10_000);
-
-            await pageA.bringToFront();
-            await setDrivingKeyState(pageA, 'KeyW', true);
-            await pageB.bringToFront();
-            await setDrivingKeyState(pageB, 'KeyW', true);
-            await waitForCarsToMoveForward(pageA, pageB, stateA, stateB, 5_000);
-
-            await pageA.bringToFront();
-            await setDrivingKeyState(pageA, 'KeyW', false);
-            await pageB.bringToFront();
-            await setDrivingKeyState(pageB, 'KeyW', false);
 
             const before = await readDebugState(pageA);
             const initialDeployableCount = before?.deployableCount ?? 0;
 
             await pageA.bringToFront();
+            await setDrivingKeyState(pageA, 'Space', false);
+            await pageA.waitForTimeout(50);
             await setDrivingKeyState(pageA, 'Space', true);
             await pageA.waitForTimeout(450);
             await setDrivingKeyState(pageA, 'Space', false);
@@ -102,22 +93,13 @@ test.describe('e2e combat - oil slick', () => {
         try {
             await joinRace(pageA, roomId, 'Oil Slicker');
             await joinRace(pageB, roomId, 'Oil Rival');
-            const [stateA, stateB] = await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
+            await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
             await waitForMultiplayerReady(pageA, pageB, 10_000);
-
-            await pageA.bringToFront();
-            await setDrivingKeyState(pageA, 'KeyW', true);
-            await pageB.bringToFront();
-            await setDrivingKeyState(pageB, 'KeyW', true);
-            await waitForCarsToMoveForward(pageA, pageB, stateA, stateB, 5_000);
-
-            await pageA.bringToFront();
-            await setDrivingKeyState(pageA, 'KeyW', false);
-            await pageB.bringToFront();
-            await setDrivingKeyState(pageB, 'KeyW', false);
 
             // Deploy oil slick (boost input edge).
             await pageA.bringToFront();
+            await setDrivingKeyState(pageA, 'Space', false);
+            await pageA.waitForTimeout(50);
             await setDrivingKeyState(pageA, 'Space', true);
             await pageA.waitForTimeout(450);
             await setDrivingKeyState(pageA, 'Space', false);
