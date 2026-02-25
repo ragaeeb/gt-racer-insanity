@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
 import { useLoader } from '@react-three/fiber';
+import { useMemo } from 'react';
 import * as THREE from 'three';
 import { type GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
@@ -16,6 +16,10 @@ export const useCarAssets = (): CarAssetsBundle => {
     const accelerateAudioBuffer = useLoader(THREE.AudioLoader, '/accelerate.mp3');
     const drivingAudioBuffer = useLoader(THREE.AudioLoader, '/driving-loop.wav');
     const brakeAudioBuffer = useLoader(THREE.AudioLoader, '/brake.mp3');
+    // squeal.mp3: dedicated tire-squeal asset (loops during drift on asphalt, pitch-shifted per surface)
+    // rumble uses driving-loop.wav as stand-in (low-frequency loop at low volume on gravel)
+    const squealAudioBuffer = useLoader(THREE.AudioLoader, '/squeal.mp3');
+    const rumbleAudioBuffer = useLoader(THREE.AudioLoader, '/driving-loop.wav');
 
     const modelVariants = useMemo(() => {
         return carModelGltfs.map((carModelGltf, index) => ({
@@ -30,8 +34,17 @@ export const useCarAssets = (): CarAssetsBundle => {
             brake: brakeAudioBuffer,
             driving: drivingAudioBuffer,
             engine: engineAudioBuffer,
+            squeal: squealAudioBuffer,
+            rumble: rumbleAudioBuffer,
         }),
-        [accelerateAudioBuffer, brakeAudioBuffer, drivingAudioBuffer, engineAudioBuffer],
+        [
+            accelerateAudioBuffer,
+            brakeAudioBuffer,
+            drivingAudioBuffer,
+            engineAudioBuffer,
+            squealAudioBuffer,
+            rumbleAudioBuffer,
+        ],
     );
 
     return useMemo(() => ({ assets, modelVariants }), [assets, modelVariants]);

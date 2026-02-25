@@ -14,7 +14,11 @@ import {
 } from '@/client/game/systems/correctionSystem';
 import { sampleInterpolationBuffer } from '@/client/game/systems/interpolationSystem';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
-import { DEFAULT_TRACK_WIDTH_METERS } from '@/shared/game/track/trackManifest';
+import {
+    DEFAULT_TRACK_WIDTH_METERS,
+    getSegmentFrictionForDistance,
+    getTrackManifestById,
+} from '@/shared/game/track/trackManifest';
 import { DriftState } from '@/shared/game/vehicle/driftConfig';
 import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 
@@ -116,6 +120,15 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
         const localSnapshot = session.latestLocalSnapshot;
         if (localSnapshot) {
             localCar.syncAuthoritativeSpeed(localSnapshot.speed);
+
+            // Update surface friction for surface audio (squeal/rumble channels).
+            if (session.activeTrackId) {
+                const trackManifest = getTrackManifestById(session.activeTrackId);
+                localCar.currentFrictionMultiplier = getSegmentFrictionForDistance(
+                    trackManifest,
+                    localSnapshot.progress.distanceMeters,
+                );
+            }
 
             // Sync drift visual state from authoritative server snapshot.
             if (localSnapshot.driftState !== undefined) {

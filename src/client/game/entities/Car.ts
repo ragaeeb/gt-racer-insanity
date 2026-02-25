@@ -39,6 +39,10 @@ export type CarAssets = {
     accelerate?: AudioBuffer;
     driving?: AudioBuffer;
     brake?: AudioBuffer;
+    /** Tire squeal sound — played on asphalt when drifting (optional, use brake.mp3 as stand-in) */
+    squeal?: AudioBuffer;
+    /** Gravel rumble sound — played on low-friction surfaces (optional, use driving-loop.wav as stand-in) */
+    rumble?: AudioBuffer;
 };
 
 export class Car {
@@ -180,9 +184,15 @@ export class Car {
         }
 
         if (!this.surfaceAudio) {
-            // Squeal and rumble audio buffers are optional — the manager degrades gracefully
-            // when no buffers are provided (volumes stay at 0).
-            this.surfaceAudio = new SurfaceAudioManager(this.listener, {}, DEFAULT_GAMEPLAY_TUNING.audio.surface);
+            // Use squeal/rumble buffers if provided; SurfaceAudioManager degrades gracefully if absent.
+            this.surfaceAudio = new SurfaceAudioManager(
+                this.listener,
+                {
+                    squeal: this.assets.squeal,
+                    rumble: this.assets.rumble,
+                },
+                DEFAULT_GAMEPLAY_TUNING.audio.surface,
+            );
             this.surfaceAudio.attachTo(this.mesh);
         }
     }
@@ -430,7 +440,7 @@ export class Car {
     }
 
     private updateAudio(dt: number) {
-        if (!this.engineLayerManager || !this.brakeSound) {
+        if (!this.engineLayerManager || !this.brakeSound || !this.surfaceAudio) {
             this.setupAudio();
         }
 
@@ -445,6 +455,7 @@ export class Car {
                 if (this.brakeSound.isPlaying) {
                     this.brakeSound.stop();
                 }
+                this.surfaceAudio?.update(0, 1.0, false); // silence squeal/rumble
                 return;
             }
         }
