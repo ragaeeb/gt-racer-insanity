@@ -951,7 +951,7 @@ export const App = () => {
                     </fieldset>
 
                     {/* 3D Preview */}
-                    <div>
+                    <div className="mt-10">
                         <LobbyCarPreview selectedVehicleId={selectedVehicleId} selectedColorId={selectedColorId} />
                     </div>
 

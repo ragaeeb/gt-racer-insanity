@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
@@ -51,6 +51,14 @@ const CarModel = ({ modelPath, colorId }: CarModelProps) => {
         () => buildWrappedCar(gltf.scene, modelPath, colorId),
         [gltf.scene, modelPath, colorId],
     );
+    const baseYaw = useMemo(() => wrapped.rotation.y, [wrapped]);
+
+    useFrame((_, dt) => {
+        wrapped.rotation.y += dt * 0.45;
+        if (wrapped.rotation.y > baseYaw + Math.PI * 2) {
+            wrapped.rotation.y -= Math.PI * 2;
+        }
+    });
 
     useEffect(() => {
         return () => {
