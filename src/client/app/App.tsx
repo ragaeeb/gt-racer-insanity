@@ -707,7 +707,12 @@ export const App = () => {
                                             : 'border-[#BCAE8A]/20 text-[#BCAE8A]/60 hover:border-[#BCAE8A]/40'
                                     }`}
                                 >
-                                    {vehicle.label}
+                                    <div className="flex flex-col items-center gap-1">
+                                        <span>{vehicle.label}</span>
+                                        <span className="text-[10px] normal-case tracking-wide opacity-80">
+                                            Top Speed {Math.round(vehicle.physics.maxForwardSpeed * 3.6)} km/h
+                                        </span>
+                                    </div>
                                 </button>
                             ))}
                         </div>

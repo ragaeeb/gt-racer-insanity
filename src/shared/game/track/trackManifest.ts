@@ -49,7 +49,7 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
         ],
         hazardSpawns: [
             { hazardId: 'spike-strip', id: 'hz-1', x: -12, z: 280 },
-            { hazardId: 'spike-strip', id: 'hz-2', x: 8, z: 550 },
+            { hazardId: 'puddle-trap', id: 'hz-2', x: 8, z: 550 },
             { hazardId: 'spike-strip', id: 'hz-3', x: -5, z: 800 },
         ],
         id: 'sunset-loop',
@@ -77,7 +77,7 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
         ],
         hazardSpawns: [
             { hazardId: 'spike-strip', id: 'hz-1', x: 10, z: 260 },
-            { hazardId: 'spike-strip', id: 'hz-2', x: -8, z: 520 },
+            { hazardId: 'puddle-trap', id: 'hz-2', x: -8, z: 520 },
             { hazardId: 'spike-strip', id: 'hz-3', x: 5, z: 850 },
         ],
         id: 'canyon-sprint',

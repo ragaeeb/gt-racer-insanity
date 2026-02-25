@@ -1,12 +1,16 @@
+import type { StatusEffectType } from '@/shared/network/snapshot';
+
 export type HazardBehavior = 'static' | 'moving';
 
 export type HazardManifest = {
+    applyFlipOnHit?: boolean;
     collisionRadius: number;
     id: string;
     label: string;
     movementAmplitude: number;
     movementSpeed: number;
-    statusEffectId: 'flat_tire' | 'stunned' | 'slowed';
+    statusEffectDurationMs?: number;
+    statusEffectId: StatusEffectType;
     type: HazardBehavior;
 };
 
@@ -36,6 +40,17 @@ export const HAZARD_MANIFESTS: HazardManifest[] = [
         movementAmplitude: 0,
         movementSpeed: 0,
         statusEffectId: 'slowed',
+        type: 'static',
+    },
+    {
+        applyFlipOnHit: true,
+        collisionRadius: 1.6,
+        id: 'puddle-trap',
+        label: 'Puddle Trap',
+        movementAmplitude: 0,
+        movementSpeed: 0,
+        statusEffectDurationMs: 2_000,
+        statusEffectId: 'stunned',
         type: 'static',
     },
 ];

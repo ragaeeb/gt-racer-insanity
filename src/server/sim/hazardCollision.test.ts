@@ -19,8 +19,10 @@ describe('hazard collision detection', () => {
 
         const snapshot = sim.buildSnapshot(nowMs);
         expect(snapshot.hazards.length).toBeGreaterThan(0);
+        const hazardIds = new Set(snapshot.hazards.map((hazard) => hazard.hazardId));
+        expect(hazardIds.has('spike-strip')).toBeTrue();
+        expect(hazardIds.has('puddle-trap')).toBeTrue();
         for (const hazard of snapshot.hazards) {
-            expect(hazard.hazardId).toBe('spike-strip');
             expect(typeof hazard.x).toBe('number');
             expect(typeof hazard.z).toBe('number');
         }
@@ -61,7 +63,7 @@ describe('hazard collision detection', () => {
         for (const hazard of snapshot.hazards) {
             const manifest = getHazardManifestById(hazard.hazardId);
             expect(manifest).not.toBeNull();
-            expect(manifest!.statusEffectId).toBe('flat_tire');
+            expect(['flat_tire', 'stunned', 'slowed']).toContain(manifest!.statusEffectId);
         }
     });
 
@@ -104,5 +106,36 @@ describe('hazard collision detection', () => {
         expect(hazardEvent).toBeDefined();
         expect(hazardEvent!.playerId).toBe('p1');
         expect(hazardEvent!.metadata?.effectType).toBe('flat_tire');
+    });
+
+    it('should apply flipped and 2s stunned when puddle trap is triggered', () => {
+        const sim = createSim();
+        const nowMs = Date.now();
+        sim.joinPlayer('p1', 'Alice', 'sport', 'red', nowMs);
+
+        sim.queueHazardTrigger({
+            applyFlipOnHit: true,
+            effectDurationMs: 2_000,
+            effectType: 'stunned',
+            hazardId: 'puddle-trap',
+            playerId: 'p1',
+        });
+        sim.step(nowMs + 50);
+
+        const snapshot = sim.buildSnapshot(nowMs + 50);
+        const player = snapshot.players.find((p) => p.id === 'p1');
+        expect(player).toBeDefined();
+        const stunned = player?.activeEffects.find((effect) => effect.effectType === 'stunned');
+        const flipped = player?.activeEffects.find((effect) => effect.effectType === 'flipped');
+        expect(stunned).toBeDefined();
+        expect(flipped).toBeDefined();
+        expect((stunned?.expiresAtMs ?? 0) - (stunned?.appliedAtMs ?? 0)).toEqual(2_000);
+
+        const events = sim.drainRaceEvents();
+        const hazardEvent = events.find((event) => event.kind === 'hazard_triggered');
+        expect(hazardEvent).toBeDefined();
+        expect(hazardEvent?.metadata?.effectType).toBe('stunned');
+        expect(hazardEvent?.metadata?.hazardId).toBe('puddle-trap');
+        expect(hazardEvent?.metadata?.flippedPlayerId).toBe('p1');
     });
 });

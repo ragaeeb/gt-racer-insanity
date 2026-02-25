@@ -394,12 +394,24 @@ export const useNetworkConnection = ({
                 useHudStore.getState().showToast('SPEED BOOST!', 'success');
             } else if (event.kind === 'hazard_triggered') {
                 const effectType = event.metadata?.effectType;
+                const flippedPlayerId =
+                    typeof event.metadata?.flippedPlayerId === 'string'
+                        ? event.metadata.flippedPlayerId
+                        : null;
                 if (effectType === 'flat_tire') {
                     useHudStore.getState().showToast('FLAT TIRE!', 'error');
                 } else if (effectType === 'stunned') {
                     useHudStore.getState().showToast('STUNNED!', 'warning');
                 } else if (effectType === 'slowed') {
                     useHudStore.getState().showToast('SLOWED!', 'warning');
+                }
+
+                if (flippedPlayerId) {
+                    if (flippedPlayerId === localPlayerId) {
+                        session.localCar?.triggerFlip();
+                    } else {
+                        session.opponents.get(flippedPlayerId)?.triggerFlip();
+                    }
                 }
             }
             } finally {

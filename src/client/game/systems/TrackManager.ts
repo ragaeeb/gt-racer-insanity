@@ -385,6 +385,42 @@ export class TrackManager {
         return group;
     };
 
+    private createPuddleTrap = (x: number, z: number): THREE.Group => {
+        const group = new THREE.Group();
+        group.position.set(x, 0.012, z);
+        group.name = 'puddle-trap';
+
+        const puddleGeo = new THREE.CircleGeometry(2.1, 20);
+        const puddleMat = new THREE.MeshStandardMaterial({
+            color: 0x1f2f5f,
+            emissive: 0x0b1330,
+            emissiveIntensity: 0.4,
+            metalness: 0.25,
+            roughness: 0.15,
+            transparent: true,
+            opacity: 0.9,
+        });
+        const puddle = new THREE.Mesh(puddleGeo, puddleMat);
+        puddle.rotation.x = -Math.PI / 2;
+        group.add(puddle);
+
+        const rimGeo = new THREE.RingGeometry(2.1, 2.35, 24);
+        const rimMat = new THREE.MeshStandardMaterial({
+            color: 0x93b7ff,
+            emissive: 0x243f8a,
+            emissiveIntensity: 0.35,
+            roughness: 0.6,
+            transparent: true,
+            opacity: 0.35,
+        });
+        const rim = new THREE.Mesh(rimGeo, rimMat);
+        rim.rotation.x = -Math.PI / 2;
+        rim.position.y = 0.002;
+        group.add(rim);
+
+        return group;
+    };
+
     private createPowerupOrb = (x: number, z: number): THREE.Group => {
         const group = new THREE.Group();
         group.position.set(x, 1.5, z);
@@ -433,7 +469,10 @@ export class TrackManager {
             if (this.hazardVisuals.has(hazard.id)) {
                 continue;
             }
-            const visual = this.createSpikeStrip(hazard.x, hazard.z);
+            const visual =
+                hazard.hazardId === 'puddle-trap'
+                    ? this.createPuddleTrap(hazard.x, hazard.z)
+                    : this.createSpikeStrip(hazard.x, hazard.z);
             this.scene.add(visual);
             this.hazardVisuals.set(hazard.id, visual);
         }

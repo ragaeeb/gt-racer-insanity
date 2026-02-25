@@ -177,7 +177,13 @@ export class RoomSimulation {
                 const dx = player.motion.positionX - hazard.position.x;
                 const dz = player.motion.positionZ - hazard.position.z;
                 if (Math.sqrt(dx * dx + dz * dz) < manifest.collisionRadius + HAZARD_CAR_HALF_LENGTH) {
-                    this.hazardTriggerQueue.push({ effectType: manifest.statusEffectId, playerId: player.id });
+                    this.hazardTriggerQueue.push({
+                        applyFlipOnHit: manifest.applyFlipOnHit,
+                        effectDurationMs: manifest.statusEffectDurationMs,
+                        effectType: manifest.statusEffectId,
+                        hazardId: manifest.id,
+                        playerId: player.id,
+                    });
                 }
             }
         }
@@ -229,7 +235,11 @@ export class RoomSimulation {
         for (const trigger of triggers) {
             this.pushRaceEvent({
                 kind: 'hazard_triggered',
-                metadata: { effectType: trigger.effectType },
+                metadata: {
+                    effectType: trigger.effectType,
+                    flippedPlayerId: trigger.applyFlipOnHit ? trigger.playerId : null,
+                    hazardId: trigger.hazardId ?? null,
+                },
                 playerId: trigger.playerId,
                 roomId: this.state.roomId,
                 serverTimeMs: nowMs,
