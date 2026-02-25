@@ -69,11 +69,11 @@ test.describe('e2e combat - oil slick', () => {
             const initialDeployableCount = before?.deployableCount ?? 0;
 
             await pageA.bringToFront();
-            await setDrivingKeyState(pageA, 'KeyE', false);
+            await setDrivingKeyState(pageA, 'Space', false);
             await pageA.waitForTimeout(50);
-            await setDrivingKeyState(pageA, 'KeyE', true);
+            await setDrivingKeyState(pageA, 'Space', true);
             await pageA.waitForTimeout(450);
-            await setDrivingKeyState(pageA, 'KeyE', false);
+            await setDrivingKeyState(pageA, 'Space', false);
 
             const state = await waitForDebugState(
                 pageA,
@@ -100,13 +100,13 @@ test.describe('e2e combat - oil slick', () => {
             await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
             await waitForMultiplayerReady(pageA, pageB, 10_000);
 
-            // Deploy oil slick (ability input edge).
+            // Deploy oil slick (boost input edge).
             await pageA.bringToFront();
-            await setDrivingKeyState(pageA, 'KeyE', false);
+            await setDrivingKeyState(pageA, 'Space', false);
             await pageA.waitForTimeout(50);
-            await setDrivingKeyState(pageA, 'KeyE', true);
+            await setDrivingKeyState(pageA, 'Space', true);
             await pageA.waitForTimeout(450);
-            await setDrivingKeyState(pageA, 'KeyE', false);
+            await setDrivingKeyState(pageA, 'Space', false);
 
             await waitForDebugState(pageA, (s) => s.deployableCount > 0, 4_000, 'oil slick deployable to appear');
             const appearedAtMs = Date.now();
@@ -195,10 +195,15 @@ test.describe('e2e combat - EMP projectile', () => {
             await page.waitForTimeout(450);
             await setDrivingKeyState(page, 'KeyE', false);
 
-            await page.waitForTimeout(2_000);
-            const state = await readDebugState(page);
-            expect(state?.isRunning).toBe(true);
-            expect(state?.projectileCount ?? 0).toBe(before?.projectileCount ?? 0);
+            const baselineProjectileCount = before?.projectileCount ?? 0;
+            const deadline = Date.now() + 2_000;
+            let state: GTDebugState | null = null;
+            while (Date.now() < deadline) {
+                state = await readDebugState(page);
+                expect(state?.isRunning).toBe(true);
+                expect(state?.projectileCount ?? 0).toBeLessThanOrEqual(baselineProjectileCount);
+                await page.waitForTimeout(100);
+            }
         } finally {
             await page.close();
         }

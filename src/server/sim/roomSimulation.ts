@@ -38,6 +38,7 @@ type AbilityActivationEnvelope = {
 const POWERUP_PICKUP_RADIUS = 4;
 const HAZARD_CAR_HALF_LENGTH = 2;
 const TICK_OVERRUN_THRESHOLD_MS = 5;
+const BASELINE_SIMULATION_TICK_HZ = 60;
 
 export class RoomSimulation {
     private readonly dtSeconds: number;
@@ -65,11 +66,17 @@ export class RoomSimulation {
     };
 
     constructor(options: RoomSimulationOptions) {
-        this.dtSeconds = 1 / Math.max(options.tickHz, 1);
+        const simulationTickHz = Math.max(options.tickHz, 1);
+        this.dtSeconds = 1 / simulationTickHz;
         this.rapierContext = createRapierWorld(this.dtSeconds);
         this.trackManifest = getTrackManifestById(options.trackId);
         this.trackBoundaryX = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
-        this.deployableLifetimeTicks = this.combatTuning.deployableOilSlickLifetimeTicks;
+        this.deployableLifetimeTicks = Math.max(
+            1,
+            Math.round(
+                (this.combatTuning.deployableOilSlickLifetimeTicks / BASELINE_SIMULATION_TICK_HZ) * simulationTickHz,
+            ),
+        );
 
         const trackColliders = buildTrackColliders(this.rapierContext.rapier, this.rapierContext.world, {
             seed: options.seed,

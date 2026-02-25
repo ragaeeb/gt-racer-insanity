@@ -29,7 +29,7 @@ async function checkAssets() {
             // Use npx to ensure it properly resolves the local/remote CLI without bunx bugs on subpaths
             await execFileAsync('npx', ['--no-install', '@gltf-transform/cli', 'validate', filePath]);
         } catch (error: any) {
-            console.error(`Validation failed for ${file}:`, error.message);
+            console.error(`Validation failed for ${filePath}:`, error.message);
             if (error.stdout) {
                 console.error(error.stdout);
             }

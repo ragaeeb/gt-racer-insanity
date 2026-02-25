@@ -1,22 +1,10 @@
 import { expect, type Page } from '@playwright/test';
+import type { GTDebugState as DiagnosticsGTDebugState } from '../src/client/game/hooks/diagnostics/types';
 
 export const STARTUP_TIMEOUT_MS = 90_000;
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export type GTDebugState = {
-    activeEffectIds: string[];
-    connectionStatus: string;
-    deployableCount: number;
-    driftBoostTier: number;
-    isRunning: boolean;
-    localCarX: number | null;
-    localCarZ: number | null;
-    opponentCount: number;
-    projectileCount: number;
-    roomId?: string | null;
-    speedKph: number;
-    vehicleId?: string | null;
-};
+export type GTDebugState = DiagnosticsGTDebugState;
 
 const isClosedPageError = (error: unknown) => {
     return error instanceof Error && /Target page, context or browser has been closed/i.test(error.message);
