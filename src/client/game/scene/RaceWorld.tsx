@@ -1,3 +1,4 @@
+import { useFrame, useThree } from '@react-three/fiber';
 import { useControls } from 'leva';
 import { useEffect, useRef } from 'react';
 import type * as THREE from 'three';
@@ -15,6 +16,7 @@ import { SceneEnvironment } from '@/client/game/scene/environment/SceneEnvironme
 import { getSceneEnvironmentProfile } from '@/client/game/scene/environment/sceneEnvironmentProfiles';
 import { HomingProjectiles } from '@/client/game/scene/HomingProjectiles';
 import { OilSlickDeployables } from '@/client/game/scene/OilSlickDeployables';
+import { CameraShake, registerCameraShakeTrigger } from '@/client/game/systems/cameraShake';
 import { InputManager } from '@/client/game/systems/InputManager';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
@@ -42,8 +44,10 @@ export const RaceWorld = ({
     selectedColorId,
     selectedVehicleId,
 }: RaceWorldProps) => {
+    const { camera } = useThree();
     const dirLightRef = useRef<THREE.DirectionalLight>(null);
     const inputManagerRef = useRef<InputManager | null>(null);
+    const cameraShakeRef = useRef<CameraShake | null>(null);
     if (!inputManagerRef.current) {
         inputManagerRef.current = new InputManager();
     }
@@ -53,6 +57,21 @@ export const RaceWorld = ({
         inputManager.setCruiseControlEnabled(cruiseControlEnabled);
     }, [cruiseControlEnabled, inputManager]);
     useEffect(() => () => inputManager.dispose(), [inputManager]);
+    useEffect(() => {
+        const cameraShake = new CameraShake(camera);
+        cameraShakeRef.current = cameraShake;
+        registerCameraShakeTrigger((intensity) => {
+            cameraShake.trigger(intensity);
+        });
+
+        return () => {
+            cameraShake.reset();
+            if (cameraShakeRef.current === cameraShake) {
+                cameraShakeRef.current = null;
+            }
+            registerCameraShakeTrigger(null);
+        };
+    }, [camera]);
 
     const carAssetsBundle = useCarAssets();
     const audioListenerRef = useAudioListener();
@@ -74,11 +93,20 @@ export const RaceWorld = ({
 
     const activeSceneEnvironment = getSceneEnvironmentProfile(sceneEnvironmentId);
 
-    // Hook order matters: interpolation updates car state -> input emits -> ability emits -> camera follows -> diagnostics captures
+    // Hook order matters: interpolation updates car state -> input emits -> ability emits -> camera follows -> shake -> diagnostics
     const wallClampCountRef = useCarInterpolation(sessionRef);
     useInputEmitter(sessionRef);
     useAbilityEmitter(sessionRef);
     const cameraMetricsRef = useCameraFollow(sessionRef, activeSceneEnvironment, dirLightRef);
+    useFrame((_, dt) => {
+        const cameraShake = cameraShakeRef.current;
+        if (!cameraShake) {
+            return;
+        }
+
+        cameraShake.update(dt);
+        cameraShake.apply();
+    }, 1);
     useDiagnostics(sessionRef, cameraMetricsRef, wallClampCountRef);
 
     // TODO: Wire these to server config (requires server RPC or config sync)

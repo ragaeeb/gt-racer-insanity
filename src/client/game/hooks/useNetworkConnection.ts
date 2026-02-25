@@ -14,6 +14,7 @@ import { useAbilityFxStore } from '@/client/game/state/abilityFxStore';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 import { createInterpolationBuffer, pushInterpolationSample } from '@/client/game/systems/interpolationSystem';
+import { triggerCameraShake } from '@/client/game/systems/cameraShake';
 import { SceneryManager } from '@/client/game/systems/SceneryManager';
 import { TrackManager } from '@/client/game/systems/TrackManager';
 import { colorIdToHSL, vehicleClassToModelIndex } from '@/client/game/vehicleSelections';
@@ -34,10 +35,109 @@ import {
     vehicleManifestToPhysicsConfig,
 } from '@/shared/game/vehicle/vehicleClassManifest';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
-import type { ConnectionStatus, PlayerState, RaceState, ServerSnapshotPayload } from '@/shared/network/types';
+import type {
+    ConnectionStatus,
+    PlayerState,
+    RaceEventPayload,
+    RaceState,
+    ServerSnapshotPayload,
+} from '@/shared/network/types';
 import { seededRandom } from '@/shared/utils/prng';
 
 const SHAKE_SPIKE_GRACE_PERIOD_MS = 1800;
+const COLLISION_SHAKE_BASE_INTENSITY = 0.12;
+const COLLISION_SHAKE_FLIP_BONUS = 0.2;
+const COLLISION_SHAKE_STUN_BONUS = 0.15;
+const COLLISION_SHAKE_MAX_FORCE = 1_000;
+const COLLISION_SHAKE_MAX_RELATIVE_SPEED_MPS = 25;
+const COLLISION_FORCE_METADATA_KEYS = [
+    'contactForceMagnitude',
+    'forceMagnitude',
+    'impactForceMagnitude',
+    'impactForce',
+] as const;
+
+const clamp01 = (value: number) => {
+    return Math.min(1, Math.max(0, value));
+};
+
+const resolveCollisionForceMagnitude = (metadata: RaceEventPayload['metadata']) => {
+    if (!metadata) {
+        return null;
+    }
+
+    for (const key of COLLISION_FORCE_METADATA_KEYS) {
+        const rawValue = metadata[key];
+        if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue >= 0) {
+            return rawValue;
+        }
+        if (typeof rawValue === 'string') {
+            const parsedValue = Number(rawValue);
+            if (Number.isFinite(parsedValue) && parsedValue >= 0) {
+                return parsedValue;
+            }
+        }
+    }
+
+    return null;
+};
+
+const getSnapshotSpeedMps = (snapshot: ServerSnapshotPayload | null, playerId: string | null) => {
+    if (!snapshot || !playerId) {
+        return null;
+    }
+    const player = snapshot.players.find((candidate) => candidate.id === playerId);
+    if (!player) {
+        return null;
+    }
+    return Math.abs(player.speed);
+};
+
+type CollisionShakeIntensityParams = {
+    event: RaceEventPayload;
+    localIsFlipped: boolean;
+    localIsStunned: boolean;
+    localPlayerId: string;
+    session: RaceSession;
+    snapshot: ServerSnapshotPayload | null;
+};
+
+const computeCollisionShakeIntensity = ({
+    event,
+    localIsFlipped,
+    localIsStunned,
+    localPlayerId,
+    session,
+    snapshot,
+}: CollisionShakeIntensityParams) => {
+    const forceMagnitude = resolveCollisionForceMagnitude(event.metadata);
+    let intensity = 0;
+
+    if (forceMagnitude !== null) {
+        intensity = clamp01(forceMagnitude / COLLISION_SHAKE_MAX_FORCE);
+    } else {
+        const againstPlayerId =
+            typeof event.metadata?.againstPlayerId === 'string' ? event.metadata.againstPlayerId : null;
+        const counterpartPlayerId = event.playerId === localPlayerId ? againstPlayerId : event.playerId;
+        const localSpeedMps =
+            getSnapshotSpeedMps(snapshot, localPlayerId) ??
+            Math.abs(session.latestLocalSnapshot?.speed ?? session.localCar?.getSpeed() ?? 0);
+        const counterpartSpeedMps = getSnapshotSpeedMps(snapshot, counterpartPlayerId);
+        const relativeSpeedMps =
+            counterpartSpeedMps === null ? localSpeedMps : Math.abs(localSpeedMps - counterpartSpeedMps);
+        intensity = clamp01(relativeSpeedMps / COLLISION_SHAKE_MAX_RELATIVE_SPEED_MPS);
+    }
+
+    intensity = Math.max(intensity, COLLISION_SHAKE_BASE_INTENSITY);
+    if (localIsFlipped) {
+        intensity += COLLISION_SHAKE_FLIP_BONUS;
+    }
+    if (localIsStunned) {
+        intensity += COLLISION_SHAKE_STUN_BONUS;
+    }
+
+    return clamp01(intensity);
+};
 
 export const buildSpikeShotFxPayload = (
     snapshot: ServerSnapshotPayload | null,
@@ -360,6 +460,18 @@ export const useNetworkConnection = ({
 
                     const nowMs = Date.now();
                     if (isLocalInvolved) {
+                        if (localPlayerId !== null) {
+                            const shakeIntensity = computeCollisionShakeIntensity({
+                                event,
+                                localIsFlipped,
+                                localIsStunned,
+                                localPlayerId,
+                                session,
+                                snapshot: useRuntimeStore.getState().latestSnapshot,
+                            });
+                            triggerCameraShake(shakeIntensity);
+                        }
+
                         session.lastCollisionEventAtMs = nowMs;
                         session.lastCollisionEventServerTimeMs = event.serverTimeMs;
                         session.lastCollisionFlippedPlayerId = flippedPlayerId;
