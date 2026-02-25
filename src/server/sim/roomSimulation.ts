@@ -34,6 +34,7 @@ type AbilityActivationEnvelope = {
 
 const POWERUP_PICKUP_RADIUS = 4;
 const HAZARD_CAR_HALF_LENGTH = 2;
+const TICK_OVERRUN_THRESHOLD_MS = 5;
 
 export class RoomSimulation {
     private readonly dtSeconds: number;
@@ -51,6 +52,11 @@ export class RoomSimulation {
     private readonly trackBoundaryX: number;
     private readonly totalTrackLengthMeters: number;
     private obstacleColliderHandles = new Set<number>();
+    private tickMetrics = {
+        lastTickDurationMs: 0,
+        tickDurationMaxMs: 0,
+        tickOverrunCount: 0,
+    };
 
     constructor(options: RoomSimulationOptions) {
         this.dtSeconds = 1 / Math.max(options.tickHz, 1);
@@ -347,6 +353,8 @@ export class RoomSimulation {
     };
 
     public step = (nowMs: number) => {
+        const tickStart = performance.now();
+
         if (this.state.players.size === 0) {
             return;
         }
@@ -406,6 +414,13 @@ export class RoomSimulation {
         this.processAbilityQueue(nowMs);
         this.processHazardQueue(nowMs);
         this.processPowerupQueue(nowMs);
+
+        const tickDuration = performance.now() - tickStart;
+        this.tickMetrics.lastTickDurationMs = tickDuration;
+        this.tickMetrics.tickDurationMaxMs = Math.max(this.tickMetrics.tickDurationMaxMs, tickDuration);
+        if (tickDuration > TICK_OVERRUN_THRESHOLD_MS) {
+            this.tickMetrics.tickOverrunCount += 1;
+        }
     };
 
     public buildSnapshot = (nowMs: number): ServerSnapshotPayload => {
@@ -437,4 +452,6 @@ export class RoomSimulation {
     public getPlayers = () => {
         return this.state.players;
     };
+
+    public getTickMetrics = () => ({ ...this.tickMetrics });
 }

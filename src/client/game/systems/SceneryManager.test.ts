@@ -20,7 +20,7 @@ describe('SceneryManager', () => {
         expect(manager.getObjectCount()).toBeGreaterThan(0);
     });
 
-    it('should produce deterministic placement with same seed', () => {
+    it('should produce deterministic logical object count with same seed', () => {
         const scene1 = createScene();
         const m1 = new SceneryManager(scene1, seededRandom(42), 76, 2700, 'sunny-day');
         m1.build();
@@ -32,7 +32,7 @@ describe('SceneryManager', () => {
         expect(m1.getObjectCount()).toBe(m2.getObjectCount());
     });
 
-    it('should produce different placement with different seeds', () => {
+    it('should produce different logical counts with different seeds', () => {
         const scene1 = createScene();
         const m1 = new SceneryManager(scene1, seededRandom(42), 76, 2700, 'sunny-day');
         m1.build();
@@ -43,13 +43,22 @@ describe('SceneryManager', () => {
 
         expect(m1.getObjectCount()).toBeGreaterThan(0);
         expect(m2.getObjectCount()).toBeGreaterThan(0);
-        const positions1 = scene1.children.map((c) => `${c.position.x.toFixed(1)},${c.position.z.toFixed(1)}`);
-        const positions2 = scene2.children.map((c) => `${c.position.x.toFixed(1)},${c.position.z.toFixed(1)}`);
-        const shared = positions1.filter((p) => positions2.includes(p));
-        expect(shared.length).toBeLessThan(positions1.length);
+
+        // With different seeds, instance matrices in the first InstancedMesh should differ.
+        // Compare the first element's matrix from each scene to confirm seeded placement differs.
+        const mesh1 = scene1.children.find((c) => c instanceof THREE.InstancedMesh) as THREE.InstancedMesh | undefined;
+        const mesh2 = scene2.children.find((c) => c instanceof THREE.InstancedMesh) as THREE.InstancedMesh | undefined;
+
+        if (mesh1 && mesh2 && mesh1.count > 0 && mesh2.count > 0) {
+            const mat1 = new THREE.Matrix4();
+            const mat2 = new THREE.Matrix4();
+            mesh1.getMatrixAt(0, mat1);
+            mesh2.getMatrixAt(0, mat2);
+            expect(mat1.equals(mat2)).toBe(false);
+        }
     });
 
-    it('should produce different object types for different themes', () => {
+    it('should produce different scene object counts for different themes', () => {
         const scene1 = createScene();
         const m1 = new SceneryManager(scene1, seededRandom(42), 76, 2700, 'sunny-day');
         m1.build();
@@ -84,7 +93,7 @@ describe('SceneryManager', () => {
         expect(manager.getObjectCount()).toBe(0);
     });
 
-    it('should scale object count with track length', () => {
+    it('should scale logical object count with track length', () => {
         const sceneShort = createScene();
         const mShort = new SceneryManager(sceneShort, seededRandom(42), 76, 900, 'sunny-day');
         mShort.build();
@@ -94,5 +103,47 @@ describe('SceneryManager', () => {
         mLong.build();
 
         expect(mLong.getObjectCount()).toBeGreaterThan(mShort.getObjectCount());
+    });
+
+    it('should use only InstancedMesh objects — no raw Mesh or Group in scene', () => {
+        const scene = createScene();
+        const manager = new SceneryManager(scene, seededRandom(42), 76, 2700, 'sunny-day');
+        manager.build();
+
+        for (const child of scene.children) {
+            expect(child).toBeInstanceOf(THREE.InstancedMesh);
+        }
+    });
+
+    // M0-C acceptance tests: verify ≤15 Three.js draw calls (scene.add calls) per theme
+    it('should produce fewer than 15 Three.js objects for sunny-day theme', () => {
+        const scene = createScene();
+        let addCount = 0;
+        const originalAdd = scene.add.bind(scene);
+        scene.add = (...objects: THREE.Object3D[]) => {
+            addCount += objects.length;
+            return originalAdd(...objects);
+        };
+
+        const manager = new SceneryManager(scene, () => 0.5, 76, 900, 'sunny-day');
+        manager.build();
+
+        expect(addCount).toBeLessThan(15);
+        expect(manager.getObjectCount()).toBeGreaterThan(100);
+    });
+
+    it('should produce fewer than 15 Three.js objects for canyon-dusk theme', () => {
+        const scene = createScene();
+        let addCount = 0;
+        const originalAdd = scene.add.bind(scene);
+        scene.add = (...objects: THREE.Object3D[]) => {
+            addCount += objects.length;
+            return originalAdd(...objects);
+        };
+
+        const manager = new SceneryManager(scene, () => 0.5, 76, 1100, 'canyon-dusk');
+        manager.build();
+
+        expect(addCount).toBeLessThan(15);
     });
 });

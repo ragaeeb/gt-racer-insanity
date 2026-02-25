@@ -187,3 +187,29 @@ export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshot
         payload.hazards.every((h) => isSnapshotHazardState(h))
     );
 };
+
+export const serializeSnapshot = (snapshot: ServerSnapshotPayload & { projectiles?: any[], deployables?: any[] }): any[] => {
+    return [
+        snapshot.seq,
+        snapshot.serverTimeMs,
+        snapshot.roomId,
+        [
+            snapshot.raceState.status,
+            snapshot.raceState.trackId,
+            snapshot.raceState.totalLaps,
+            snapshot.raceState.startedAtMs,
+            snapshot.raceState.endedAtMs,
+            snapshot.raceState.winnerPlayerId,
+            snapshot.raceState.playerOrder,
+        ],
+        snapshot.players.map(p => [
+            p.id, p.name, p.vehicleId, p.colorId, p.x, p.y, p.z, p.rotationY, p.speed, p.lastProcessedInputSeq,
+            [p.progress.checkpointIndex, p.progress.completedCheckpoints.map(c => [c.checkpointIndex, c.completedAtMs]), p.progress.distanceMeters, p.progress.finishedAtMs, p.progress.lap],
+            p.activeEffects.map(e => [e.effectType, e.appliedAtMs, e.expiresAtMs, e.intensity])
+        ]),
+        snapshot.powerups.map(p => [p.id, p.powerupId, p.isActive, p.x, p.z]),
+        snapshot.hazards.map(h => [h.id, h.hazardId, h.x, h.z]),
+        snapshot.projectiles?.map(pr => [pr.id, pr.ownerId, pr.targetId, pr.x, pr.z, pr.velX, pr.velZ, pr.ttlTicks]) ?? [],
+        snapshot.deployables?.map(d => [d.id, d.kind, d.ownerId, d.x, d.z, d.radius, d.lifetimeTicks]) ?? []
+    ];
+};
