@@ -13,8 +13,8 @@ import type { PendingSpikeShot } from '@/client/game/state/abilityFxStore';
 import { useAbilityFxStore } from '@/client/game/state/abilityFxStore';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
-import { createInterpolationBuffer, pushInterpolationSample } from '@/client/game/systems/interpolationSystem';
 import { triggerCameraShake } from '@/client/game/systems/cameraShake';
+import { createInterpolationBuffer, pushInterpolationSample } from '@/client/game/systems/interpolationSystem';
 import { SceneryManager } from '@/client/game/systems/SceneryManager';
 import { TrackManager } from '@/client/game/systems/TrackManager';
 import { colorIdToHSL, vehicleClassToModelIndex } from '@/client/game/vehicleSelections';
@@ -470,6 +470,10 @@ export const useNetworkConnection = ({
                                 snapshot: useRuntimeStore.getState().latestSnapshot,
                             });
                             triggerCameraShake(shakeIntensity);
+
+                            // Emit collision sparks on the local car
+                            const collisionForce = resolveCollisionForceMagnitude(event.metadata) ?? 200;
+                            session.localCar?.onCollision(collisionForce);
                         }
 
                         session.lastCollisionEventAtMs = nowMs;
@@ -501,6 +505,12 @@ export const useNetworkConnection = ({
                             }
                         }
                     }
+                    // Emit sparks on the colliding opponent so all players see the impact burst
+                    if (againstPlayerId) {
+                        const collisionForce = resolveCollisionForceMagnitude(event.metadata) ?? 200;
+                        session.opponents.get(againstPlayerId)?.onCollision(collisionForce);
+                    }
+
                     return;
                 }
 

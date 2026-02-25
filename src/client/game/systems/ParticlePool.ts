@@ -12,6 +12,25 @@ export type EmitConfig = {
     velocityZ?: number;
 };
 
+// Global particle pool instance for game-wide access
+let globalParticlePool: ParticlePool | null = null;
+
+/**
+ * Set the global particle pool instance.
+ * Should be called once when the game scene is initialized.
+ */
+export const setGlobalParticlePool = (pool: ParticlePool | null): void => {
+    globalParticlePool = pool;
+};
+
+/**
+ * Get the global particle pool instance.
+ * Returns null if not yet initialized.
+ */
+export const getGlobalParticlePool = (): ParticlePool | null => {
+    return globalParticlePool;
+};
+
 // Particle data structure for CPU-side simulation
 type Particle = {
     active: boolean;
@@ -39,7 +58,7 @@ const PARTICLE_CONFIGS: Record<ParticleType, { color: number; size: number; life
         vy: 2.0, // Fast upward
     },
     BOOST: {
-        color: 0x00ffff, // Cyan
+        color: 0xbb00ff, // Neon purple
         size: 1.5,
         lifetime: 0.8,
         vy: 0.0, // Stationary relative to world
@@ -64,7 +83,6 @@ export class ParticlePool {
 
     // Pre-allocated scratch objects to avoid GC in hot paths
     private scratchColor = new THREE.Color();
-    private scratchVelocity = new THREE.Vector3();
 
     constructor(scene: THREE.Scene, maxParticles = 512) {
         this.maxParticles = maxParticles;
@@ -238,7 +256,6 @@ export class ParticlePool {
             }
 
             // Fade out colors (only affects RGB, alpha handled by material opacity)
-            const fadeMultiplier = 1 - lifeRatio;
             this.colors[i * 3 + 0] *= 0.99; // Slight continuous fade
             this.colors[i * 3 + 1] *= 0.99;
             this.colors[i * 3 + 2] *= 0.99;
