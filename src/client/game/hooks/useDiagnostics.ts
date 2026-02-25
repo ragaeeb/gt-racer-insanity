@@ -54,6 +54,7 @@ const downloadReport = (capture: DiagCaptureState) => {
     const averageFps = capture.fpsSampleCount > 0 ? capture.fpsSum / capture.fpsSampleCount : 0;
     const snapshotAgeAverageMs = capture.snapshotAgeCount > 0 ? capture.snapshotAgeSumMs / capture.snapshotAgeCount : 0;
     const fpsMin = capture.fpsSampleCount > 0 ? capture.fpsMin : 0;
+    const drawCallsAvg = capture.drawCallsSampleCount > 0 ? capture.drawCallsSum / capture.drawCallsSampleCount : 0;
     const header = [
         '# GT Racer Diagnostic Report',
         `generatedAt: ${new Date(nowMs).toISOString()}`,
@@ -63,6 +64,8 @@ const downloadReport = (capture: DiagCaptureState) => {
         `fpsAvg: ${averageFps.toFixed(2)}`,
         `fpsMin: ${fpsMin.toFixed(2)}`,
         `fpsMax: ${capture.fpsMax.toFixed(2)}`,
+        `drawCallsAvg: ${drawCallsAvg.toFixed(2)}`,
+        `drawCallsMax: ${capture.drawCallsMax}`,
         `maxSpeedKph: ${capture.speedKphMax.toFixed(2)}`,
         `maxCorrectionErrorMeters: ${capture.correctionPositionErrorMaxMeters.toFixed(4)}`,
         `snapshotAgeAvgMs: ${snapshotAgeAverageMs.toFixed(2)}`,
@@ -102,7 +105,7 @@ export const useDiagnostics = (
     cameraMetricsRef: React.RefObject<CameraFrameMetrics>,
     wallClampCountRef: React.RefObject<number>,
 ) => {
-    const { camera } = useThree();
+    const { camera, gl } = useThree();
     const enabledRef = useRef(false);
     const verboseRef = useRef(false);
     const captureRef = useRef<DiagCaptureState>(createDiagCaptureState());
@@ -157,6 +160,8 @@ export const useDiagnostics = (
                 enable: () => void;
                 getSummary: () => {
                     collisionFrameSampleCount: number;
+                    drawCallsAvg: number;
+                    drawCallsMax: number;
                     longFrameGapCount: number;
                     longTaskCount: number;
                     longTaskMaxMs: number;
@@ -206,6 +211,10 @@ export const useDiagnostics = (
                 }, 0);
                 return {
                     collisionFrameSampleCount,
+                    drawCallsAvg: capture.drawCallsSampleCount > 0
+                        ? Math.round(capture.drawCallsSum / capture.drawCallsSampleCount)
+                        : 0,
+                    drawCallsMax: capture.drawCallsMax,
                     longFrameGapCount: capture.longFrameGapCount,
                     longTaskCount: capture.longTaskCount,
                     longTaskMaxMs: Number(capture.longTaskMaxMs.toFixed(2)),
@@ -342,6 +351,13 @@ export const useDiagnostics = (
                 capture.correctionPositionErrorMaxMeters,
                 correction?.positionError ?? 0,
             );
+
+            // Draw call tracking
+            const drawCalls = gl.info.render.calls;
+            capture.drawCallsMax = Math.max(capture.drawCallsMax, drawCalls);
+            capture.drawCallsSampleCount += 1;
+            capture.drawCallsSum += drawCalls;
+
             if (lastSnapshotAgeMs !== null) {
                 capture.snapshotAgeCount += 1;
                 capture.snapshotAgeSumMs += lastSnapshotAgeMs;

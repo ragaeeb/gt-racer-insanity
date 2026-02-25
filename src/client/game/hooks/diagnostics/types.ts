@@ -45,6 +45,9 @@ export type DiagSpikeSample = {
 
 export type DiagCaptureState = {
     correctionPositionErrorMaxMeters: number;
+    drawCallsMax: number;
+    drawCallsSampleCount: number;
+    drawCallsSum: number;
     fpsMax: number;
     fpsMin: number;
     fpsSampleCount: number;
@@ -119,6 +122,9 @@ export const DIAGNOSTIC_LOG_INTERVAL_MS = 250;
 
 export const createDiagCaptureState = (): DiagCaptureState => ({
     correctionPositionErrorMaxMeters: 0,
+    drawCallsMax: 0,
+    drawCallsSampleCount: 0,
+    drawCallsSum: 0,
     fpsMax: 0,
     fpsMin: Number.POSITIVE_INFINITY,
     fpsSampleCount: 0,

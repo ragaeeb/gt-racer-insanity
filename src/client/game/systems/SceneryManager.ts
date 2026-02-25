@@ -37,6 +37,34 @@ const SCENERY_THEME_PALETTES: Record<TrackThemeId, SceneryThemePalette> = {
 type BuildingDescriptor = {
     depth: number;
     height: number;
+    materialIndex: number;
+    width: number;
+    x: number;
+    z: number;
+};
+
+type StreetLightDescriptor = {
+    x: number;
+    z: number;
+};
+
+type ConeDescriptor = {
+    x: number;
+    y: number;
+    z: number;
+};
+
+type PillarDescriptor = {
+    height: number;
+    scaleX: number;
+    scaleZ: number;
+    x: number;
+    z: number;
+};
+
+type MesaDescriptor = {
+    depth: number;
+    height: number;
     width: number;
     x: number;
     z: number;
@@ -51,6 +79,7 @@ export class SceneryManager {
     private readonly geometries: THREE.BufferGeometry[] = [];
     private readonly materials: THREE.Material[] = [];
     private readonly palette: SceneryThemePalette;
+    private logicalObjectCount = 0;
 
     constructor(
         private scene: THREE.Scene,
@@ -75,7 +104,7 @@ export class SceneryManager {
     };
 
     public getObjectCount = (): number => {
-        return this.objects.length;
+        return this.logicalObjectCount;
     };
 
     private buildingMaterials: THREE.MeshStandardMaterial[] = [];
@@ -159,18 +188,44 @@ export class SceneryManager {
         const unitGeo = new THREE.BoxGeometry(1, 1, 1);
         this.geometries.push(unitGeo);
 
+        // Group buildings by material index for instanced rendering
+        const buildingsByMaterial = new Map<number, BuildingDescriptor[]>();
         for (const b of buildings) {
-            const matIdx = Math.floor(this.random() * this.buildingMaterials.length);
-            const mat = this.buildingMaterials[matIdx];
-
-            const mesh = new THREE.Mesh(unitGeo, mat);
-            mesh.position.set(b.x, b.height / 2, b.z);
-            mesh.scale.set(b.width, b.height, b.depth);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            this.scene.add(mesh);
-            this.objects.push(mesh);
+            const group = buildingsByMaterial.get(b.materialIndex) ?? [];
+            group.push(b);
+            buildingsByMaterial.set(b.materialIndex, group);
         }
+
+        const matrix = new THREE.Matrix4();
+
+        for (const [matIdx, group] of buildingsByMaterial) {
+            if (group.length === 0) continue;
+
+            const mat = this.buildingMaterials[matIdx];
+            if (!mat) continue;
+
+            const instancedMesh = new THREE.InstancedMesh(unitGeo, mat, group.length);
+            instancedMesh.castShadow = true;
+            instancedMesh.receiveShadow = true;
+            instancedMesh.frustumCulled = true;
+
+            for (let i = 0; i < group.length; i++) {
+                const b = group[i];
+                matrix.compose(
+                    new THREE.Vector3(b.x, b.height / 2, b.z),
+                    new THREE.Quaternion(),
+                    new THREE.Vector3(b.width, b.height, b.depth),
+                );
+                instancedMesh.setMatrixAt(i, matrix);
+            }
+
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            instancedMesh.computeBoundingSphere();
+            this.scene.add(instancedMesh);
+            this.objects.push(instancedMesh);
+        }
+
+        this.logicalObjectCount += buildings.length;
     };
 
     private createBuildingCluster = (buildings: BuildingDescriptor[], x: number, z: number) => {
@@ -181,13 +236,17 @@ export class SceneryManager {
             const depth = 8 + this.random() * 12;
             const offsetX = (this.random() - 0.5) * 10;
             const offsetZ = (this.random() - 0.5) * 10;
-            buildings.push({ depth, height, width, x: x + offsetX, z: z + offsetZ });
+            // Material index is chosen here (same random() call order as before)
+            const materialIndex = Math.floor(this.random() * this.buildingMaterials.length);
+            buildings.push({ depth, height, materialIndex, width, x: x + offsetX, z: z + offsetZ });
         }
     };
 
     private placeStreetLights = () => {
         const halfWidth = this.trackWidth / 2;
         const count = Math.floor(this.trackLength / STREET_LIGHT_INTERVAL);
+
+        if (count === 0) return;
 
         const poleGeo = new THREE.CylinderGeometry(0.15, 0.15, 8, 6);
         const poleMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
@@ -202,34 +261,60 @@ export class SceneryManager {
         this.geometries.push(poleGeo, lightGeo);
         this.materials.push(poleMat, lightMat);
 
+        // Collect all street light positions (2 per zone: left and right)
+        const lights: StreetLightDescriptor[] = [];
         for (let i = 0; i < count; i++) {
             const z = i * STREET_LIGHT_INTERVAL + 30;
-            this.createStreetLight(-halfWidth - 4, z, poleGeo, poleMat, lightGeo, lightMat);
-            this.createStreetLight(halfWidth + 4, z, poleGeo, poleMat, lightGeo, lightMat);
+            lights.push({ x: -halfWidth - 4, z });
+            lights.push({ x: halfWidth + 4, z });
         }
-    };
 
-    private createStreetLight = (
-        x: number,
-        z: number,
-        poleGeo: THREE.BufferGeometry,
-        poleMat: THREE.Material,
-        lightGeo: THREE.BufferGeometry,
-        lightMat: THREE.Material,
-    ) => {
-        const group = new THREE.Group();
+        const totalLights = lights.length;
 
-        const pole = new THREE.Mesh(poleGeo, poleMat);
-        pole.position.y = 4;
-        group.add(pole);
+        // Poles InstancedMesh
+        const poleMatrix = new THREE.Matrix4();
+        const polesInstancedMesh = new THREE.InstancedMesh(poleGeo, poleMat, totalLights);
+        polesInstancedMesh.castShadow = true;
+        polesInstancedMesh.receiveShadow = true;
+        polesInstancedMesh.frustumCulled = true;
 
-        const light = new THREE.Mesh(lightGeo, lightMat);
-        light.position.y = 8.2;
-        group.add(light);
+        // Bulbs InstancedMesh
+        const bulbMatrix = new THREE.Matrix4();
+        const bulbsInstancedMesh = new THREE.InstancedMesh(lightGeo, lightMat, totalLights);
+        bulbsInstancedMesh.castShadow = false;
+        bulbsInstancedMesh.receiveShadow = false;
+        bulbsInstancedMesh.frustumCulled = true;
 
-        group.position.set(x, 0, z);
-        this.scene.add(group);
-        this.objects.push(group);
+        for (let i = 0; i < totalLights; i++) {
+            const light = lights[i];
+            // Pole: center at y=4 (pole height=8, so bottom at 0, top at 8)
+            poleMatrix.compose(
+                new THREE.Vector3(light.x, 4, light.z),
+                new THREE.Quaternion(),
+                new THREE.Vector3(1, 1, 1),
+            );
+            polesInstancedMesh.setMatrixAt(i, poleMatrix);
+
+            // Bulb: at top of pole
+            bulbMatrix.compose(
+                new THREE.Vector3(light.x, 8.2, light.z),
+                new THREE.Quaternion(),
+                new THREE.Vector3(1, 1, 1),
+            );
+            bulbsInstancedMesh.setMatrixAt(i, bulbMatrix);
+        }
+
+        polesInstancedMesh.instanceMatrix.needsUpdate = true;
+        polesInstancedMesh.computeBoundingSphere();
+        bulbsInstancedMesh.instanceMatrix.needsUpdate = true;
+        bulbsInstancedMesh.computeBoundingSphere();
+
+        this.scene.add(polesInstancedMesh);
+        this.objects.push(polesInstancedMesh);
+        this.scene.add(bulbsInstancedMesh);
+        this.objects.push(bulbsInstancedMesh);
+
+        this.logicalObjectCount += totalLights;
     };
 
     private placeTrafficCones = () => {
@@ -243,15 +328,39 @@ export class SceneryManager {
         this.materials.push(coneMat);
 
         const count = Math.floor(this.trackLength / 30);
+
+        if (count === 0) return;
+
+        const cones: ConeDescriptor[] = [];
         for (let i = 0; i < count; i++) {
             const z = i * 30 + this.random() * 15;
             const side = this.random() > 0.5 ? 1 : -1;
             const x = side * (halfWidth - 2 + this.random() * 2);
-            const cone = new THREE.Mesh(coneGeo, coneMat);
-            cone.position.set(x, 0.3, z);
-            this.scene.add(cone);
-            this.objects.push(cone);
+            cones.push({ x, y: 0.3, z });
         }
+
+        const instancedMesh = new THREE.InstancedMesh(coneGeo, coneMat, cones.length);
+        instancedMesh.castShadow = true;
+        instancedMesh.receiveShadow = true;
+        instancedMesh.frustumCulled = true;
+
+        const matrix = new THREE.Matrix4();
+        for (let i = 0; i < cones.length; i++) {
+            const c = cones[i];
+            matrix.compose(
+                new THREE.Vector3(c.x, c.y, c.z),
+                new THREE.Quaternion(),
+                new THREE.Vector3(1, 1, 1),
+            );
+            instancedMesh.setMatrixAt(i, matrix);
+        }
+
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        instancedMesh.computeBoundingSphere();
+        this.scene.add(instancedMesh);
+        this.objects.push(instancedMesh);
+
+        this.logicalObjectCount += cones.length;
     };
 
     private placeRockPillars = () => {
@@ -266,18 +375,42 @@ export class SceneryManager {
         this.materials.push(pillarMat);
 
         const zones = Math.floor(this.trackLength / 50);
+
+        if (zones === 0) return;
+
+        const pillars: PillarDescriptor[] = [];
         for (let i = 0; i < zones; i++) {
             const z = i * 50 + this.random() * 25;
             const side = this.random() > 0.5 ? 1 : -1;
             const x = side * (halfWidth + 8 + this.random() * 15);
             const height = 8 + this.random() * 20;
-            const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-            pillar.position.set(x, height / 2, z);
-            pillar.scale.set(1 + this.random(), height, 1 + this.random());
-            pillar.castShadow = true;
-            this.scene.add(pillar);
-            this.objects.push(pillar);
+            const scaleX = 1 + this.random();
+            const scaleZ = 1 + this.random();
+            pillars.push({ height, scaleX, scaleZ, x, z });
         }
+
+        const instancedMesh = new THREE.InstancedMesh(pillarGeo, pillarMat, pillars.length);
+        instancedMesh.castShadow = true;
+        instancedMesh.receiveShadow = false;
+        instancedMesh.frustumCulled = true;
+
+        const matrix = new THREE.Matrix4();
+        for (let i = 0; i < pillars.length; i++) {
+            const p = pillars[i];
+            matrix.compose(
+                new THREE.Vector3(p.x, p.height / 2, p.z),
+                new THREE.Quaternion(),
+                new THREE.Vector3(p.scaleX, p.height, p.scaleZ),
+            );
+            instancedMesh.setMatrixAt(i, matrix);
+        }
+
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        instancedMesh.computeBoundingSphere();
+        this.scene.add(instancedMesh);
+        this.objects.push(instancedMesh);
+
+        this.logicalObjectCount += pillars.length;
     };
 
     private placeMesaFormations = () => {
@@ -291,6 +424,10 @@ export class SceneryManager {
         this.materials.push(mesaMat);
 
         const zones = Math.floor(this.trackLength / 80);
+
+        if (zones === 0) return;
+
+        const mesas: MesaDescriptor[] = [];
         for (let i = 0; i < zones; i++) {
             const z = i * 80 + this.random() * 40;
             const side = this.random() > 0.5 ? 1 : -1;
@@ -298,15 +435,31 @@ export class SceneryManager {
             const width = 12 + this.random() * 20;
             const height = 5 + this.random() * 10;
             const depth = 10 + this.random() * 15;
-
-            const mesa = new THREE.Mesh(mesaGeo, mesaMat);
-            mesa.position.set(x, height / 2, z);
-            mesa.scale.set(width, height, depth);
-            mesa.castShadow = true;
-            mesa.receiveShadow = true;
-            this.scene.add(mesa);
-            this.objects.push(mesa);
+            mesas.push({ depth, height, width, x, z });
         }
+
+        const instancedMesh = new THREE.InstancedMesh(mesaGeo, mesaMat, mesas.length);
+        instancedMesh.castShadow = true;
+        instancedMesh.receiveShadow = true;
+        instancedMesh.frustumCulled = true;
+
+        const matrix = new THREE.Matrix4();
+        for (let i = 0; i < mesas.length; i++) {
+            const m = mesas[i];
+            matrix.compose(
+                new THREE.Vector3(m.x, m.height / 2, m.z),
+                new THREE.Quaternion(),
+                new THREE.Vector3(m.width, m.height, m.depth),
+            );
+            instancedMesh.setMatrixAt(i, matrix);
+        }
+
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        instancedMesh.computeBoundingSphere();
+        this.scene.add(instancedMesh);
+        this.objects.push(instancedMesh);
+
+        this.logicalObjectCount += mesas.length;
     };
 
     public dispose = () => {
@@ -314,9 +467,12 @@ export class SceneryManager {
             this.scene.remove(obj);
             if (obj instanceof THREE.InstancedMesh) {
                 obj.dispose();
+            } else if (obj instanceof THREE.Mesh) {
+                obj.geometry.dispose();
             }
         }
         this.objects.length = 0;
+        this.logicalObjectCount = 0;
 
         for (const geo of this.geometries) {
             geo.dispose();
