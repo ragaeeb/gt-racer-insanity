@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { applyAbilityActivation } from '@/server/sim/abilitySystem';
+import { applyAbilityActivation, commitAbilityCooldown } from '@/server/sim/abilitySystem';
 import type { SimPlayerState } from '@/server/sim/types';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 
@@ -88,5 +88,33 @@ describe('ability system', () => {
         expect(first.applied).toEqual(true);
         expect(second.applied).toEqual(false);
         expect(second.reason).toEqual('cooldown');
+    });
+
+    it('should defer cooldown for projectile-delivery abilities until committed', () => {
+        const players = new Map<string, SimPlayerState>([
+            ['player-1', createPlayer('player-1')],
+            ['player-2', createPlayer('player-2')],
+        ]);
+        const cooldownStore = new Map<string, number>();
+
+        const result = applyAbilityActivation(
+            players,
+            'player-1',
+            {
+                abilityId: 'spike-shot',
+                seq: 1,
+                targetPlayerId: null,
+            },
+            1_000,
+            cooldownStore,
+        );
+
+        expect(result.spawnProjectile).toEqual(true);
+        expect(result.applied).toEqual(false);
+        expect(cooldownStore.size).toEqual(0);
+
+        const committed = commitAbilityCooldown(cooldownStore, 'player-1', 'spike-shot', 1_000);
+        expect(committed).toEqual(true);
+        expect(cooldownStore.size).toEqual(1);
     });
 });

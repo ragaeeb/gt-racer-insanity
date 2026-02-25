@@ -1,16 +1,10 @@
 import { expect, type Page } from '@playwright/test';
+import type { GTDebugState as DiagnosticsGTDebugState } from '../src/client/game/hooks/diagnostics/types';
 
 export const STARTUP_TIMEOUT_MS = 90_000;
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export type GTDebugState = {
-    connectionStatus: string;
-    driftBoostTier: number;
-    isRunning: boolean;
-    localCarX: number | null;
-    localCarZ: number | null;
-    opponentCount: number;
-    roomId?: string | null;
-};
+export type GTDebugState = DiagnosticsGTDebugState;
 
 const isClosedPageError = (error: unknown) => {
     return error instanceof Error && /Target page, context or browser has been closed/i.test(error.message);
@@ -39,7 +33,14 @@ export const readDebugState = async (page: Page) => {
     }
 };
 
-export const joinRace = async (page: Page, roomId: string, name: string) => {
+export const joinRace = async (
+    page: Page,
+    roomId: string,
+    name: string,
+    options?: {
+        vehicleLabel?: string;
+    },
+) => {
     await page.goto(`/lobby?room=${roomId}`, {
         timeout: STARTUP_TIMEOUT_MS,
         waitUntil: 'domcontentloaded',
@@ -47,6 +48,13 @@ export const joinRace = async (page: Page, roomId: string, name: string) => {
     await page.bringToFront();
     await page.focus('body');
     await page.locator('#player-name-input').fill(name);
+    if (options?.vehicleLabel) {
+        const escapedVehicleLabel = escapeRegex(options.vehicleLabel);
+        const vehicleClassFieldset = page.locator('fieldset').filter({ hasText: 'VEHICLE CLASS' }).first();
+        await vehicleClassFieldset
+            .getByRole('button', { name: new RegExp(`^\\s*${escapedVehicleLabel}\\b`, 'i') })
+            .click();
+    }
     await page.locator('#player-name-confirm').click();
     await page.waitForURL(new RegExp(`/race\\?room=${roomId}$`), { timeout: STARTUP_TIMEOUT_MS });
     await page.locator('canvas').waitFor({ timeout: STARTUP_TIMEOUT_MS });
@@ -61,8 +69,10 @@ export const setDrivingKeyState = async (page: Page, code: string, pressed: bool
         ArrowUp: 'ArrowUp',
         KeyA: 'a',
         KeyD: 'd',
+        KeyE: 'e',
         KeyS: 's',
         KeyW: 'w',
+        Space: ' ',
     };
 
     const key = keyByCode[code] ?? code;

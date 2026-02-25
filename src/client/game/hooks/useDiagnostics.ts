@@ -21,6 +21,7 @@ import { useLongTaskObserver } from '@/client/game/hooks/diagnostics/useLongTask
 import type { RaceSession } from '@/client/game/hooks/types';
 import type { CameraFrameMetrics } from '@/client/game/hooks/useCameraFollow';
 import { useHudStore } from '@/client/game/state/hudStore';
+import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 
 const parseDiagnosticsFlag = () => {
     if (typeof window === 'undefined') {
@@ -174,15 +175,20 @@ export const useDiagnostics = (
         debugWindow.__GT_DEBUG__ = {
             getState: (): GTDebugState => {
                 const session = sessionRef.current;
+                const latestSnapshot = useRuntimeStore.getState().latestSnapshot;
                 return {
                     connectionStatus: session.connectionStatus,
+                    deployableCount: latestSnapshot?.deployables?.length ?? 0,
                     driftBoostTier: useHudStore.getState().driftBoostTier,
                     isRunning: session.isRunning,
                     localCarX: session.localCar?.position.x ?? null,
                     localCarZ: session.localCar?.position.z ?? null,
                     opponentCount: session.opponents.size,
+                    projectileCount: latestSnapshot?.projectiles?.length ?? 0,
                     roomId: session.networkManager?.roomId ?? null,
                     speedKph: useHudStore.getState().speedKph,
+                    vehicleId: session.latestLocalSnapshot?.vehicleId ?? null,
+                    activeEffectIds: session.latestLocalSnapshot?.activeEffects?.map((e) => e.effectType) ?? [],
                 };
             },
         };
@@ -212,9 +218,10 @@ export const useDiagnostics = (
                 }, 0);
                 return {
                     collisionFrameSampleCount,
-                    drawCallsAvg: capture.drawCallsSampleCount > 0
-                        ? Math.round(capture.drawCallsSum / capture.drawCallsSampleCount)
-                        : 0,
+                    drawCallsAvg:
+                        capture.drawCallsSampleCount > 0
+                            ? Math.round(capture.drawCallsSum / capture.drawCallsSampleCount)
+                            : 0,
                     drawCallsMax: capture.drawCallsMax,
                     longFrameGapCount: capture.longFrameGapCount,
                     longTaskCount: capture.longTaskCount,

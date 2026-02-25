@@ -50,7 +50,34 @@ export type AudioTuning = {
 };
 
 export type CombatTuning = {
-    // M3 will add: projectile speed/TTL, deployable radius/lifetime, caps, etc.
+    /** Max deployables any single player may have active simultaneously. */
+    deployableMaxPerPlayer: number;
+    /** Max deployables across the entire room. */
+    deployableMaxPerRoom: number;
+    /** Radius of an oil slick deployable in meters. */
+    deployableOilSlickRadius: number;
+    /** Lifetime of an oil slick in ticks (600 = 10s @ 60Hz). */
+    deployableOilSlickLifetimeTicks: number;
+    /** Spawn offset behind the deploying player in meters. */
+    deployableOilSlickSpawnDistance: number;
+    /** Duration of the slippery/slowed effect applied by oil slick (ms). */
+    deployableOilSlickEffectDurationMs: number;
+    /** Max projectiles any single player may have active simultaneously. */
+    projectileMaxPerPlayer: number;
+    /** Max projectiles across the entire room. */
+    projectileMaxPerRoom: number;
+    /** Projectile travel speed in m/s. */
+    projectileSpeed: number;
+    /** Time-to-live in ticks (120 = 2s @ 60Hz). */
+    projectileTtlTicks: number;
+    /** Distance within which a projectile hits its target (meters). */
+    projectileHitRadius: number;
+    /** Maximum turn rate in rad/s for proportional navigation steering. */
+    projectileTurnRate: number;
+    /** Immunity window after being hit by a projectile (ms). */
+    projectileHitImmunityMs: number;
+    /** Duration of the stunned effect applied on projectile hit (ms). */
+    stunnedEffectDurationMs: number;
 };
 
 export type GameplayTuningConfig = {
@@ -93,5 +120,20 @@ export const DEFAULT_GAMEPLAY_TUNING: GameplayTuningConfig = {
             postRace: { musicGain: 0.9, engineGain: 0.2, effectsGain: 0.5 },
         },
     },
-    combat: {},
+    combat: {
+        deployableMaxPerPlayer: 1,
+        deployableMaxPerRoom: 8,
+        deployableOilSlickRadius: 3.5,
+        deployableOilSlickLifetimeTicks: 600,
+        deployableOilSlickSpawnDistance: 5,
+        deployableOilSlickEffectDurationMs: 2000,
+        projectileMaxPerPlayer: 1,
+        projectileMaxPerRoom: 8,
+        projectileSpeed: 25,
+        projectileTtlTicks: 120,
+        projectileHitRadius: 2.5,
+        projectileTurnRate: 3.0,
+        projectileHitImmunityMs: 1500,
+        stunnedEffectDurationMs: 1500,
+    },
 };

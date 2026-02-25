@@ -10,9 +10,11 @@ import { useDiagnostics } from '@/client/game/hooks/useDiagnostics';
 import { useInputEmitter } from '@/client/game/hooks/useInputEmitter';
 import { useNetworkConnection } from '@/client/game/hooks/useNetworkConnection';
 import { useRaceSession } from '@/client/game/hooks/useRaceSession';
+import { ErrorBoundary } from '@/client/game/scene/ErrorBoundary';
 import { SceneEnvironment } from '@/client/game/scene/environment/SceneEnvironment';
 import { getSceneEnvironmentProfile } from '@/client/game/scene/environment/sceneEnvironmentProfiles';
-import { SpikeShotProjectiles } from '@/client/game/scene/SpikeShotProjectiles';
+import { HomingProjectiles } from '@/client/game/scene/HomingProjectiles';
+import { OilSlickDeployables } from '@/client/game/scene/OilSlickDeployables';
 import { InputManager } from '@/client/game/systems/InputManager';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
@@ -98,7 +100,12 @@ export const RaceWorld = ({
     return (
         <>
             <SceneEnvironment profileId={sceneEnvironmentId} sunLightRef={dirLightRef} />
-            <SpikeShotProjectiles />
+            <ErrorBoundary key={`deployables-${resetNonce}`}>
+                <OilSlickDeployables />
+            </ErrorBoundary>
+            <ErrorBoundary key={`projectiles-${resetNonce}`}>
+                <HomingProjectiles />
+            </ErrorBoundary>
         </>
     );
 };

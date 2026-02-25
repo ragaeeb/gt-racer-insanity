@@ -80,7 +80,7 @@ describe('Snapshot Payload Budget', () => {
                 velX: 5, velZ: 20, ttlTicks: 90,
             })),
             deployables: Array.from({ length: 8 }, (_, i) => ({
-                id: `dep-${i}`, kind: 'oil_slick', ownerId: `player-${i}`, x: i * 10, z: i * 100,
+                id: i, kind: 'oil-slick' as const, ownerId: `player-${i}`, x: i * 10, z: i * 100,
                 radius: 3.5, lifetimeTicks: 400,
             })),
             raceState: {

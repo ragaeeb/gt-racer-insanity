@@ -1,6 +1,6 @@
-import { getAbilityManifestById, type AbilityTargeting } from '@/shared/game/ability/abilityManifest';
-import type { SimPlayerState } from '@/server/sim/types';
 import { applyStatusEffectToPlayer } from '@/server/sim/effectSystem';
+import type { SimPlayerState } from '@/server/sim/types';
+import { type AbilityTargeting, getAbilityManifestById } from '@/shared/game/ability/abilityManifest';
 
 type AbilityActivationRequest = {
     abilityId: string;
@@ -13,12 +13,28 @@ type AbilityResolutionResult = {
     applied: boolean;
     reason: 'cooldown' | 'invalid_ability' | 'invalid_player' | 'ok' | 'target_not_found';
     sourcePlayerId: string;
+    /** Whether the caller should spawn a projectile (delivery: 'projectile'). */
+    spawnProjectile: boolean;
     targetPlayerId: string | null;
+};
+
+export const commitAbilityCooldown = (
+    cooldownStore: Map<string, number>,
+    sourcePlayerId: string,
+    abilityId: string,
+    nowMs: number,
+) => {
+    const ability = getAbilityManifestById(abilityId);
+    if (!ability) {
+        return false;
+    }
+    cooldownStore.set(`${sourcePlayerId}:${ability.id}`, nowMs + ability.baseCooldownMs);
+    return true;
 };
 
 const findNearestOpponent = (
     players: Map<string, SimPlayerState>,
-    sourcePlayer: SimPlayerState
+    sourcePlayer: SimPlayerState,
 ): SimPlayerState | null => {
     let closest: SimPlayerState | null = null;
     let closestDistanceSquared = Number.POSITIVE_INFINITY;
@@ -44,7 +60,7 @@ const findNearestOpponent = (
 const findNearestForwardOpponent = (
     players: Map<string, SimPlayerState>,
     sourcePlayer: SimPlayerState,
-    maxDistanceAhead?: number
+    maxDistanceAhead?: number,
 ): SimPlayerState | null => {
     const forwardX = Math.sin(sourcePlayer.motion.rotationY);
     const forwardZ = Math.cos(sourcePlayer.motion.rotationY);
@@ -91,7 +107,7 @@ const resolveTarget = (
     sourcePlayer: SimPlayerState,
     requestedTargetPlayerId: string | null,
     targeting: AbilityTargeting,
-    maxDistanceAhead?: number
+    maxDistanceAhead?: number,
 ): SimPlayerState | null => {
     switch (targeting) {
         case 'self':
@@ -120,7 +136,7 @@ export const applyAbilityActivation = (
     sourcePlayerId: string,
     activation: AbilityActivationRequest,
     nowMs: number,
-    cooldownStore: Map<string, number>
+    cooldownStore: Map<string, number>,
 ): AbilityResolutionResult => {
     const sourcePlayer = players.get(sourcePlayerId);
     if (!sourcePlayer) {
@@ -129,6 +145,7 @@ export const applyAbilityActivation = (
             applied: false,
             reason: 'invalid_player',
             sourcePlayerId,
+            spawnProjectile: false,
             targetPlayerId: null,
         };
     }
@@ -140,6 +157,7 @@ export const applyAbilityActivation = (
             applied: false,
             reason: 'invalid_ability',
             sourcePlayerId,
+            spawnProjectile: false,
             targetPlayerId: null,
         };
     }
@@ -152,6 +170,7 @@ export const applyAbilityActivation = (
             applied: false,
             reason: 'cooldown',
             sourcePlayerId,
+            spawnProjectile: false,
             targetPlayerId: null,
         };
     }
@@ -161,7 +180,7 @@ export const applyAbilityActivation = (
         sourcePlayer,
         activation.targetPlayerId,
         ability.targeting,
-        ability.maxDistanceAhead
+        ability.maxDistanceAhead,
     );
     if (!targetPlayer) {
         return {
@@ -169,18 +188,34 @@ export const applyAbilityActivation = (
             applied: false,
             reason: 'target_not_found',
             sourcePlayerId,
+            spawnProjectile: false,
             targetPlayerId: null,
         };
     }
 
-    cooldownStore.set(cooldownKey, nowMs + ability.baseCooldownMs);
+    const isProjectile = ability.delivery === 'projectile';
+
+    // Projectile-delivery abilities defer cooldown and success until spawn succeeds.
+    if (isProjectile) {
+        return {
+            abilityId: ability.id,
+            applied: false,
+            reason: 'ok',
+            sourcePlayerId,
+            spawnProjectile: true,
+            targetPlayerId: targetPlayer.id,
+        };
+    }
+
     applyStatusEffectToPlayer(targetPlayer, ability.effectId, nowMs, 1);
+    cooldownStore.set(cooldownKey, nowMs + ability.baseCooldownMs);
 
     return {
         abilityId: ability.id,
         applied: true,
         reason: 'ok',
         sourcePlayerId,
+        spawnProjectile: isProjectile,
         targetPlayerId: targetPlayer.id,
     };
 };

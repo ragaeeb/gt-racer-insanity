@@ -72,14 +72,18 @@ export type DiagCaptureState = {
 };
 
 export type GTDebugState = {
+    activeEffectIds: string[];
     connectionStatus: import('@/shared/network/types').ConnectionStatus;
+    deployableCount: number;
     driftBoostTier: number;
     isRunning: boolean;
     localCarX: number | null;
     localCarZ: number | null;
     opponentCount: number;
+    projectileCount: number;
     roomId: string | null;
     speedKph: number;
+    vehicleId: string | null;
 };
 
 export type ContactEpisodeState = {

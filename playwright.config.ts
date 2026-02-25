@@ -7,6 +7,7 @@ const isCI = Boolean(process.env.CI);
 export default defineConfig({
     testDir: './testing',
     testMatch: ['**/*.e2e.ts'],
+    tsconfig: './tsconfig.e2e.json',
     reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'list',
     fullyParallel: false,
     workers: 1,

@@ -65,6 +65,27 @@ export type SnapshotHazardState = {
     z: number;
 };
 
+export type SnapshotProjectileState = {
+    id: number;
+    ownerId: string;
+    targetId: string | null;
+    x: number;
+    z: number;
+    velX: number;
+    velZ: number;
+    ttlTicks: number;
+};
+
+export type SnapshotDeployableState = {
+    id: number;
+    kind: 'oil-slick';
+    ownerId: string;
+    x: number;
+    z: number;
+    radius: number;
+    lifetimeTicks: number;
+};
+
 export type ServerSnapshotPayload = {
     hazards: SnapshotHazardState[];
     players: SnapshotPlayerState[];
@@ -73,6 +94,8 @@ export type ServerSnapshotPayload = {
     roomId: string;
     seq: number;
     serverTimeMs: number;
+    projectiles?: SnapshotProjectileState[];
+    deployables?: SnapshotDeployableState[];
 };
 
 const isFiniteNumber = (value: unknown): value is number => {
@@ -214,6 +237,39 @@ const isSnapshotHazardState = (value: unknown): value is SnapshotHazardState => 
     return isString(p.id) && isString(p.hazardId) && isFiniteNumber(p.x) && isFiniteNumber(p.z);
 };
 
+export const isSnapshotProjectileState = (value: unknown): value is SnapshotProjectileState => {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+    const p = value as Record<string, unknown>;
+    return (
+        isFiniteNumber(p.id) &&
+        isString(p.ownerId) &&
+        (p.targetId === null || isString(p.targetId)) &&
+        isFiniteNumber(p.x) &&
+        isFiniteNumber(p.z) &&
+        isFiniteNumber(p.velX) &&
+        isFiniteNumber(p.velZ) &&
+        isFiniteNumber(p.ttlTicks)
+    );
+};
+
+export const isSnapshotDeployableState = (value: unknown): value is SnapshotDeployableState => {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+    const d = value as Record<string, unknown>;
+    return (
+        isFiniteNumber(d.id) &&
+        (d.kind === 'oil-slick') &&
+        isString(d.ownerId) &&
+        isFiniteNumber(d.x) &&
+        isFiniteNumber(d.z) &&
+        isFiniteNumber(d.radius) &&
+        isFiniteNumber(d.lifetimeTicks)
+    );
+};
+
 export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshotPayload => {
     if (!value || typeof value !== 'object') {
         return false;
@@ -221,6 +277,26 @@ export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshot
     const payload = value as Record<string, unknown>;
     if (!Array.isArray(payload.players)) {
         return false;
+    }
+
+    // Validate optional projectiles array
+    if (payload.projectiles !== undefined) {
+        if (!Array.isArray(payload.projectiles)) {
+            return false;
+        }
+        if (!payload.projectiles.every((p) => isSnapshotProjectileState(p))) {
+            return false;
+        }
+    }
+
+    // Validate optional deployables array
+    if (payload.deployables !== undefined) {
+        if (!Array.isArray(payload.deployables)) {
+            return false;
+        }
+        if (!payload.deployables.every((d) => isSnapshotDeployableState(d))) {
+            return false;
+        }
     }
 
     return (
@@ -236,9 +312,7 @@ export const isServerSnapshotPayload = (value: unknown): value is ServerSnapshot
     );
 };
 
-export const serializeSnapshot = (
-    snapshot: ServerSnapshotPayload & { projectiles?: any[]; deployables?: any[] },
-): any[] => {
+export const serializeSnapshot = (snapshot: ServerSnapshotPayload): any[] => {
     return [
         snapshot.seq,
         snapshot.serverTimeMs,
