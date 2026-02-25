@@ -663,6 +663,7 @@ export const App = () => {
     const position = useHudStore((state) => state.position);
     const trackLabel = useHudStore((state) => state.trackLabel);
     const activeEffectIds = useHudStore((state) => state.activeEffectIds);
+    const driftBoostTier = useHudStore((state) => state.driftBoostTier);
     const pendingToasts = useHudStore((state) => state.pendingToasts);
     const clearPendingToast = useHudStore((state) => state.clearPendingToast);
     const latestSnapshot = useRuntimeStore((state) => state.latestSnapshot);
@@ -993,6 +994,59 @@ export const App = () => {
                         </div>
                     )}
                     <AbilityIndicator />
+                    {driftBoostTier > 0 && (
+                        <div
+                            id="drift-tier-indicator"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontFamily: "'Courier New', monospace",
+                                fontSize: '0.7rem',
+                                fontWeight: 'bold',
+                                letterSpacing: '0.1em',
+                                textTransform: 'uppercase',
+                                marginTop: '4px',
+                                color:
+                                    driftBoostTier === 3
+                                        ? '#BB86FC'
+                                        : driftBoostTier === 2
+                                          ? '#FF9800'
+                                          : '#29B6F6',
+                                textShadow:
+                                    driftBoostTier === 3
+                                        ? '0 0 8px rgba(187,134,252,0.7)'
+                                        : driftBoostTier === 2
+                                          ? '0 0 8px rgba(255,152,0,0.7)'
+                                          : '0 0 8px rgba(41,182,246,0.7)',
+                                transition: 'color 0.3s, text-shadow 0.3s',
+                            }}
+                            data-tier={driftBoostTier}
+                        >
+                            <span
+                                style={{
+                                    display: 'inline-block',
+                                    width: '8px',
+                                    height: '8px',
+                                    borderRadius: '50%',
+                                    backgroundColor:
+                                        driftBoostTier === 3
+                                            ? '#BB86FC'
+                                            : driftBoostTier === 2
+                                              ? '#FF9800'
+                                              : '#29B6F6',
+                                    boxShadow:
+                                        driftBoostTier === 3
+                                            ? '0 0 6px rgba(187,134,252,0.9)'
+                                            : driftBoostTier === 2
+                                              ? '0 0 6px rgba(255,152,0,0.9)'
+                                              : '0 0 6px rgba(41,182,246,0.9)',
+                                }}
+                            />
+                            DRIFT{' '}
+                            {driftBoostTier === 1 ? 'MINI' : driftBoostTier === 2 ? 'SUPER' : 'ULTRA'}
+                        </div>
+                    )}
                 </div>
                 <Toaster position="top-center" richColors closeButton duration={2000} />
                 <div id="app-version">v{appVersion}</div>

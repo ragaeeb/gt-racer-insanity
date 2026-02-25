@@ -47,6 +47,9 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
     const previousLocalFlippedRef = useRef(false);
     const lastLocalFlipAppliedAtMsRef = useRef<number | null>(null);
     const lastFrameAtMsRef = useRef<number | null>(null);
+    // Dev-only: track previous drift values for change-detection logging
+    const prevDriftStateLogRef = useRef(-1);
+    const prevDriftTierLogRef = useRef(-1);
 
     useFrame((_, dt) => {
         const session = sessionRef.current;
@@ -112,6 +115,32 @@ export const useCarInterpolation = (sessionRef: React.RefObject<RaceSession>) =>
         const localSnapshot = session.latestLocalSnapshot;
         if (localSnapshot) {
             localCar.syncAuthoritativeSpeed(localSnapshot.speed);
+
+            // Sync drift visual state from authoritative server snapshot.
+            if (localSnapshot.driftState !== undefined) {
+                localCar.driftState = localSnapshot.driftState;
+                localCar.driftAngle = localSnapshot.driftAngle ?? 0;
+                localCar.driftBoostTier = localSnapshot.driftBoostTier ?? 0;
+                useHudStore.getState().setDriftBoostTier(localCar.driftBoostTier);
+
+                if (import.meta.env.DEV) {
+                    if (localCar.driftState !== prevDriftStateLogRef.current) {
+                        const stateNames = ['GRIPPING', 'INITIATING', 'DRIFTING', 'RECOVERING'];
+                        console.debug('[drift] state →', stateNames[localCar.driftState] ?? localCar.driftState, {
+                            angle: localCar.driftAngle.toFixed(3),
+                            tier: localCar.driftBoostTier,
+                        });
+                        prevDriftStateLogRef.current = localCar.driftState;
+                    }
+                    if (localCar.driftBoostTier !== prevDriftTierLogRef.current) {
+                        console.debug('[drift] tier →', localCar.driftBoostTier, {
+                            driftState: localCar.driftState,
+                            prev: prevDriftTierLogRef.current,
+                        });
+                        prevDriftTierLogRef.current = localCar.driftBoostTier;
+                    }
+                }
+            }
 
             const snapshotSeq = session.latestLocalSnapshotSeq;
             const isNewSnapshot = snapshotSeq !== null && snapshotSeq !== session.lastReconciledSnapshotSeq;

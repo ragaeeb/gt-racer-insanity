@@ -75,7 +75,13 @@ const applyScalarSpeed = (player: SimPlayerState, dtSeconds: number, movementMul
     }
 
     if (player.inputState.brake || player.inputState.handbrake) {
-        const brakingMultiplier = player.inputState.handbrake ? 2.1 : 1.4;
+        // When handbrake + throttle are both active (drift scenario), use a much
+        // lighter braking factor so the car decelerates gently instead of stopping.
+        // Without throttle, handbrake still brakes at full force.
+        const isThrottling = player.inputState.throttle > 0.01;
+        const brakingMultiplier = player.inputState.handbrake
+            ? (isThrottling ? 0.6 : 2.1)
+            : 1.4;
         if (speed > 0) {
             speed = Math.max(0, speed - acceleration * brakingMultiplier * dtSeconds);
         } else {
@@ -166,8 +172,13 @@ export const syncPlayerMotionFromRigidBody = (
     if (trackBoundaryX !== undefined && Math.abs(x) > trackBoundaryX) {
         x = clamp(x, -trackBoundaryX, trackBoundaryX);
         rigidBody.setTranslation({ x, y: position.y, z: position.z }, true);
-        rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-        player.motion.speed = 0;
+
+        // Zero only the lateral (x) velocity — preserve forward (z) speed so
+        // the car slides along the wall instead of coming to a dead stop.
+        // This is critical for the drift FSM: a full speed-zero would bail the
+        // DRIFTING state (requires speed ≥ 5 m/s) every time the car touches the wall.
+        const currentVel = rigidBody.linvel();
+        rigidBody.setLinvel({ x: 0, y: currentVel.y, z: currentVel.z }, true);
     }
 
     player.motion.positionX = x;

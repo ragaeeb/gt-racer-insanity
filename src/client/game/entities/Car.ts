@@ -72,6 +72,13 @@ export class Car {
 
     private flipElapsedMs: number | null = null;
 
+    // Drift visual state — written from server snapshot each frame
+    public driftState: number = 0;
+    public driftAngle: number = 0;
+    public driftBoostTier: number = 0;
+    private previousBoostTier: number = 0;
+    private boostFlashIntensity: number = 0;
+
     constructor(
         private scene: THREE.Scene,
         private inputManager: InputManager | null,
@@ -283,6 +290,8 @@ export class Car {
         this.setupGLTFVisuals();
         this.updateBrakeLights();
         this.updateSuspensionBounce(dt);
+        this.updateDriftTilt();
+        this.updateBoostFlash();
         this.updateAudio(dt);
     }
 
@@ -364,6 +373,49 @@ export class Car {
         const normalizedSpeed = Math.min(1, Math.abs(this.controller.getSpeed()) / maxSpeed);
         const targetBounce = Math.sin(this.suspensionTime * 5) * SUSPENSION_BOUNCE_AMPLITUDE * normalizedSpeed;
         this.gltfWrapper.position.y = THREE.MathUtils.lerp(this.gltfWrapper.position.y, targetBounce, 0.05);
+    }
+
+    private updateDriftTilt() {
+        if (!this.gltfWrapper || this.flipElapsedMs !== null) {
+            return;
+        }
+        // Apply a small Z-rotation on the GLTF wrapper proportional to driftAngle (max ±~5.7 degrees)
+        const DRIFT_STATE_DRIFTING = 2;
+        if (this.driftState === DRIFT_STATE_DRIFTING) {
+            const tiltAngle = this.driftAngle * 0.1; // 0.1 rad/rad → ~5.7° max at full slide
+            this.gltfWrapper.rotation.z = THREE.MathUtils.lerp(this.gltfWrapper.rotation.z, tiltAngle, 0.12);
+        } else {
+            this.gltfWrapper.rotation.z = THREE.MathUtils.lerp(this.gltfWrapper.rotation.z, 0, 0.12);
+        }
+    }
+
+    private updateBoostFlash() {
+        // Detect boost application: tier transitions from >0 back to 0.
+        if (this.previousBoostTier > 0 && this.driftBoostTier === 0) {
+            this.boostFlashIntensity = 2.0;
+        }
+        this.previousBoostTier = this.driftBoostTier;
+
+        if (this.boostFlashIntensity <= 0) {
+            return;
+        }
+
+        this.mesh.traverse((child) => {
+            if (!(child instanceof THREE.Mesh)) {
+                return;
+            }
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            for (const mat of mats) {
+                if (mat instanceof THREE.MeshStandardMaterial) {
+                    mat.emissiveIntensity = this.boostFlashIntensity;
+                }
+            }
+        });
+
+        this.boostFlashIntensity *= 0.88; // ~10-frame decay at 60 fps
+        if (this.boostFlashIntensity < 0.02) {
+            this.boostFlashIntensity = 0;
+        }
     }
 
     private updateAudio(dt: number) {
@@ -471,8 +523,14 @@ export class Car {
         this.flipElapsedMs = null;
         if (this.gltfWrapper) {
             this.gltfWrapper.rotation.x = 0;
+            this.gltfWrapper.rotation.z = 0;
             this.gltfWrapper.position.y = 0;
         }
+        this.driftState = 0;
+        this.driftAngle = 0;
+        this.driftBoostTier = 0;
+        this.previousBoostTier = 0;
+        this.boostFlashIntensity = 0;
         this.controller.reset();
         this.previousAudioSpeed = 0;
         this.lastBrakeTriggerAtMs = 0;
