@@ -398,10 +398,27 @@ export class RoomSimulation {
             this.obstacleColliderHandles,
         );
 
+        // Drain Rapier contact force events to extract impulse magnitudes for
+        // mass-scaled bump response. Keep the max magnitude per player pair.
+        const contactForces = new Map<string, number>();
+        this.rapierContext.eventQueue.drainContactForceEvents((event) => {
+            const handle1 = event.collider1();
+            const handle2 = event.collider2();
+            const id1 = this.playerManager.colliderHandleToPlayerId.get(handle1);
+            const id2 = this.playerManager.colliderHandleToPlayerId.get(handle2);
+
+            if (id1 && id2) {
+                const key = id1 < id2 ? `${id1}:${id2}` : `${id2}:${id1}`;
+                const magnitude = event.totalForceMagnitude();
+                contactForces.set(key, Math.max(contactForces.get(key) ?? 0, magnitude));
+            }
+        });
+
         this.collisionManager.processBumpCollisions(
             collisionResult.startedPlayerPairs,
             collisionResult.endedPlayerPairs,
             nowMs,
+            contactForces,
         );
 
         const obstacleTriggers = this.collisionManager.processObstacleHits(collisionResult.obstacleHits, nowMs);

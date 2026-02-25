@@ -182,10 +182,20 @@ const POST_BUMP_VELOCITY_DAMPING = 0.45;
 const POST_BUMP_ANGULAR_DAMPING = 0.35;
 const IMPULSE_SPEED_SCALE_CEILING_MPS = 30;
 
+/** Hard impulse clamp in N·s — prevents physics explosions (R04 mitigation). */
+const MAX_IMPULSE = 800;
+/** Newton's 3rd reaction multiplier for the attacker: 0.3 = trucks feel powerful. */
+const ARCADE_BIAS = 0.3;
+/** Raw contact force divisor — normalises Rapier force magnitude into 0–2 impulse scale. */
+const FORCE_NORMALISATION_BASE = 500;
+/** Upper bound for the contact-force scaling factor. */
+const FORCE_SCALE_CAP = 2.0;
+
 export const applyPlayerBumpResponse = (
     playerA: SimPlayerState,
     playerB: SimPlayerState,
     rigidBodyMap: Map<string, RigidBody>,
+    contactForceMagnitude?: number,
 ) => {
     const rbA = rigidBodyMap.get(playerA.id);
     const rbB = rigidBodyMap.get(playerB.id);
@@ -216,26 +226,51 @@ export const applyPlayerBumpResponse = (
 
     const impactSpeed = Math.max(Math.abs(playerA.motion.speed), Math.abs(playerB.motion.speed));
     const speedFactor = clamp(impactSpeed / IMPULSE_SPEED_SCALE_CEILING_MPS, 0.12, 1);
-    const scaledStrength = BUMP_IMPULSE_STRENGTH * speedFactor;
 
-    // Reduced-mass impulse: same magnitude in opposite directions.
-    // Lighter cars receive a larger velocity delta (impulse / mass).
-    const impulse = scaledStrength * reducedMass;
-    const lateralImpulse = impulse * BUMP_LATERAL_IMPULSE_FACTOR;
+    // Scale by contact force if available (normalised to 0–FORCE_SCALE_CAP range)
+    const forceScale = contactForceMagnitude !== undefined
+        ? Math.min(contactForceMagnitude / FORCE_NORMALISATION_BASE, FORCE_SCALE_CAP)
+        : 1.0;
+
+    const scaledStrength = BUMP_IMPULSE_STRENGTH * speedFactor * forceScale;
+
+    // Reduced-mass base impulse — same physics magnitude applied to both bodies,
+    // but lighter cars experience a larger velocity delta (impulse / mass).
+    const baseImpulse = scaledStrength * reducedMass;
+
+    // Mass-ratio–scaled impulse TO each player:
+    //   impulseToA = how hard A gets hit (scaled by B's relative mass)
+    //   impulseToB = how hard B gets hit (scaled by A's relative mass)
+    const massRatioBtoA = massB / massA; // > 1 if B is heavier → A gets hit harder
+    const massRatioAtoB = massA / massB; // > 1 if A is heavier → B gets hit harder
+
+    const impulseToA = Math.min(baseImpulse * massRatioBtoA, MAX_IMPULSE);
+    const impulseToB = Math.min(baseImpulse * massRatioAtoB, MAX_IMPULSE);
+
+    // Arcade bias: attacker gets only ARCADE_BIAS fraction of the reaction impulse
+    // This makes a heavy car (truck) feel powerful — it barely recoils on hit.
+    const reactionToA = impulseToB * ARCADE_BIAS;
+    const reactionToB = impulseToA * ARCADE_BIAS;
+
+    const totalImpulseA = impulseToA + reactionToA;
+    const totalImpulseB = impulseToB + reactionToB;
+
+    const lateralImpulseA = totalImpulseA * BUMP_LATERAL_IMPULSE_FACTOR;
+    const lateralImpulseB = totalImpulseB * BUMP_LATERAL_IMPULSE_FACTOR;
 
     rbA.applyImpulse(
         {
-            x: -dx * impulse + lateralX * lateralImpulse * lateralSign,
+            x: -dx * totalImpulseA + lateralX * lateralImpulseA * lateralSign,
             y: 0,
-            z: -dz * impulse + lateralZ * lateralImpulse * lateralSign,
+            z: -dz * totalImpulseA + lateralZ * lateralImpulseA * lateralSign,
         },
         true,
     );
     rbB.applyImpulse(
         {
-            x: dx * impulse - lateralX * lateralImpulse * lateralSign,
+            x: dx * totalImpulseB - lateralX * lateralImpulseB * lateralSign,
             y: 0,
-            z: dz * impulse - lateralZ * lateralImpulse * lateralSign,
+            z: dz * totalImpulseB - lateralZ * lateralImpulseB * lateralSign,
         },
         true,
     );

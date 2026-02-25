@@ -49,7 +49,10 @@ export class PlayerManager {
             0.5,
             PLAYER_COLLIDER_HALF_LENGTH_METERS,
         )
-            .setActiveEvents(rapier.ActiveEvents.COLLISION_EVENTS)
+            .setActiveEvents(
+                rapier.ActiveEvents.COLLISION_EVENTS |
+                rapier.ActiveEvents.CONTACT_FORCE_EVENTS
+            )
             .setFriction(0.8)
             .setRestitution(0.45);
 

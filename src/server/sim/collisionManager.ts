@@ -58,7 +58,12 @@ export class CollisionManager {
      * Processes the started and ended player-pair collision sets produced by
      * `drainStartedCollisions`. Applies bump responses and manages pair cooldowns.
      */
-    processBumpCollisions(startedPairs: BumpPair[], endedPairs: BumpPair[], nowMs: number): void {
+    processBumpCollisions(
+        startedPairs: BumpPair[],
+        endedPairs: BumpPair[],
+        nowMs: number,
+        contactForces?: Map<string, number>,
+    ): void {
         for (const pair of endedPairs) {
             const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
             this.activeBumpPairKeys.delete(pairKey);
@@ -76,7 +81,7 @@ export class CollisionManager {
             }
 
             this.pendingBumpPairByKey.delete(pairKey);
-            this.applyBumpForPair(pair, nowMs);
+            this.applyBumpForPair(pair, nowMs, contactForces);
         }
 
         // Flush any pending pairs whose cooldown has now expired.
@@ -92,7 +97,7 @@ export class CollisionManager {
             }
 
             this.pendingBumpPairByKey.delete(pairKey);
-            this.applyBumpForPair(pair, nowMs);
+            this.applyBumpForPair(pair, nowMs, contactForces);
         }
     }
 
@@ -152,7 +157,7 @@ export class CollisionManager {
         this.obstacleStunCooldownByPlayerId.clear();
     }
 
-    private applyBumpForPair(pair: BumpPair, nowMs: number): void {
+    private applyBumpForPair(pair: BumpPair, nowMs: number, contactForces?: Map<string, number>): void {
         const pairKey = toPairKey(pair.firstPlayerId, pair.secondPlayerId);
         const playerA = this.players.get(pair.firstPlayerId);
         const playerB = this.players.get(pair.secondPlayerId);
@@ -168,7 +173,8 @@ export class CollisionManager {
         const slowerPlayer = Math.abs(playerA.motion.speed) <= Math.abs(playerB.motion.speed) ? playerA : playerB;
         const fasterPlayer = slowerPlayer === playerA ? playerB : playerA;
 
-        applyPlayerBumpResponse(playerA, playerB, this.rigidBodyById);
+        const forceMagnitude = contactForces?.get(pairKey);
+        applyPlayerBumpResponse(playerA, playerB, this.rigidBodyById, forceMagnitude);
 
         this.bumpPairCooldown.set(pairKey, nowMs + BUMP_PAIR_COOLDOWN_MS);
         this.bumpDriveRecoveryByPlayerId.set(fasterPlayer.id, nowMs + BUMP_DRIVE_RECOVERY_MS_RAMMER);
