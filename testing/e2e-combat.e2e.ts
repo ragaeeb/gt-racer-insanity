@@ -69,11 +69,11 @@ test.describe('e2e combat - oil slick', () => {
             const initialDeployableCount = before?.deployableCount ?? 0;
 
             await pageA.bringToFront();
-            await setDrivingKeyState(pageA, 'Space', false);
+            await setDrivingKeyState(pageA, 'KeyE', false);
             await pageA.waitForTimeout(50);
-            await setDrivingKeyState(pageA, 'Space', true);
+            await setDrivingKeyState(pageA, 'KeyE', true);
             await pageA.waitForTimeout(450);
-            await setDrivingKeyState(pageA, 'Space', false);
+            await setDrivingKeyState(pageA, 'KeyE', false);
 
             const state = await waitForDebugState(
                 pageA,
@@ -100,13 +100,13 @@ test.describe('e2e combat - oil slick', () => {
             await Promise.all([waitForCarSpawn(pageA), waitForCarSpawn(pageB)]);
             await waitForMultiplayerReady(pageA, pageB, 10_000);
 
-            // Deploy oil slick (boost input edge).
+            // Deploy oil slick (ability input edge).
             await pageA.bringToFront();
-            await setDrivingKeyState(pageA, 'Space', false);
+            await setDrivingKeyState(pageA, 'KeyE', false);
             await pageA.waitForTimeout(50);
-            await setDrivingKeyState(pageA, 'Space', true);
+            await setDrivingKeyState(pageA, 'KeyE', true);
             await pageA.waitForTimeout(450);
-            await setDrivingKeyState(pageA, 'Space', false);
+            await setDrivingKeyState(pageA, 'KeyE', false);
 
             await waitForDebugState(pageA, (s) => s.deployableCount > 0, 4_000, 'oil slick deployable to appear');
             const appearedAtMs = Date.now();

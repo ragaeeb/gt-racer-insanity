@@ -1,23 +1,33 @@
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 async function checkAssets() {
     const modelsDir = join(process.cwd(), 'public', 'models', 'cars');
-    const files = await readdir(modelsDir);
-    const glbFiles = files.filter((f) => f.endsWith('.glb'));
+    const glbFiles: string[] = [];
+    async function walk(dir: string) {
+        const entries = await readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+            const path = join(dir, entry.name);
+            if (entry.isDirectory()) {
+                await walk(path);
+            } else if (entry.name.endsWith('.glb')) {
+                glbFiles.push(path);
+            }
+        }
+    }
+    await walk(modelsDir);
 
     let hasError = false;
 
-    for (const file of glbFiles) {
-        const filePath = join(modelsDir, file);
+    for (const filePath of glbFiles) {
         try {
-            console.log(`Validating ${file}...`);
+            console.log(`Validating ${filePath}...`);
             // Use npx to ensure it properly resolves the local/remote CLI without bunx bugs on subpaths
-            await execAsync(`npx @gltf-transform/cli validate "${filePath}"`);
+            await execFileAsync('npx', ['--no-install', '@gltf-transform/cli', 'validate', filePath]);
         } catch (error: any) {
             console.error(`Validation failed for ${file}:`, error.message);
             if (error.stdout) {

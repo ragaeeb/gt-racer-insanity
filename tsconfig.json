@@ -6,20 +6,10 @@
         "jsx": "react-jsx",
         "baseUrl": ".",
         "paths": {
-            "@/*": [
-                "src/*"
-            ]
+            "@/*": ["src/*"]
         },
-        "lib": [
-            "ESNext",
-            "DOM",
-            "DOM.Iterable"
-        ],
-        "types": [
-            "vite/client",
-            "bun-types",
-            "@playwright/test"
-        ],
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
+        "types": ["vite/client", "bun-types"],
         "skipLibCheck": true,
         "moduleResolution": "bundler",
         "allowImportingTsExtensions": true,
@@ -31,8 +21,5 @@
         "noUnusedParameters": true,
         "noFallthroughCasesInSwitch": true
     },
-    "include": [
-        "src",
-        "testing"
-    ]
+    "include": ["src", "testing"]
 }

@@ -233,20 +233,16 @@ export class RoomSimulation {
                         this.state.activeProjectiles,
                         this.combatTuning,
                         nowMs,
+                        resolved.targetPlayerId || undefined,
                     );
                     if (projectile) {
                         this.state.activeProjectiles.push(projectile);
-                        commitAbilityCooldown(
-                            this.cooldownStore,
-                            resolved.sourcePlayerId,
-                            resolved.abilityId,
-                            nowMs,
-                        );
+                        commitAbilityCooldown(this.cooldownStore, resolved.sourcePlayerId, resolved.abilityId, nowMs);
                         this.pushRaceEvent({
                             kind: 'ability_activated',
                             metadata: {
                                 abilityId: resolved.abilityId,
-                                targetPlayerId: resolved.targetPlayerId,
+                                targetPlayerId: projectile.targetId,
                             },
                             playerId: resolved.sourcePlayerId,
                             roomId: this.state.roomId,

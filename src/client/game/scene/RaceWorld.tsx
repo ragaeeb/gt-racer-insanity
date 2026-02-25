@@ -100,10 +100,10 @@ export const RaceWorld = ({
     return (
         <>
             <SceneEnvironment profileId={sceneEnvironmentId} sunLightRef={dirLightRef} />
-            <ErrorBoundary>
+            <ErrorBoundary key={`deployables-${resetNonce}`}>
                 <OilSlickDeployables />
             </ErrorBoundary>
-            <ErrorBoundary>
+            <ErrorBoundary key={`projectiles-${resetNonce}`}>
                 <HomingProjectiles />
             </ErrorBoundary>
         </>

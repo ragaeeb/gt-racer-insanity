@@ -58,6 +58,7 @@ export const createProjectile = (
     existingProjectiles: ActiveProjectile[],
     config: CombatTuning,
     nowMs: number,
+    preferredTarget?: string,
 ): ActiveProjectile | null => {
     // Check per-player cap
     const ownerProjectileCount = existingProjectiles.filter((p) => p.ownerId === owner.id).length;
@@ -70,7 +71,15 @@ export const createProjectile = (
         return null;
     }
 
-    const nearestOpponent = findNearestOpponent(owner, players, nowMs, config.projectileHitImmunityMs);
+    let target = preferredTarget ? players.get(preferredTarget) : undefined;
+    if (target) {
+        const timeSinceLastHit = nowMs - (target.lastHitByProjectileAtMs ?? 0);
+        if (timeSinceLastHit < config.projectileHitImmunityMs) {
+            target = undefined;
+        }
+    }
+
+    const nearestOpponent = target || findNearestOpponent(owner, players, nowMs, config.projectileHitImmunityMs);
     if (!nearestOpponent) {
         return null;
     }
