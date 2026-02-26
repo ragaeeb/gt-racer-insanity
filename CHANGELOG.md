@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.15.0...v1.16.0) (2026-02-26)
+
+
+### Features
+
+* **m4:** Milestone 4: Visual Effects & Polish ([#55](https://github.com/ragaeeb/gt-racer-insanity/issues/55)) ([b2b8d7b](https://github.com/ragaeeb/gt-racer-insanity/commit/b2b8d7b978bc226f557d5ea91b1f40fb28d2ce39))
+
 # [1.15.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.14.0...v1.15.0) (2026-02-25)
 
 
