@@ -1,10 +1,11 @@
 import { Server as Engine } from '@socket.io/bun-engine';
 import { Server } from 'socket.io';
+import { serverConfig } from '@/server/config';
+import { RoomStore } from '@/server/roomStore';
+import { isTrackId } from '@/shared/game/track/trackManifest';
 import { isInputFramePayload } from '@/shared/network/inputFrame';
 import { coerceProtocolVersion, PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 import type { AbilityActivatePayload, JoinRoomPayload } from '@/shared/network/types';
-import { serverConfig } from '@/server/config';
-import { RoomStore } from '@/server/roomStore';
 
 const roomStore = new RoomStore();
 
@@ -137,6 +138,10 @@ io.on('connection', (socket) => {
             selectedColorId = rawJoinRoom.selectedColorId;
             selectedTrackId = rawJoinRoom.selectedTrackId;
 
+            if (selectedTrackId !== undefined && !isTrackId(selectedTrackId)) {
+                selectedTrackId = undefined;
+            }
+
             if (coerceProtocolVersion(rawJoinRoom.protocolVersion) !== PROTOCOL_V2) {
                 return;
             }
@@ -163,14 +168,15 @@ io.on('connection', (socket) => {
         const snapshot = roomStore.buildRoomSnapshot(roomId, Date.now());
         socket.emit('room_joined', {
             localPlayerId: socket.id,
-            players: snapshot?.players.map((snapshotPlayer) => ({
-                id: snapshotPlayer.id,
-                name: snapshotPlayer.name,
-                rotationY: snapshotPlayer.rotationY,
-                x: snapshotPlayer.x,
-                y: snapshotPlayer.y,
-                z: snapshotPlayer.z,
-            })) ?? Array.from(room.players.values()),
+            players:
+                snapshot?.players.map((snapshotPlayer) => ({
+                    id: snapshotPlayer.id,
+                    name: snapshotPlayer.name,
+                    rotationY: snapshotPlayer.rotationY,
+                    x: snapshotPlayer.x,
+                    y: snapshotPlayer.y,
+                    z: snapshotPlayer.z,
+                })) ?? Array.from(room.players.values()),
             protocolVersion: PROTOCOL_V2,
             seed: room.seed,
             snapshot: snapshot ?? undefined,
@@ -313,7 +319,7 @@ Bun.serve({
                 },
                 {
                     headers: new Headers(corsHeaders),
-                }
+                },
             );
         }
 

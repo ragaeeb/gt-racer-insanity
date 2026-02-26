@@ -182,7 +182,8 @@ export class SceneryManager {
     public update = (camera: THREE.Camera): void => {
         for (const group of this.lodGroups) {
             const dist = camera.position.distanceTo(group.center);
-            group.mesh.visible = dist < group.maxVisibleDistance;
+            const radius = group.mesh.boundingSphere?.radius ?? 0;
+            group.mesh.visible = dist <= group.maxVisibleDistance + radius;
         }
     };
 

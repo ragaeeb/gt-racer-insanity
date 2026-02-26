@@ -38,6 +38,7 @@ export const joinRace = async (
     roomId: string,
     name: string,
     options?: {
+        trackId?: string;
         vehicleLabel?: string;
     },
 ) => {
@@ -54,6 +55,12 @@ export const joinRace = async (
         await vehicleClassFieldset
             .getByRole('button', { name: new RegExp(`^\\s*${escapedVehicleLabel}\\b`, 'i') })
             .click();
+    }
+    if (options?.trackId) {
+        const destinationFieldset = page.locator('fieldset').filter({ hasText: 'DESTINATION' }).first();
+        const trackLabel = options.trackId.replace(/-/g, ' ');
+        const escapedTrackLabel = escapeRegex(trackLabel);
+        await destinationFieldset.getByRole('button', { name: new RegExp(escapedTrackLabel, 'i') }).click();
     }
     await page.locator('#player-name-confirm').click();
     await page.waitForURL(new RegExp(`/race\\?room=${roomId}$`), { timeout: STARTUP_TIMEOUT_MS });
@@ -138,7 +145,7 @@ export const waitForMultiplayerReady = async (pageA: Page, pageB: Page, timeoutM
     }
 
     throw new Error(
-        `Timed out waiting for multiplayer readiness. Last stateA=${JSON.stringify(lastStateA)} lastStateB=${JSON.stringify(lastStateB)}`
+        `Timed out waiting for multiplayer readiness. Last stateA=${JSON.stringify(lastStateA)} lastStateB=${JSON.stringify(lastStateB)}`,
     );
 };
 
@@ -168,7 +175,7 @@ export const waitForCarsToMoveForward = async (
     }
 
     throw new Error(
-        `Timed out waiting for both cars to move forward. Last stateA=${JSON.stringify(lastStateA)} lastStateB=${JSON.stringify(lastStateB)}`
+        `Timed out waiting for both cars to move forward. Last stateA=${JSON.stringify(lastStateA)} lastStateB=${JSON.stringify(lastStateB)}`,
     );
 };
 

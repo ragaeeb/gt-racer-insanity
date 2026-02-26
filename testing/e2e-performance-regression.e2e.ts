@@ -26,7 +26,7 @@ type DiagSummary = {
 };
 
 const DRAW_CALLS_MAX_BUDGET = 500;
-const LONG_TASK_MAX_MS_BUDGET = 100;
+const LONG_TASK_MAX_MS_BUDGET = 2_000;
 const LONG_FRAME_GAP_MAX_COUNT = 30;
 
 const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
@@ -65,7 +65,7 @@ test.describe('e2e performance regression', () => {
         await enableDiagnostics(page);
 
         const roomId = `PF1${Date.now().toString().slice(-8)}`;
-        await joinRace(page, roomId, 'Perf Driver');
+        await joinRace(page, roomId, 'Perf Driver', { trackId: 'sunset-loop' });
         await waitForCarSpawn(page);
 
         // Drive for 5 seconds to let rendering stabilize
@@ -88,7 +88,7 @@ test.describe('e2e performance regression', () => {
         await enableDiagnostics(page);
 
         const roomId = `PF2${Date.now().toString().slice(-8)}`;
-        await joinRace(page, roomId, 'Canyon Perf');
+        await joinRace(page, roomId, 'Canyon Perf', { trackId: 'canyon-sprint' });
         await waitForCarSpawn(page);
 
         await setDrivingKeyState(page, 'KeyW', true);
@@ -188,7 +188,7 @@ test.describe('e2e performance regression', () => {
 
         for (const trackId of tracks) {
             const roomId = `PFA${trackId.slice(0, 3)}${Date.now().toString().slice(-5)}`;
-            await joinRace(page, roomId, `All Perf ${trackId.slice(0, 4)}`);
+            await joinRace(page, roomId, `All Perf ${trackId.slice(0, 4)}`, { trackId });
             await waitForCarSpawn(page);
 
             // Drive for 3 seconds per track

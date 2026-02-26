@@ -25,7 +25,7 @@ async function findGlbFiles(dir: string): Promise<string[]> {
 }
 
 async function compressModel(inputPath: string): Promise<void> {
-    const outputPath = inputPath.replace('.glb', '.compressed.glb');
+    const outputPath = inputPath.replace(/\.glb$/i, '.compressed.glb');
 
     console.log(`Compressing ${inputPath}...`);
 
