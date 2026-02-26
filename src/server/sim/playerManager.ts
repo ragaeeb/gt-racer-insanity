@@ -2,10 +2,16 @@ import type { Collider, RigidBody } from '@dimforge/rapier3d-compat';
 import { syncPlayerMotionFromRigidBody } from '@/server/sim/collisionSystem';
 import type { createRapierWorld } from '@/server/sim/rapierWorld';
 import type { SimPlayerState } from '@/server/sim/types';
+import { getElevationAtZ } from '@/shared/game/track/elevationHelpers';
+import type { TrackSegmentManifest } from '@/shared/game/track/trackManifest';
 import { createInitialRaceProgress } from '@/shared/game/track/raceProgress';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 import { getVehicleClassManifestById, type VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
-import { PLAYER_COLLIDER_HALF_LENGTH_METERS, PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
+import {
+    PLAYER_COLLIDER_HALF_HEIGHT_METERS,
+    PLAYER_COLLIDER_HALF_LENGTH_METERS,
+    PLAYER_COLLIDER_HALF_WIDTH_METERS,
+} from '@/shared/physics/constants';
 
 type RapierContext = ReturnType<typeof createRapierWorld>;
 
@@ -26,29 +32,35 @@ export class PlayerManager {
         private readonly players: Map<string, SimPlayerState>,
         private readonly rapierContext: RapierContext,
         private readonly trackBoundaryX: number,
+        private readonly trackSegments: TrackSegmentManifest[],
     ) {}
+
+    private getSpawnPositionY = (spawnZ: number): number => {
+        const clampedSpawnZ = Math.max(0, spawnZ);
+        return getElevationAtZ(this.trackSegments, clampedSpawnZ) + PLAYER_COLLIDER_HALF_HEIGHT_METERS;
+    };
 
     private createRigidBody(playerId: string, vehicleId: VehicleClassId, playerIndex: number): void {
         const vehicleClass = getVehicleClassManifestById(vehicleId);
         const { rapier, world } = this.rapierContext;
+        const spawnZ = getSpawnPositionZ(playerIndex);
 
         const rigidBodyDesc = rapier.RigidBodyDesc.dynamic()
             .setCanSleep(false)
             .setCcdEnabled(true)
             .setLinearDamping(2.5)
             .setAngularDamping(4)
-            .setTranslation(getSpawnPositionX(playerIndex), 0.45, getSpawnPositionZ(playerIndex));
+            .setTranslation(getSpawnPositionX(playerIndex), this.getSpawnPositionY(spawnZ), spawnZ);
 
         const rigidBody = world.createRigidBody(rigidBodyDesc);
         rigidBody.setEnabledRotations(false, true, false, true);
         // Y translation enabled for ground-snap elevation support (M5-Elevation).
-        // TODO(M5-D): Use getElevationAtZ(segments, spawnZ) for spawn Y instead of 0.45.
         rigidBody.setEnabledTranslations(true, true, true, true);
         rigidBody.setAdditionalMass(Math.max(vehicleClass.physics.collisionMass, 1), true);
 
         const colliderDesc = rapier.ColliderDesc.cuboid(
             PLAYER_COLLIDER_HALF_WIDTH_METERS,
-            0.5,
+            PLAYER_COLLIDER_HALF_HEIGHT_METERS,
             PLAYER_COLLIDER_HALF_LENGTH_METERS,
         )
             .setActiveEvents(rapier.ActiveEvents.COLLISION_EVENTS | rapier.ActiveEvents.CONTACT_FORCE_EVENTS)
@@ -87,6 +99,8 @@ export class PlayerManager {
             this.removePlayer(playerId);
         }
         const normalizedVehicleId = (vehicleId || 'sport') as VehicleClassId;
+        const spawnZ = getSpawnPositionZ(playerIndex);
+        const spawnY = this.getSpawnPositionY(spawnZ);
         this.createRigidBody(playerId, normalizedVehicleId, playerIndex);
         const rigidBody = this.rigidBodyById.get(playerId);
 
@@ -100,8 +114,8 @@ export class PlayerManager {
             lastProcessedInputSeq: -1,
             motion: {
                 positionX: getSpawnPositionX(playerIndex),
-                positionY: 0,
-                positionZ: getSpawnPositionZ(playerIndex),
+                positionY: spawnY,
+                positionZ: spawnZ,
                 rotationY: 0,
                 speed: 0,
             },
@@ -128,6 +142,8 @@ export class PlayerManager {
      * for the given slot index. Call this during race restart.
      */
     resetPlayerForRestart(player: SimPlayerState, playerIndex: number): void {
+        const spawnZ = getSpawnPositionZ(playerIndex);
+        const spawnY = this.getSpawnPositionY(spawnZ);
         player.activeEffects = [];
         player.driftContext = createInitialDriftContext();
         player.inputState = { boost: false, brake: false, handbrake: false, steering: 0, throttle: 0 };
@@ -135,8 +151,8 @@ export class PlayerManager {
         player.lastProcessedInputSeq = -1;
         player.motion = {
             positionX: getSpawnPositionX(playerIndex),
-            positionY: 0,
-            positionZ: getSpawnPositionZ(playerIndex),
+            positionY: spawnY,
+            positionZ: spawnZ,
             rotationY: 0,
             speed: 0,
         };
@@ -145,7 +161,7 @@ export class PlayerManager {
         const rigidBody = this.rigidBodyById.get(player.id);
         if (rigidBody) {
             rigidBody.setTranslation(
-                { x: getSpawnPositionX(playerIndex), y: 0.45, z: getSpawnPositionZ(playerIndex) },
+                { x: getSpawnPositionX(playerIndex), y: spawnY, z: spawnZ },
                 true,
             );
             rigidBody.setRotation({ w: 1, x: 0, y: 0, z: 0 }, true);

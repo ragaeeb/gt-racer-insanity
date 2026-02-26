@@ -54,4 +54,13 @@ export const CAR_MODEL_CATALOG: CarModelDefinition[] = [
         modelYawOffsetRadians: Math.PI,
         sourceUrl: 'https://poly.pizza/m/BwwnUrWGmV',
     },
+    {
+        id: 'yamaha-r1',
+        title: 'Yamaha',
+        author: 'Lionsharp Studios',
+        license: 'Free StandardFree',
+        modelPath: '/models/cars/2022_yamaha_r1.glb',
+        modelYawOffsetRadians: Math.PI * 2,
+        sourceUrl: 'https://sketchfab.com/3d-models/2022-yamaha-r1-9caf5493d79d47aeacdec415b312fd5e',
+    },
 ];

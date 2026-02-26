@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { DEFAULT_MIX_STATE_TUNING, getMixStateForPhase, MixStateManager, type RacePhase } from '../mixStateManager';
+import { DEFAULT_MIX_STATE_TUNING, getMixStateForPhase, MixStateManager, type RacePhase } from './mixStateManager';
 
 describe('Mix State Manager — getMixStateForPhase', () => {
     it('should return high music and low engine for pre-race', () => {

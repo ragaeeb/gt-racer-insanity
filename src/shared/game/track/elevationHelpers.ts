@@ -120,6 +120,10 @@ export const getElevationAtDistanceModuloLap = (
  * @returns Normalized surface normal { x, y, z }
  */
 export const getSegmentSurfaceNormal = (segment: TrackSegmentManifest): { x: number; y: number; z: number } => {
+    if (segment.lengthMeters <= 0) {
+        return { x: 0, y: 1, z: 0 };
+    }
+
     const elevStart = segment.elevationStartM ?? 0;
     const elevEnd = segment.elevationEndM ?? 0;
     const slope = (elevEnd - elevStart) / segment.lengthMeters;
@@ -132,5 +136,8 @@ export const getSegmentSurfaceNormal = (segment: TrackSegmentManifest): { x: num
 
     // Normalize to unit length
     const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (len <= 0 || !Number.isFinite(len)) {
+        return { x: 0, y: 1, z: 0 };
+    }
     return { x: nx / len, y: ny / len, z: nz / len };
 };

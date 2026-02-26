@@ -107,6 +107,34 @@ describe('SceneryManager', () => {
         expect(manager.getObjectCount()).toBe(0);
     });
 
+    it('should register LOD groups for generated scenery', () => {
+        const scene = createScene();
+        const manager = new SceneryManager(scene, seededRandom(42), 76, 2700, 'sunny-day');
+        manager.build();
+
+        expect(manager.getLODGroupCount()).toBeGreaterThan(0);
+    });
+
+    it('should update instanced mesh visibility based on camera distance', () => {
+        const scene = createScene();
+        const manager = new SceneryManager(scene, seededRandom(42), 76, 2700, 'sunny-day');
+        manager.build();
+
+        const firstMesh = scene.children.find((child) => child instanceof THREE.InstancedMesh) as
+            | THREE.InstancedMesh
+            | undefined;
+        expect(firstMesh).toBeDefined();
+
+        const camera = new THREE.PerspectiveCamera();
+        camera.position.set(0, 20, -10_000);
+        manager.update(camera);
+        expect(firstMesh?.visible).toBeFalse();
+
+        camera.position.set(0, 20, 80);
+        manager.update(camera);
+        expect(firstMesh?.visible).toBeTrue();
+    });
+
     it('should scale logical object count with track length', () => {
         const sceneShort = createScene();
         const mShort = new SceneryManager(sceneShort, seededRandom(42), 76, 900, 'sunny-day');

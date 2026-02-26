@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import * as THREE from 'three';
-import { CameraShake } from '../cameraShake';
+import { CameraShake } from './cameraShake';
 
 describe('CameraShake', () => {
     it('should initialize with zero offset', () => {
@@ -48,5 +48,23 @@ describe('CameraShake', () => {
 
         const offset = shake.getOffset();
         expect(offset.length()).toBeLessThan(0.01);
+    });
+
+    it('should apply offset to camera position', () => {
+        const camera = new THREE.PerspectiveCamera();
+        camera.position.set(10, 5, -4);
+        const shake = new CameraShake(camera, {
+            maxOffset: new THREE.Vector3(1, 0, 0),
+            maxVelocity: new THREE.Vector3(0, 0, 0),
+            random: () => 1,
+        });
+
+        shake.trigger(1);
+        const basePosition = camera.position.clone();
+        shake.apply();
+
+        expect(camera.position.x).toBeGreaterThan(basePosition.x);
+        expect(camera.position.y).toBe(basePosition.y);
+        expect(camera.position.z).toBe(basePosition.z);
     });
 });

@@ -119,8 +119,16 @@ const LOD_DISTANCE_CACTI = 200;
 
 type SceneryLODGroup = {
     center: THREE.Vector3;
+    instanceIndices: number[];
     maxVisibleDistance: number;
     mesh: THREE.InstancedMesh;
+    radius: number;
+};
+
+type MeshLODState = {
+    baseColors: THREE.Color[] | null;
+    baseMatrices: THREE.Matrix4[];
+    originalCount: number;
 };
 
 export class SceneryManager {
@@ -129,6 +137,7 @@ export class SceneryManager {
     private readonly materials: THREE.Material[] = [];
     private readonly palette: SceneryThemePalette;
     private readonly lodGroups: SceneryLODGroup[] = [];
+    private readonly lodStateByMesh = new Map<THREE.InstancedMesh, MeshLODState>();
     private logicalObjectCount = 0;
 
     constructor(
@@ -180,10 +189,50 @@ export class SceneryManager {
      * Call once per frame from the render loop.
      */
     public update = (camera: THREE.Camera): void => {
+        const visibleIndicesByMesh = new Map<THREE.InstancedMesh, number[]>();
+
         for (const group of this.lodGroups) {
             const dist = camera.position.distanceTo(group.center);
-            const radius = group.mesh.boundingSphere?.radius ?? 0;
-            group.mesh.visible = dist <= group.maxVisibleDistance + radius;
+            const visible = dist <= group.maxVisibleDistance + group.radius;
+            if (!visible) {
+                continue;
+            }
+
+            const indices = visibleIndicesByMesh.get(group.mesh) ?? [];
+            indices.push(...group.instanceIndices);
+            visibleIndicesByMesh.set(group.mesh, indices);
+        }
+
+        for (const [mesh, state] of this.lodStateByMesh) {
+            const visibleIndices = visibleIndicesByMesh.get(mesh) ?? [];
+            if (visibleIndices.length === 0) {
+                mesh.count = 0;
+                mesh.visible = false;
+                continue;
+            }
+
+            mesh.visible = true;
+            const nextCount = Math.min(visibleIndices.length, state.originalCount);
+            mesh.count = nextCount;
+
+            for (let i = 0; i < nextCount; i++) {
+                const sourceIndex = visibleIndices[i];
+                const matrix = state.baseMatrices[sourceIndex];
+                if (matrix) {
+                    mesh.setMatrixAt(i, matrix);
+                }
+                if (state.baseColors) {
+                    const color = state.baseColors[sourceIndex];
+                    if (color) {
+                        mesh.setColorAt(i, color);
+                    }
+                }
+            }
+
+            mesh.instanceMatrix.needsUpdate = true;
+            if (mesh.instanceColor) {
+                mesh.instanceColor.needsUpdate = true;
+            }
         }
     };
 
@@ -192,6 +241,95 @@ export class SceneryManager {
     };
 
     private buildingMaterials: THREE.MeshStandardMaterial[] = [];
+
+    private registerLODGroupsForPoints = (
+        mesh: THREE.InstancedMesh,
+        maxVisibleDistance: number,
+        points: Array<{ x: number; z: number }>,
+        clusterLengthMeters = 200,
+    ) => {
+        if (points.length === 0) {
+            return;
+        }
+
+        type ClusterStats = {
+            count: number;
+            indices: number[];
+            maxX: number;
+            maxZ: number;
+            minX: number;
+            minZ: number;
+            sumX: number;
+            sumZ: number;
+        };
+
+        if (!this.lodStateByMesh.has(mesh)) {
+            const baseMatrices: THREE.Matrix4[] = [];
+            const tempMatrix = new THREE.Matrix4();
+            for (let i = 0; i < mesh.count; i++) {
+                mesh.getMatrixAt(i, tempMatrix);
+                baseMatrices.push(tempMatrix.clone());
+            }
+
+            let baseColors: THREE.Color[] | null = null;
+            if (mesh.instanceColor) {
+                const tempColor = new THREE.Color();
+                baseColors = [];
+                for (let i = 0; i < mesh.count; i++) {
+                    mesh.getColorAt(i, tempColor);
+                    baseColors.push(tempColor.clone());
+                }
+            }
+
+            this.lodStateByMesh.set(mesh, {
+                baseColors,
+                baseMatrices,
+                originalCount: mesh.count,
+            });
+        }
+
+        const clusters = new Map<number, ClusterStats>();
+        for (let index = 0; index < points.length; index++) {
+            const point = points[index];
+            const key = Math.floor(point.z / clusterLengthMeters);
+            const existing = clusters.get(key);
+            if (existing) {
+                existing.count += 1;
+                existing.indices.push(index);
+                existing.sumX += point.x;
+                existing.sumZ += point.z;
+                existing.minX = Math.min(existing.minX, point.x);
+                existing.maxX = Math.max(existing.maxX, point.x);
+                existing.minZ = Math.min(existing.minZ, point.z);
+                existing.maxZ = Math.max(existing.maxZ, point.z);
+                continue;
+            }
+            clusters.set(key, {
+                count: 1,
+                indices: [index],
+                maxX: point.x,
+                maxZ: point.z,
+                minX: point.x,
+                minZ: point.z,
+                sumX: point.x,
+                sumZ: point.z,
+            });
+        }
+
+        for (const cluster of clusters.values()) {
+            const center = new THREE.Vector3(cluster.sumX / cluster.count, 0, cluster.sumZ / cluster.count);
+            const halfSpanX = (cluster.maxX - cluster.minX) * 0.5;
+            const halfSpanZ = (cluster.maxZ - cluster.minZ) * 0.5;
+            const radius = Math.max(8, Math.sqrt(halfSpanX * halfSpanX + halfSpanZ * halfSpanZ) + 6);
+            this.lodGroups.push({
+                center,
+                instanceIndices: cluster.indices,
+                maxVisibleDistance,
+                mesh,
+                radius,
+            });
+        }
+    };
 
     private createSharedBuildingMaterials = () => {
         const colors = this.palette.buildingColors;
@@ -312,14 +450,11 @@ export class SceneryManager {
             this.scene.add(instancedMesh);
             this.objects.push(instancedMesh);
 
-            // Register LOD visibility group with average building position
-            const center = new THREE.Vector3();
-            for (const b of group) {
-                center.x += b.x;
-                center.z += b.z;
-            }
-            center.divideScalar(group.length);
-            this.lodGroups.push({ center, maxVisibleDistance: LOD_DISTANCE_BUILDINGS, mesh: instancedMesh });
+            this.registerLODGroupsForPoints(
+                instancedMesh,
+                LOD_DISTANCE_BUILDINGS,
+                group.map((building) => ({ x: building.x, z: building.z })),
+            );
         }
 
         this.logicalObjectCount += buildings.length;
@@ -413,23 +548,9 @@ export class SceneryManager {
         this.scene.add(bulbsInstancedMesh);
         this.objects.push(bulbsInstancedMesh);
 
-        // Register LOD visibility groups for street lights
-        const lightCenter = new THREE.Vector3();
-        for (const l of lights) {
-            lightCenter.x += l.x;
-            lightCenter.z += l.z;
-        }
-        lightCenter.divideScalar(lights.length);
-        this.lodGroups.push({
-            center: lightCenter.clone(),
-            maxVisibleDistance: LOD_DISTANCE_STREET_LIGHTS,
-            mesh: polesInstancedMesh,
-        });
-        this.lodGroups.push({
-            center: lightCenter.clone(),
-            maxVisibleDistance: LOD_DISTANCE_STREET_LIGHTS,
-            mesh: bulbsInstancedMesh,
-        });
+        const lightPoints = lights.map((light) => ({ x: light.x, z: light.z }));
+        this.registerLODGroupsForPoints(polesInstancedMesh, LOD_DISTANCE_STREET_LIGHTS, lightPoints);
+        this.registerLODGroupsForPoints(bulbsInstancedMesh, LOD_DISTANCE_STREET_LIGHTS, lightPoints);
 
         this.logicalObjectCount += totalLights;
     };
@@ -475,18 +596,12 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
-        // Register LOD visibility group for cones
-        const coneCenter = new THREE.Vector3();
-        for (const c of cones) {
-            coneCenter.x += c.x;
-            coneCenter.z += c.z;
-        }
-        coneCenter.divideScalar(cones.length);
-        this.lodGroups.push({
-            center: coneCenter,
-            maxVisibleDistance: LOD_DISTANCE_TRAFFIC_CONES,
-            mesh: instancedMesh,
-        });
+        this.registerLODGroupsForPoints(
+            instancedMesh,
+            LOD_DISTANCE_TRAFFIC_CONES,
+            cones.map((cone) => ({ x: cone.x, z: cone.z })),
+            160,
+        );
 
         this.logicalObjectCount += cones.length;
     };
@@ -540,18 +655,12 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
-        // Register LOD visibility group for rock pillars
-        const pillarCenter = new THREE.Vector3();
-        for (const p of pillars) {
-            pillarCenter.x += p.x;
-            pillarCenter.z += p.z;
-        }
-        pillarCenter.divideScalar(pillars.length);
-        this.lodGroups.push({
-            center: pillarCenter,
-            maxVisibleDistance: LOD_DISTANCE_ROCK_PILLARS,
-            mesh: instancedMesh,
-        });
+        this.registerLODGroupsForPoints(
+            instancedMesh,
+            LOD_DISTANCE_ROCK_PILLARS,
+            pillars.map((pillar) => ({ x: pillar.x, z: pillar.z })),
+            240,
+        );
 
         this.logicalObjectCount += pillars.length;
     };
@@ -604,14 +713,12 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
-        // Register LOD visibility group for mesa formations
-        const mesaCenter = new THREE.Vector3();
-        for (const m of mesas) {
-            mesaCenter.x += m.x;
-            mesaCenter.z += m.z;
-        }
-        mesaCenter.divideScalar(mesas.length);
-        this.lodGroups.push({ center: mesaCenter, maxVisibleDistance: LOD_DISTANCE_MESAS, mesh: instancedMesh });
+        this.registerLODGroupsForPoints(
+            instancedMesh,
+            LOD_DISTANCE_MESAS,
+            mesas.map((mesa) => ({ x: mesa.x, z: mesa.z })),
+            240,
+        );
 
         this.logicalObjectCount += mesas.length;
     };
@@ -666,14 +773,12 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
-        // Register LOD visibility group for billboards
-        const bbCenter = new THREE.Vector3();
-        for (const bb of billboards) {
-            bbCenter.x += bb.x;
-            bbCenter.z += bb.z;
-        }
-        bbCenter.divideScalar(billboards.length);
-        this.lodGroups.push({ center: bbCenter, maxVisibleDistance: LOD_DISTANCE_BILLBOARDS, mesh: instancedMesh });
+        this.registerLODGroupsForPoints(
+            instancedMesh,
+            LOD_DISTANCE_BILLBOARDS,
+            billboards.map((billboard) => ({ x: billboard.x, z: billboard.z })),
+            180,
+        );
 
         this.logicalObjectCount += billboards.length;
     };
@@ -738,6 +843,7 @@ export class SceneryManager {
         const rightArmQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -Math.PI / 2));
 
         let rightArmIndex = 0;
+        const rightArmPoints: Array<{ x: number; z: number }> = [];
         for (let i = 0; i < cacti.length; i++) {
             const cactus = cacti[i];
 
@@ -762,6 +868,7 @@ export class SceneryManager {
                     new THREE.Vector3(1, 0.8 + this.random() * 0.4, 1),
                 );
                 rightArmMesh.setMatrixAt(rightArmIndex, matrix);
+                rightArmPoints.push({ x: cactus.x, z: cactus.z });
                 rightArmIndex += 1;
             }
         }
@@ -780,20 +887,10 @@ export class SceneryManager {
         this.scene.add(rightArmMesh);
         this.objects.push(rightArmMesh);
 
-        // Register LOD visibility groups for cacti
-        const cactiCenter = new THREE.Vector3();
-        for (const c of cacti) {
-            cactiCenter.x += c.x;
-            cactiCenter.z += c.z;
-        }
-        cactiCenter.divideScalar(cacti.length);
-        this.lodGroups.push({ center: cactiCenter.clone(), maxVisibleDistance: LOD_DISTANCE_CACTI, mesh: trunkMesh });
-        this.lodGroups.push({ center: cactiCenter.clone(), maxVisibleDistance: LOD_DISTANCE_CACTI, mesh: leftArmMesh });
-        this.lodGroups.push({
-            center: cactiCenter.clone(),
-            maxVisibleDistance: LOD_DISTANCE_CACTI,
-            mesh: rightArmMesh,
-        });
+        const cactiPoints = cacti.map((cactus) => ({ x: cactus.x, z: cactus.z }));
+        this.registerLODGroupsForPoints(trunkMesh, LOD_DISTANCE_CACTI, cactiPoints, 180);
+        this.registerLODGroupsForPoints(leftArmMesh, LOD_DISTANCE_CACTI, cactiPoints, 180);
+        this.registerLODGroupsForPoints(rightArmMesh, LOD_DISTANCE_CACTI, rightArmPoints, 180);
 
         this.logicalObjectCount += cacti.length;
     };
@@ -809,6 +906,7 @@ export class SceneryManager {
         }
         this.objects.length = 0;
         this.lodGroups.length = 0;
+        this.lodStateByMesh.clear();
         this.logicalObjectCount = 0;
 
         for (const geo of this.geometries) {

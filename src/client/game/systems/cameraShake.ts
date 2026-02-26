@@ -13,10 +13,6 @@ type CameraShakeOptions = {
 
 type CameraShakeOptionsInput = Partial<CameraShakeOptions>;
 
-type CameraShakeTrigger = (intensity: number) => void;
-
-let cameraShakeTrigger: CameraShakeTrigger | null = null;
-
 const createDefaultOptions = (): CameraShakeOptions => {
     return {
         damping: 10,
@@ -27,17 +23,6 @@ const createDefaultOptions = (): CameraShakeOptions => {
         settleVelocitySq: 1e-6,
         spring: 24,
     };
-};
-
-export const registerCameraShakeTrigger = (trigger: CameraShakeTrigger | null) => {
-    cameraShakeTrigger = trigger;
-};
-
-export const triggerCameraShake = (intensity: number) => {
-    if (intensity <= 0) {
-        return;
-    }
-    cameraShakeTrigger?.(intensity);
 };
 
 export class CameraShake {

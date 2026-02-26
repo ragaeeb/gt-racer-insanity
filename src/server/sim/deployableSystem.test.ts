@@ -7,8 +7,8 @@ import {
     resetDeployableIdCounter,
     spawnDeployable,
     updateDeployables,
-} from '../deployableSystem';
-import type { ActiveDeployable } from '../types';
+} from './deployableSystem';
+import type { ActiveDeployable } from './types';
 import { mockPlayer } from './testFactories';
 
 const combatTuning = DEFAULT_GAMEPLAY_TUNING.combat;
@@ -134,6 +134,23 @@ describe('Deployable System', () => {
         expect(deployable).toBeNull();
     });
 
+    it('should block deploy near the finish line', () => {
+        const totalTrackLengthMeters = 1_000;
+        const player = mockPlayer({ id: 'owner', x: 0, z: 920 });
+        player.progress.distanceMeters = 970;
+
+        const deployable = spawnDeployable(
+            'oil-slick',
+            player,
+            [],
+            oilSlickLifetimeTicks,
+            combatTuning,
+            totalTrackLengthMeters,
+        );
+
+        expect(deployable).toBeNull();
+    });
+
     it('should include oil slick deployable in room snapshot after deploy input', () => {
         const sim = new RoomSimulation({
             roomId: 'deploy-room',
@@ -151,5 +168,27 @@ describe('Deployable System', () => {
         expect(snapshot.deployables).toBeDefined();
         expect(snapshot.deployables?.length).toBe(1);
         expect(snapshot.deployables?.[0]?.kind).toBe('oil-slick');
+    });
+
+    it('should evaluate every deployable against the same iterable player set', () => {
+        const deployableA = mockDeployable({ id: 1, ownerId: 'owner-a', radius: 3, x: 0, z: 0 });
+        const deployableB = mockDeployable({ id: 2, ownerId: 'owner-b', radius: 3, x: 10, z: 10 });
+        const playerNearA = mockPlayer({ id: 'p-a', x: 0.5, z: 0.5 });
+        const playerNearB = mockPlayer({ id: 'p-b', x: 10.5, z: 10.5 });
+
+        const playersMap = new Map<string, typeof playerNearA>([
+            [playerNearA.id, playerNearA],
+            [playerNearB.id, playerNearB],
+        ]);
+
+        const effects = checkDeployableCollisions(
+            [deployableA, deployableB],
+            playersMap.values(),
+            combatTuning,
+        );
+
+        expect(effects.length).toBe(2);
+        expect(effects.some((effect) => effect.playerId === 'p-a')).toBeTrue();
+        expect(effects.some((effect) => effect.playerId === 'p-b')).toBeTrue();
     });
 });

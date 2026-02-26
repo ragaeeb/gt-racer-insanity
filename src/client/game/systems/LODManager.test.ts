@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import * as THREE from 'three';
-import { LODManager } from '../LODManager';
+import { LODManager } from './LODManager';
 
 describe('LODManager', () => {
     it('should create 3 LOD levels for a geometry', () => {

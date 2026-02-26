@@ -2,6 +2,7 @@ import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 
 export const VEHICLE_CLASS_TO_CATALOG_ID: Record<VehicleClassId, string> = {
+    bike: 'yamaha-r1',
     sport: 'sport',
     muscle: 'suv',
     patrol: 'police',
@@ -127,8 +128,7 @@ export const vehicleClassToModelIndex = (vehicleClassId: string): number => {
 };
 
 /** Resolve a color ID (e.g. "blue") to an HSL hue (0-1). */
-export const colorIdToHue = (colorId: string): number =>
-    colorIdToHSL(colorId).h;
+export const colorIdToHue = (colorId: string): number => colorIdToHSL(colorId).h;
 
 /** Resolve a color ID to a full HSL triplet for the Car constructor. */
 export const colorIdToHSL = (colorId: string): { h: number; s: number; l: number } => {

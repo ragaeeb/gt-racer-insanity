@@ -2,8 +2,8 @@ import { describe, expect, it } from 'bun:test';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
 import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
-import { createProjectile, stepAllProjectiles, stepProjectile } from '../projectileSystem';
-import type { ActiveProjectile, SimPlayerState, SimRoomState } from '../types';
+import { createProjectile, stepAllProjectiles, stepProjectile } from './projectileSystem';
+import type { ActiveProjectile, SimPlayerState, SimRoomState } from './types';
 
 const combatConfig = DEFAULT_GAMEPLAY_TUNING.combat;
 
@@ -361,13 +361,16 @@ describe('Projectile System - Lifecycle', () => {
 
         const state = mockRoomState([owner, target], [proj]);
         const nowMs = 5000;
+        const events: any[] = [];
 
-        stepAllProjectiles(state, 1 / 60, nowMs, combatConfig, () => {});
+        stepAllProjectiles(state, 1 / 60, nowMs, combatConfig, (event) => events.push(event));
 
         expect(state.activeProjectiles.length).toBe(0);
         expect(target.activeEffects.length).toBe(initialEffectsLength);
         const stunnedAfterStep = target.activeEffects.find((effect) => effect.effectType === 'stunned');
         expect(stunnedAfterStep?.expiresAtMs).toBe(initialStunnedExpiresAtMs);
+        expect(target.lastHitByProjectileAtMs).toBe(4900);
+        expect(events.length).toBe(0);
     });
 
     it('should clear projectiles on race restart', () => {
