@@ -88,9 +88,10 @@ export class RoomSimulation {
         this.totalTrackLengthMeters = trackColliders.totalTrackLengthMeters;
         this.obstacleColliderHandles = trackColliders.obstacleColliderHandles;
 
-        // Pre-compute: all segments have zero elevation → skip per-tick raycasts
+        // Pre-compute: all segments have zero elevation and zero banking → skip per-tick raycasts
         this.isTrackFlat = this.trackManifest.segments.every(
-            (seg) => (seg.elevationStartM ?? 0) === 0 && (seg.elevationEndM ?? 0) === 0,
+            (seg) =>
+                (seg.elevationStartM ?? 0) === 0 && (seg.elevationEndM ?? 0) === 0 && (seg.bankAngleDeg ?? 0) === 0,
         );
 
         this.state = {

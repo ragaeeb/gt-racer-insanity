@@ -24,6 +24,7 @@ describe('car physics stability', () => {
             expect(Number.isFinite(result.speed)).toBeTrue();
             expect(Number.isFinite(result.rotationY)).toBeTrue();
             expect(Number.isFinite(result.positionX)).toBeTrue();
+            expect(Number.isFinite(result.positionY)).toBeTrue();
             expect(Number.isFinite(result.positionZ)).toBeTrue();
         }
     });

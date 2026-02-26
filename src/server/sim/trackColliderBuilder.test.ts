@@ -2,8 +2,6 @@ import { describe, expect, it } from 'bun:test';
 import type { TrackSegmentManifest } from '@/shared/game/track/trackManifest';
 import { computeSegmentColliderTransform, eulerToQuaternion } from './trackColliderBuilder';
 
-// ───────────────────────── helpers ──────────────────────────
-
 const FLOAT_EPSILON = 1e-6;
 
 const quatIsIdentity = (q: { w: number; x: number; y: number; z: number }) =>
@@ -16,8 +14,6 @@ const quatIsNormalized = (q: { w: number; x: number; y: number; z: number }) => 
     const len = Math.sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
     return Math.abs(len - 1) < FLOAT_EPSILON;
 };
-
-// ───────────────────── eulerToQuaternion ────────────────────
 
 describe('eulerToQuaternion', () => {
     it('should return identity quaternion for zero angles', () => {
@@ -50,8 +46,6 @@ describe('eulerToQuaternion', () => {
         expect(q.w).toBeCloseTo(Math.cos(angle / 2), 5);
     });
 });
-
-// ──────────── computeSegmentColliderTransform ───────────────
 
 describe('computeSegmentColliderTransform', () => {
     it('should produce identity rotation for a flat segment', () => {
@@ -199,8 +193,6 @@ describe('computeSegmentColliderTransform', () => {
     });
 });
 
-// ──────────── segment continuity checks ─────────────────────
-
 describe('segment boundary continuity', () => {
     it('should place consecutive segment colliders without gap at boundary', () => {
         const segA: TrackSegmentManifest = {
@@ -256,8 +248,6 @@ describe('segment boundary continuity', () => {
     });
 });
 
-// ──────────── wall collider transform ───────────────────────
-
 describe('wall collider elevation', () => {
     it('should produce wall colliders at elevated position for raised segments', () => {
         const segment: TrackSegmentManifest = {
@@ -285,5 +275,43 @@ describe('wall collider elevation', () => {
 
         // Wall center Y should be at default wall height (no elevation offset)
         expect(transform.wallCenterY).toBeCloseTo(3, 1); // DEFAULT_WALL_HEIGHT_METERS
+    });
+
+    it('should produce non-identity rotation for banked segments', () => {
+        // Regression: banked segments must produce a rotation quaternion that
+        // tilts colliders. If the rotation is identity (w=1), the banking
+        // has no effect on wall or floor collider orientation.
+        const segment: TrackSegmentManifest = {
+            bankAngleDeg: 15,
+            frictionMultiplier: 1,
+            id: 'seg-banked',
+            lengthMeters: 100,
+        };
+        const transform = computeSegmentColliderTransform(segment, 0);
+
+        // A 15° bank should produce a non-identity quaternion
+        // Identity quaternion is {x:0, y:0, z:0, w:1}
+        expect(transform.rotation.z).not.toBeCloseTo(0, 3);
+    });
+
+    it('should produce opposite rotation directions for positive vs negative bank', () => {
+        const leftBank: TrackSegmentManifest = {
+            bankAngleDeg: 10,
+            frictionMultiplier: 1,
+            id: 'seg-left',
+            lengthMeters: 100,
+        };
+        const rightBank: TrackSegmentManifest = {
+            bankAngleDeg: -10,
+            frictionMultiplier: 1,
+            id: 'seg-right',
+            lengthMeters: 100,
+        };
+
+        const leftTransform = computeSegmentColliderTransform(leftBank, 0);
+        const rightTransform = computeSegmentColliderTransform(rightBank, 0);
+
+        // Opposite bank angles should produce opposite Z rotation components
+        expect(Math.sign(leftTransform.rotation.z)).not.toEqual(Math.sign(rightTransform.rotation.z));
     });
 });

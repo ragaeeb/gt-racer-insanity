@@ -116,6 +116,11 @@ export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveSte
     // snapPlayerToGround on the previous tick before this runs.
     if (player.isGrounded) {
         applySteering(player, rigidBody, multipliers.steeringMultiplier);
+    } else {
+        // Clear stale yaw angular velocity so the car doesn't continue
+        // rotating in mid-air from a pre-airborne steering input.
+        const angVel = rigidBody.angvel();
+        rigidBody.setAngvel({ x: angVel.x, y: 0, z: angVel.z }, true);
     }
 
     const vehicleClass = getVehicleClassManifestById(player.vehicleId);

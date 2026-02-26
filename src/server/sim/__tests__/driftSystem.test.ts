@@ -57,8 +57,6 @@ const mockPlayer = (overrides: {
 };
 
 describe('Drift State Machine', () => {
-    // ─── GRIPPING state tests ───
-
     it('should stay GRIPPING when speed is below threshold', () => {
         const player = mockPlayer({
             speed: 5, // below 10 threshold
@@ -115,8 +113,6 @@ describe('Drift State Machine', () => {
         expect(player.driftContext.stateEnteredAtMs).toBe(1000);
         expect(result.lateralFrictionMultiplier).toBe(DEFAULT_DRIFT_CONFIG.initiatingLateralFriction);
     });
-
-    // ─── INITIATING state tests ───
 
     it('should transition INITIATING -> DRIFTING after hold time', () => {
         const player = mockPlayer({
@@ -208,8 +204,6 @@ describe('Drift State Machine', () => {
         updateDriftState(player, 990, customConfig); // 90ms in INITIATING
         expect(player.driftContext.state).toBe(DriftState.GRIPPING);
     });
-
-    // ─── DRIFTING state tests ───
 
     it('should return low lateral friction (0.15) in DRIFTING state', () => {
         const player = mockPlayer({
@@ -389,8 +383,6 @@ describe('Drift State Machine', () => {
         expect(Math.abs(player.driftContext.driftAngle)).toBeGreaterThan(0);
     });
 
-    // ─── RECOVERING state tests ───
-
     it('should apply tier-1 boost impulse in RECOVERING state', () => {
         const player = mockPlayer({
             speed: 15,
@@ -495,8 +487,6 @@ describe('Drift State Machine', () => {
 
         expect(result.boostImpulse).toBe(0);
     });
-
-    // ─── Edge cases ───
 
     it('should return GRIPPING lateral friction (0.65) when not drifting', () => {
         const player = mockPlayer({

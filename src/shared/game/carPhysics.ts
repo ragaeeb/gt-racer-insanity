@@ -46,6 +46,7 @@ export const stepCarMotion = (
     let speed = state.speed;
     let rotationY = state.rotationY;
     let positionX = state.positionX;
+    const positionY = state.positionY;
     let positionZ = state.positionZ;
 
     if (controls.isUp) {
@@ -75,7 +76,7 @@ export const stepCarMotion = (
 
     return {
         positionX,
-        positionY: 0,
+        positionY,
         positionZ,
         rotationY,
         speed,

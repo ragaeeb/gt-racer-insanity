@@ -58,6 +58,13 @@ export const validateTrackManifests = (manifests: TrackManifest[]): TrackManifes
 
         for (let i = 0; i < manifest.segments.length; i++) {
             const segment = manifest.segments[i]!;
+
+            // Validate segment length before any math that depends on it
+            if (!isFinitePositive(segment.lengthMeters)) {
+                issues.push(`Track ${manifest.id} segment ${segment.id} has invalid lengthMeters`);
+                continue;
+            }
+
             validateSegmentElevation(manifest.id, segment, issues);
 
             // Reject negative elevation (no below-ground segments)
@@ -80,6 +87,21 @@ export const validateTrackManifests = (manifests: TrackManifest[]): TrackManifes
                             `end=${elevEnd} != start=${nextElevStart}`,
                     );
                 }
+            }
+        }
+
+        // Wrap-around continuity: last segment's end must match first segment's start
+        // so laps close cleanly without an elevation cliff at the lap boundary.
+        if (manifest.segments.length > 1) {
+            const first = manifest.segments[0]!;
+            const last = manifest.segments[manifest.segments.length - 1]!;
+            const firstElevStart = first.elevationStartM ?? 0;
+            const lastElevEnd = last.elevationEndM ?? 0;
+            if (Math.abs(lastElevEnd - firstElevStart) > 0.001) {
+                issues.push(
+                    `Track ${manifest.id} has elevation gap at lap boundary between segments ${last.id} and ${first.id}: ` +
+                        `end=${lastElevEnd} != start=${firstElevStart}`,
+                );
             }
         }
     }

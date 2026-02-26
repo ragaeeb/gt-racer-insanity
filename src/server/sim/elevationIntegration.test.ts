@@ -17,8 +17,6 @@ import { describe, expect, it } from 'bun:test';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
-// ───────────────────────── helpers ──────────────────────────
-
 const createInputFrame = (roomId: string, seq: number, timestampMs: number, throttle = 1, steering = 0) => ({
     ackSnapshotSeq: null,
     controls: {
@@ -45,8 +43,8 @@ const createDriftInputFrame = (roomId: string, seq: number, timestampMs: number)
         steering: 0.8,
         throttle: 1,
     },
-    cruiseControlEnabled: true,
-    precisionOverrideActive: false,
+    cruiseControlEnabled: false,
+    precisionOverrideActive: true,
     protocolVersion: PROTOCOL_V2,
     roomId,
     seq,
@@ -61,8 +59,6 @@ const createSimulation = (trackId = 'sunset-loop', totalLaps = 1) =>
         totalLaps,
         trackId,
     });
-
-// ────────────── snapshot Y-position validation ──────────────
 
 describe('elevation snapshot integration', () => {
     it('should produce finite Y values in snapshots after sustained driving', () => {
@@ -92,8 +88,6 @@ describe('elevation snapshot integration', () => {
         expect(player!.y).toBeGreaterThanOrEqual(-0.1);
         expect(player!.y).toBeLessThanOrEqual(0.1);
     });
-
-    // ──── Regression: floating car (positionY = collider center, not ground) ────
 
     it('should send ground-level Y (0) in snapshot, not collider-center Y (0.5)', () => {
         const sim = createSimulation();
@@ -177,8 +171,6 @@ describe('elevation snapshot integration', () => {
     });
 });
 
-// ────────────── drift system with elevation ─────────────────
-
 describe('drift with elevation enabled', () => {
     it('should still transition to DRIFTING state with Y-axis motion', () => {
         const sim = createSimulation();
@@ -247,8 +239,6 @@ describe('drift with elevation enabled', () => {
     });
 });
 
-// ────────────── collision system with elevation ─────────────
-
 describe('collision with elevation enabled', () => {
     it('should still produce collision_bump events on flat track', () => {
         const sim = createSimulation();
@@ -311,10 +301,8 @@ describe('collision with elevation enabled', () => {
     });
 });
 
-// ────────────── obstacle system with elevation ──────────────
-
 describe('obstacle hits with elevation enabled', () => {
-    it('should still trigger stun on obstacle collision', () => {
+    it('should maintain sane Y values after long drive through obstacle zone', () => {
         const sim = createSimulation();
         sim.joinPlayer('p1', 'Driver', 'sport', 'red');
 
@@ -340,8 +328,6 @@ describe('obstacle hits with elevation enabled', () => {
         expect(player!.y).toBeLessThan(10);
     });
 });
-
-// ────────────── canyon track regression ──────────────────────
 
 describe('canyon-sprint track with elevation enabled', () => {
     it('should produce finite Y values on canyon-sprint track', () => {
@@ -392,8 +378,6 @@ describe('canyon-sprint track with elevation enabled', () => {
         }
     });
 });
-
-// ────────────── race completion regression ───────────────────
 
 describe('race completion with elevation enabled', () => {
     it('should deterministically complete a 1-lap race', () => {
@@ -468,5 +452,112 @@ describe('race completion with elevation enabled', () => {
         // On flat track, Y should not oscillate wildly
         expect(minY).toBeGreaterThan(-3);
         expect(maxY).toBeLessThan(10);
+    });
+});
+
+describe('snapshot Y regression', () => {
+    it('should send ground-level Y (0) in snapshot, not collider-center Y (0.5)', () => {
+        // Regression: the server previously sent the physics rigid body center Y
+        // (0.5m above ground, the collider half-height offset) instead of the
+        // visual ground-surface Y (0m). This caused the car to appear floating.
+        const sim = createSimulation();
+        sim.joinPlayer('p1', 'Alice', 'sport', 'red');
+
+        let nowMs = 1_000;
+        for (let step = 1; step <= 60; step += 1) {
+            nowMs = 1_000 + step * 16;
+            sim.queueInputFrame('p1', createInputFrame('ELEV-TEST', step, nowMs, 0, 0));
+            sim.step(nowMs);
+            sim.drainRaceEvents();
+        }
+
+        const snapshot = sim.buildSnapshot(nowMs);
+        const player = snapshot.players.find((p) => p.id === 'p1');
+
+        expect(player).toBeDefined();
+        // Ground-level Y on a flat track must be ~0.0, NOT ~0.5.
+        expect(player!.y).toBeCloseTo(0, 1);
+    });
+});
+
+describe('speed cap regression', () => {
+    it('should never exceed sport-class max speed on sunset-loop', () => {
+        // Regression: on canyon-sprint with elevation data, the car accelerated to
+        // 309 kph (nearly 2x the 158 kph max) because the downward raycast missed
+        // the rotated floor collider, the car became airborne, and gravity pulled
+        // it through the floor producing uncontrolled acceleration.
+        const sim = createSimulation('sunset-loop', 1);
+        sim.joinPlayer('p1', 'Alice', 'sport', 'red');
+
+        const MAX_SPEED_KPH = 44 * 3.6; // sport maxForwardSpeed = 44 m/s
+
+        let nowMs = 1_000;
+        let peakSpeedKph = 0;
+        for (let step = 1; step <= 600; step += 1) {
+            nowMs = 1_000 + step * 16;
+            sim.queueInputFrame('p1', createInputFrame('ELEV-TEST', step, nowMs, 1, 0));
+            sim.step(nowMs);
+            sim.drainRaceEvents();
+
+            const snap = sim.buildSnapshot(nowMs);
+            const p = snap.players[0];
+            if (p) {
+                peakSpeedKph = Math.max(peakSpeedKph, Math.abs(p.speed) * 3.6);
+            }
+        }
+
+        // Allow 5% margin for physics-step overshoot
+        expect(peakSpeedKph).toBeLessThan(MAX_SPEED_KPH * 1.05);
+    });
+
+    it('should never exceed sport-class max speed on canyon-sprint', () => {
+        const sim = createSimulation('canyon-sprint', 1);
+        sim.joinPlayer('p1', 'Alice', 'sport', 'red');
+
+        const MAX_SPEED_KPH = 44 * 3.6;
+
+        let nowMs = 1_000;
+        let peakSpeedKph = 0;
+        for (let step = 1; step <= 600; step += 1) {
+            nowMs = 1_000 + step * 16;
+            sim.queueInputFrame('p1', createInputFrame('ELEV-TEST', step, nowMs, 1, 0));
+            sim.step(nowMs);
+            sim.drainRaceEvents();
+
+            const snap = sim.buildSnapshot(nowMs);
+            const p = snap.players[0];
+            if (p) {
+                peakSpeedKph = Math.max(peakSpeedKph, Math.abs(p.speed) * 3.6);
+            }
+        }
+
+        expect(peakSpeedKph).toBeLessThan(MAX_SPEED_KPH * 1.05);
+    });
+
+    it('should keep car Y above ground level on all tracks (no sinking)', () => {
+        // Regression: elevation data caused the car to fall through the floor
+        // and sink into negative Y territory (the car "drowned" under the track).
+        for (const trackId of ['sunset-loop', 'canyon-sprint']) {
+            const sim = createSimulation(trackId, 1);
+            sim.joinPlayer('p1', 'Alice', 'sport', 'red');
+
+            let nowMs = 1_000;
+            let minY = Infinity;
+            for (let step = 1; step <= 600; step += 1) {
+                nowMs = 1_000 + step * 16;
+                sim.queueInputFrame('p1', createInputFrame('ELEV-TEST', step, nowMs, 1, 0));
+                sim.step(nowMs);
+                sim.drainRaceEvents();
+
+                const snap = sim.buildSnapshot(nowMs);
+                const p = snap.players[0];
+                if (p) {
+                    minY = Math.min(minY, p.y);
+                }
+            }
+
+            // Car must never sink below -0.5m on any production track.
+            expect(minY).toBeGreaterThanOrEqual(-0.5);
+        }
     });
 });

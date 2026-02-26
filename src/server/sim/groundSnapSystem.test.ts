@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { computeGroundSnap, MAX_Y_VELOCITY, Y_VELOCITY_DAMPING } from './groundSnapSystem';
 
-// ─────────────────── computeGroundSnap ──────────────────────
-
 describe('computeGroundSnap', () => {
     it('should snap player to ground when within range', () => {
         const result = computeGroundSnap({
@@ -146,14 +144,16 @@ describe('computeGroundSnap', () => {
     });
 });
 
-// ──────────── flat segment optimization ─────────────────────
+// NOTE: The full snapPlayerToGround(... isTrackFlat: true) path is exercised
+// by the integration tests in elevationIntegration.test.ts, which spin up
+// a real RoomSimulation and verify snapshot Y ≈ 0 on flat tracks. These
+// tests cover the pure computeGroundSnap logic used by that path.
 
 describe('flat segment optimization', () => {
-    it('should skip expensive raycast on segments with zero elevation', () => {
-        // This tests the principle that flat segments don't need raycasting.
-        // The optimization is that when elevation is always 0, we can skip the
-        // raycast and just snap to Y=0.5 (collider half-height).
-        // Player at Y=0.5, probe at Y=1.5, ground at Y=0 → hit distance = 1.5
+    it('should compute grounded state with synthetic flat-ground hit distance', () => {
+        // This mirrors the isTrackFlat fast path in snapPlayerToGround:
+        // when elevation is always 0, groundHitDistance = pos.y + RAY_PROBE_OFFSET_Y
+        // For pos.y=0.5, offset=1 → distance=1.5, ground at Y=0, target=0.5
         const result = computeGroundSnap({
             currentY: 0.5,
             groundHitDistance: 1.5, // probe 1.5 - 1.5 = ground at Y=0
@@ -165,8 +165,6 @@ describe('flat segment optimization', () => {
         expect(result.targetY).toBeCloseTo(0.5, 2);
     });
 });
-
-// ──────────── Y-axis safety ─────────────────────────────────
 
 describe('Y-axis safety constraints', () => {
     it('should never produce NaN values', () => {

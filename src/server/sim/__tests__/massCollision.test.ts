@@ -129,8 +129,6 @@ const buildCollisionRig = (opts: {
     return { manager, players, events, bodyA, bodyB };
 };
 
-// ─── Physics impulse tests ───────────────────────────────────────────────────
-
 describe('Mass-Based Collision Impulse', () => {
     it('should produce higher impulse to sport car when truck hits it', () => {
         // Truck (1800 kg) hitting sport (1050 kg)
@@ -423,7 +421,6 @@ describe('Mass-Based Collision Impulse', () => {
     });
 });
 
-// ─── Mass-aware flip/stun effect tests ──────────────────────────────────────
 // Tests the full bump pipeline via CollisionManager to verify that flip and
 // stun effects respect mass ratio, not just speed.
 

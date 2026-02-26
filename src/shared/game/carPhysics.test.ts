@@ -49,4 +49,11 @@ describe('stepCarMotion', () => {
 
         expect(next.rotationY).toBeGreaterThan(0);
     });
+
+    it('should preserve positionY when stepping planar motion', () => {
+        // Regression: positionY was hard-coded to 0 in the return, wiping
+        // the vertical state set by the ground snap system each tick.
+        const next = stepCarMotion({ ...defaultState, positionY: 12.5 }, noInput, 1 / 60);
+        expect(next.positionY).toBe(12.5);
+    });
 });

@@ -3,8 +3,6 @@ import type { RigidBody, World } from '@dimforge/rapier3d-compat';
 import type { SimPlayerState } from '@/server/sim/types';
 import { PLAYER_COLLIDER_HALF_HEIGHT_METERS } from '@/shared/physics/constants';
 
-// ─────────────────────── constants ────────────────────────────
-
 /** Maximum distance for the downward raycast probe (meters). */
 export const GROUND_SNAP_MAX_DISTANCE = 15;
 
@@ -20,8 +18,6 @@ const GRAVITY = 9.81;
 
 /** Vertical offset from the ray origin above the player's Y position. */
 const RAY_PROBE_OFFSET_Y = 1;
-
-// ─────────────────── pure snap logic ──────────────────────────
 
 export type GroundSnapInput = {
     currentY: number;
@@ -86,8 +82,6 @@ export const computeGroundSnap = (input: GroundSnapInput): GroundSnapResult => {
         yVelocity,
     };
 };
-
-// ─────────────── Rapier integration layer ─────────────────────
 
 // Composite filter flag: exclude sensors (obstacles, QueryFilterFlags.EXCLUDE_SENSORS = 8)
 // and dynamic bodies (players, QueryFilterFlags.EXCLUDE_DYNAMIC = 4).

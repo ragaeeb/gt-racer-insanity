@@ -95,7 +95,7 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
             { id: 'pu-2', powerupId: 'powerup-speed', x: -10, z: 500 },
             { id: 'pu-3', powerupId: 'powerup-speed', x: 8, z: 780 },
         ],
-        // NOTE: Elevation and banking data are commented out until the floor
+        // TODO: Elevation and banking data are commented out until the floor
         // collider system supports proper ramp geometry (trimesh / heightfield).
         // Rotated cuboids do not correctly model sloped surfaces — the car
         // falls through the floor on segments with non-zero elevation.

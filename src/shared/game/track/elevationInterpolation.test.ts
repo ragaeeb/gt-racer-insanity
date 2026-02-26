@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
     getBankAngleAtZ,
+    getElevationAtDistanceModuloLap,
     getElevationAtZ,
     getSegmentSurfaceNormal,
     interpolateBankAngle,
@@ -303,5 +304,24 @@ describe('getSegmentSurfaceNormal', () => {
         const normal = getSegmentSurfaceNormal(segment);
         const len = Math.sqrt(normal.x ** 2 + normal.y ** 2 + normal.z ** 2);
         expect(len).toBeCloseTo(1, 5);
+    });
+});
+
+describe('getElevationAtDistanceModuloLap', () => {
+    const segments: TrackSegmentManifest[] = [
+        { frictionMultiplier: 1, id: 'a', lengthMeters: 100, elevationStartM: 0, elevationEndM: 10 },
+        { frictionMultiplier: 1, id: 'b', lengthMeters: 100, elevationStartM: 10, elevationEndM: 0 },
+    ];
+
+    it('wraps distance beyond one lap', () => {
+        expect(getElevationAtDistanceModuloLap(segments, 250, 200)).toBeCloseTo(5, 1); // wraps to z=50
+    });
+
+    it('handles negative distance by wrapping into lap range', () => {
+        expect(getElevationAtDistanceModuloLap(segments, -50, 200)).toBeCloseTo(5, 1); // wraps to z=150
+    });
+
+    it('returns 0 for non-positive lapLength', () => {
+        expect(getElevationAtDistanceModuloLap(segments, 10, 0)).toBe(0);
     });
 });
