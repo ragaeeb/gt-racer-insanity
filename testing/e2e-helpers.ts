@@ -5,6 +5,12 @@ export const STARTUP_TIMEOUT_MS = 90_000;
 const LOBBY_GOTO_RETRIES = 4;
 const LOBBY_GOTO_RETRY_DELAY_MS = 750;
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export const sanitizeRoomIdForUrl = (value: string) =>
+    value
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_-]/g, '')
+        .slice(0, 16);
 
 export type GTDebugState = DiagnosticsGTDebugState;
 
@@ -44,12 +50,13 @@ export const joinRace = async (
         vehicleLabel?: string;
     },
 ) => {
+    const normalizedRoomId = sanitizeRoomIdForUrl(roomId);
     const lobbyMode = options?.trackId ? 'create' : 'join';
     await page.addInitScript((mode) => {
         window.sessionStorage.setItem('gt-lobby-mode', mode);
     }, lobbyMode);
 
-    await gotoLobby(page, roomId);
+    await gotoLobby(page, normalizedRoomId);
     await page.bringToFront();
     await page.focus('body');
     await page.locator('#player-name-input').fill(name);
@@ -70,7 +77,15 @@ export const joinRace = async (
             .click();
     }
     await page.locator('#player-name-confirm').click();
-    await page.waitForURL(new RegExp(`/race\\?room=${roomId}$`), { timeout: STARTUP_TIMEOUT_MS });
+    await page.waitForURL(
+        (url) => {
+            if (url.pathname !== '/race') {
+                return false;
+            }
+            return sanitizeRoomIdForUrl(url.searchParams.get('room') ?? '') === normalizedRoomId;
+        },
+        { timeout: STARTUP_TIMEOUT_MS },
+    );
     await page.locator('canvas').waitFor({ timeout: STARTUP_TIMEOUT_MS });
     await page.locator('#speed').waitFor({ timeout: STARTUP_TIMEOUT_MS });
 };
@@ -82,11 +97,12 @@ const isRefusedNavigationError = (error: unknown) =>
         error.message.includes('net::ERR_CONNECTION_ABORTED'));
 
 export const gotoLobby = async (page: Page, roomId: string) => {
+    const normalizedRoomId = sanitizeRoomIdForUrl(roomId);
     let lastError: unknown = null;
 
     for (let attempt = 1; attempt <= LOBBY_GOTO_RETRIES; attempt += 1) {
         try {
-            await page.goto(`/lobby?room=${roomId}`, {
+            await page.goto(`/lobby?room=${normalizedRoomId}`, {
                 timeout: STARTUP_TIMEOUT_MS,
                 waitUntil: 'domcontentloaded',
             });

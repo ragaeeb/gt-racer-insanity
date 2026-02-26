@@ -299,7 +299,7 @@ export class RoomSimulation {
         };
     };
 
-    public getPlayers = () => this.state.players;
+    public getPlayers = () => new Map(this.state.players);
 
     public getTickMetrics = () => ({ ...this.tickMetrics });
 }
