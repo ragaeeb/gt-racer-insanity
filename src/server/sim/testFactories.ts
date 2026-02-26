@@ -4,7 +4,7 @@
  */
 import type { DriftContext } from '@/shared/game/vehicle/driftConfig';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
-import type { SimPlayerState } from '../types';
+import type { SimPlayerState } from './types';
 
 export type MockPlayerOverrides = {
     driftContext?: Partial<DriftContext>;

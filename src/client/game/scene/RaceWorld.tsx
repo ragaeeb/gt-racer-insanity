@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useControls } from 'leva';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type * as THREE from 'three';
 import type { RaceSession } from '@/client/game/hooks/types';
 import { useAbilityEmitter } from '@/client/game/hooks/useAbilityEmitter';
@@ -17,9 +17,9 @@ import { SceneEnvironment } from '@/client/game/scene/environment/SceneEnvironme
 import { getSceneEnvironmentProfile } from '@/client/game/scene/environment/sceneEnvironmentProfiles';
 import { HomingProjectiles } from '@/client/game/scene/HomingProjectiles';
 import { OilSlickDeployables } from '@/client/game/scene/OilSlickDeployables';
-import { CameraShake, registerCameraShakeTrigger } from '@/client/game/systems/cameraShake';
+import { CameraShake } from '@/client/game/systems/cameraShake';
 import { InputManager } from '@/client/game/systems/InputManager';
-import { ParticlePool, setGlobalParticlePool } from '@/client/game/systems/ParticlePool';
+import { ParticlePool } from '@/client/game/systems/ParticlePool';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
 
@@ -94,12 +94,13 @@ export const RaceWorld = ({
         inputManager.setCruiseControlEnabled(cruiseControlEnabled);
     }, [cruiseControlEnabled, inputManager]);
     useEffect(() => () => inputManager.dispose(), [inputManager]);
+    const handleCollisionShake = useCallback((intensity: number) => {
+        cameraShakeRef.current?.trigger(intensity);
+    }, []);
+
     useEffect(() => {
         const cameraShake = new CameraShake(camera);
         cameraShakeRef.current = cameraShake;
-        registerCameraShakeTrigger((intensity) => {
-            cameraShake.trigger(intensity);
-        });
 
         const hardwareConcurrency = typeof navigator === 'undefined' ? undefined : navigator.hardwareConcurrency;
         const maxParticles = resolveParticlePoolCapacity(hardwareConcurrency);
@@ -107,19 +108,16 @@ export const RaceWorld = ({
         // Initialize particle pool (reduced capacity on low-end devices).
         const particlePool = new ParticlePool(scene, maxParticles);
         particlePoolRef.current = particlePool;
-        setGlobalParticlePool(particlePool);
 
         return () => {
             cameraShake.reset();
             if (cameraShakeRef.current === cameraShake) {
                 cameraShakeRef.current = null;
             }
-            registerCameraShakeTrigger(null);
             particlePool.dispose();
             if (particlePoolRef.current === particlePool) {
                 particlePoolRef.current = null;
             }
-            setGlobalParticlePool(null);
             // Reset wired-cars tracking so the next pool creation rewires everything.
             wiredCarsRef.current = new WeakSet<object>();
         };
@@ -133,6 +131,7 @@ export const RaceWorld = ({
         audioListenerRef,
         carAssetsBundle,
         onConnectionStatusChange,
+        onCollisionShake: handleCollisionShake,
         onGameOverChange,
         onRaceStateChange,
         playerName,
@@ -152,6 +151,8 @@ export const RaceWorld = ({
     useAbilityEmitter(sessionRef);
     const cameraMetricsRef = useCameraFollow(sessionRef, activeSceneEnvironment, dirLightRef);
     useFrame((_, dt) => {
+        sessionRef.current?.sceneryManager?.update(camera);
+
         const cameraShake = cameraShakeRef.current;
         const particlePool = particlePoolRef.current;
 

@@ -7,8 +7,8 @@ import {
     resetDeployableIdCounter,
     spawnDeployable,
     updateDeployables,
-} from '../deployableSystem';
-import type { ActiveDeployable } from '../types';
+} from './deployableSystem';
+import type { ActiveDeployable } from './types';
 import { mockPlayer } from './testFactories';
 
 const combatTuning = DEFAULT_GAMEPLAY_TUNING.combat;
@@ -130,6 +130,23 @@ describe('Deployable System', () => {
         );
 
         const deployable = spawnDeployable('oil-slick', player, dummyDeployables, oilSlickLifetimeTicks, combatTuning);
+
+        expect(deployable).toBeNull();
+    });
+
+    it('should block deploy near the finish line', () => {
+        const totalTrackLengthMeters = 1_000;
+        const player = mockPlayer({ id: 'owner', x: 0, z: 920 });
+        player.progress.distanceMeters = 970;
+
+        const deployable = spawnDeployable(
+            'oil-slick',
+            player,
+            [],
+            oilSlickLifetimeTicks,
+            combatTuning,
+            totalTrackLengthMeters,
+        );
 
         expect(deployable).toBeNull();
     });

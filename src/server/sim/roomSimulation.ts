@@ -50,6 +50,7 @@ export class RoomSimulation {
     private readonly collisionManager: CollisionManager;
     private readonly progressTracker: RaceProgressTracker;
     private readonly cooldownStore = new Map<string, number>();
+    private readonly contactForcesByPair = new Map<string, number>();
     private readonly abilityActivationQueue: AbilityActivationEnvelope[] = [];
     private readonly hazardTriggerQueue: HazardTrigger[] = [];
     private readonly powerupTriggerQueue: PowerupTrigger[] = [];
@@ -115,7 +116,12 @@ export class RoomSimulation {
             snapshotSeq: 0,
         };
 
-        this.playerManager = new PlayerManager(this.state.players, this.rapierContext, this.trackBoundaryX);
+        this.playerManager = new PlayerManager(
+            this.state.players,
+            this.rapierContext,
+            this.trackBoundaryX,
+            this.trackManifest.segments,
+        );
         this.collisionManager = new CollisionManager(
             this.state.players,
             this.playerManager.rigidBodyById,
@@ -353,7 +359,7 @@ export class RoomSimulation {
     private processDeployables = () => {
         const deployableTriggers = checkDeployableCollisions(
             this.state.activeDeployables,
-            Array.from(this.state.players.values()),
+            this.state.players.values(),
             this.combatTuning,
         );
 
@@ -513,7 +519,8 @@ export class RoomSimulation {
 
         // Drain Rapier contact force events to extract impulse magnitudes for
         // mass-scaled bump response. Keep the max magnitude per player pair.
-        const contactForces = new Map<string, number>();
+        const contactForces = this.contactForcesByPair;
+        contactForces.clear();
         this.rapierContext.eventQueue.drainContactForceEvents((event) => {
             const handle1 = event.collider1();
             const handle2 = event.collider2();

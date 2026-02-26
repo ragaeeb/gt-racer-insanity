@@ -35,6 +35,13 @@ export type RoomJoinedPayload = {
     snapshot?: ServerSnapshotPayload;
 };
 
+export type JoinErrorReason = 'invalid_payload' | 'payload_too_large' | 'unsupported_protocol' | 'invalid_room_id';
+
+export type JoinErrorPayload = {
+    message?: string;
+    reason: JoinErrorReason;
+};
+
 export type AbilityActivatePayload = {
     abilityId: string;
     roomId: string;

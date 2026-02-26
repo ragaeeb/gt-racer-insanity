@@ -49,7 +49,7 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Room lifecycle and room store live in `src/server/roomStore.ts`; authoritative simulation (physics, collision, track boundary, effects, powerups, hazards) lives in `src/server/sim/` (e.g. `roomSimulation.ts`, `collisionSystem.ts`).
 - Networking protocol shapes in `src/shared/network/types.ts`; snapshot and payload validators (including powerup/hazard item shapes) in `src/shared/network/snapshot.ts`.
 - Shared physics constants (e.g. player collider half-width) live in `src/shared/physics/constants.ts` and are used by client boundary clamping, server colliders, and tests.
-- Realtime room events are owned in `src/server/index.ts` and mirrored by `src/client/network/NetworkManager.ts` (including `restart_race`).
+- Realtime room events are owned in `src/server/index.ts` and mirrored by `src/client/network/NetworkManager.ts` (including `restart_race` and `join_error`).
 - Player identity is part of shared network player state (`name` on `PlayerState`).
 - Scene presentation is defined through environment profiles in `src/client/game/scene/environment/sceneEnvironmentProfiles.ts`; scenery is rebuilt when the track changes (useNetworkConnection).
 - E2E tests are intentionally gated and should not run in default `bun test` flows.

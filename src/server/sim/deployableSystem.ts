@@ -69,7 +69,7 @@ export const updateDeployables = (deployables: ActiveDeployable[], ticksPassed =
 
 export const checkDeployableCollisions = (
     deployables: ActiveDeployable[],
-    players: SimPlayerState[],
+    players: Iterable<SimPlayerState>,
     tuning: CombatTuning,
 ): HazardTrigger[] => {
     const triggers: HazardTrigger[] = [];

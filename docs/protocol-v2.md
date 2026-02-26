@@ -10,7 +10,7 @@
 - `restart_race`
   - payload: `{ roomId }`
 - `join_room`
-  - payload: `{ roomId, playerName, protocolVersion?, selectedVehicleId?, selectedColorId? }`
+  - payload: `{ roomId, playerName, protocolVersion?, selectedVehicleId?, selectedColorId?, selectedTrackId? }`
 - `input_frame`
   - payload: `{ roomId, frame }`
   - `frame`: `{ roomId, protocolVersion, seq, timestampMs, ackSnapshotSeq, controls, cruiseControlEnabled, precisionOverrideActive }`
@@ -26,6 +26,9 @@
   - payload: `PlayerState`
 - `player_left`
   - payload: `playerId`
+- `join_error`
+  - payload: `{ reason, message? }`
+  - `reason` values: `invalid_payload`, `payload_too_large`, `unsupported_protocol`, `invalid_room_id`
 - `server_snapshot`
   - payload: `{ roomId, snapshot }`
 - `race_event`
@@ -36,10 +39,11 @@
     - `lap_completed`: `metadata.lap` (number)
     - `player_finished`: `metadata.lap` (number)
     - `race_finished`: `metadata` omitted
-    - `collision_bump`: `metadata.otherPlayerId` (string)
+    - `collision_bump`: `metadata.againstPlayerId` (string), `metadata.flippedPlayerId` (string | null), `metadata.stunnedPlayerId` (string | null), `metadata.rammerPlayerId` (string), `metadata.rammerDriveLockMs` (number), `metadata.contactForceMagnitude` (number | null)
     - `ability_activated`: `metadata.abilityId` (string), `metadata.targetPlayerId` (string | null)
     - `hazard_triggered`: `metadata.effectType` (string)
     - `powerup_collected`: `metadata.powerupType` (string)
+    - `projectile_hit`: `metadata.effectType` (`stunned`), `metadata.projectileId` (number), `metadata.targetPlayerId` (string)
 
 ## Snapshot Semantics
 `server_snapshot` is the authoritative state transport and includes:
@@ -65,6 +69,7 @@
 - Join/input payload size limits are enforced server-side.
 - Input frame rate is clamped on both client and server.
 - Unknown/invalid payload shapes are ignored.
+- Invalid join payloads emit `join_error` so clients can surface a reason instead of waiting indefinitely.
 
 ## Late Join Behavior
 - On join, server generates a fresh simulation snapshot and includes it in `room_joined`.

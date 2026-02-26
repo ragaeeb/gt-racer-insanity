@@ -4,7 +4,7 @@ import {
     calculateSquealPitch,
     calculateRumbleVolume,
     DEFAULT_SURFACE_AUDIO_TUNING,
-} from '../surfaceAudio';
+} from './surfaceAudio';
 import { getTrackManifestById } from '@/shared/game/track/trackManifest';
 
 describe('Surface Audio — squeal volume', () => {

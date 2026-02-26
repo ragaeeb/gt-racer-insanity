@@ -19,9 +19,10 @@
 Multiplayer racing game with a server-authoritative V2 simulation stack, finite race flow, and data-driven gameplay manifests.
 
 ## Latest Features
-- V2-only realtime transport (`join_room`, `input_frame`, `ability_activate`, `restart_race`, `server_snapshot`, `race_event`) with sequenced input acknowledgements.
+- V2-only realtime transport (`join_room`, `join_error`, `input_frame`, `ability_activate`, `restart_race`, `server_snapshot`, `race_event`) with sequenced input acknowledgements.
 - Authoritative server simulation with Rapier rigid bodies for collision bumping, track boundary enforcement, and non-overlap guarantees.
 - Late join now receives a fresh authoritative snapshot so active player positions are correct on entry.
+- Invalid join payloads now return `join_error` reasons (`invalid_payload`, `payload_too_large`, `unsupported_protocol`, `invalid_room_id`) so clients fail fast with feedback.
 - Finite full-race track flow with lap/checkpoint progression and a race-end barrier.
 - Race results overlay with winner/position/lap summary plus restart flow.
 - Authoritative status-effect pipeline for abilities, hazards, and power-ups (boosted, flat tire, stunned, slowed).

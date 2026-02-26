@@ -8,10 +8,9 @@ describe('Asset Size Budget', () => {
 
     it('should keep all GLB models under 2MB each', () => {
         const modelsDir = join(process.cwd(), 'public/models');
-        
+
         if (!existsSync(modelsDir)) {
-            console.warn('public/models/ does not exist, skipping test');
-            return;
+            throw new Error('public/models/ does not exist');
         }
 
         const files = readdirSync(modelsDir, { recursive: true }).filter(
@@ -19,8 +18,7 @@ describe('Asset Size Budget', () => {
         );
 
         if (files.length === 0) {
-            console.warn('No GLB files found, skipping test');
-            return;
+            throw new Error('No GLB files found in public/models/');
         }
 
         const overBudget: string[] = [];
@@ -45,8 +43,7 @@ describe('Asset Size Budget', () => {
         const modelsDir = join(process.cwd(), 'public/models');
 
         if (!existsSync(modelsDir)) {
-            console.warn('public/models/ does not exist, skipping test');
-            return;
+            throw new Error('public/models/ does not exist');
         }
 
         const files = readdirSync(modelsDir, { recursive: true }).filter(
@@ -54,8 +51,7 @@ describe('Asset Size Budget', () => {
         );
 
         if (files.length === 0) {
-            console.warn('No GLB files found, skipping test');
-            return;
+            throw new Error('No GLB files found in public/models/');
         }
 
         const totalBytes = files.reduce((sum, file) => {

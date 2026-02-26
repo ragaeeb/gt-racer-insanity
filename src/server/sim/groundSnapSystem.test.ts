@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { computeGroundSnap, MAX_Y_VELOCITY, Y_VELOCITY_DAMPING } from './groundSnapSystem';
+import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
+import { computeGroundSnap, MAX_Y_VELOCITY, snapPlayerToGround, Y_VELOCITY_DAMPING } from './groundSnapSystem';
+import type { SimPlayerState } from './types';
 
 describe('computeGroundSnap', () => {
     it('should snap player to ground when within range', () => {
@@ -202,5 +204,102 @@ describe('Y-axis safety constraints', () => {
         });
 
         expect(Number.isFinite(result.yVelocity)).toBeTrue();
+    });
+});
+
+describe('snapPlayerToGround', () => {
+    const createMockPlayer = (): SimPlayerState => ({
+        activeEffects: [],
+        colorId: 'red',
+        driftContext: createInitialDriftContext(),
+        id: 'player-1',
+        inputState: { boost: false, brake: false, handbrake: false, steering: 0, throttle: 0 },
+        isGrounded: false,
+        lastProcessedInputSeq: 0,
+        motion: {
+            positionX: 0,
+            positionY: 3,
+            positionZ: 0,
+            rotationY: 0,
+            speed: 0,
+        },
+        name: 'Driver',
+        progress: {
+            checkpointIndex: 0,
+            completedCheckpoints: [],
+            distanceMeters: 0,
+            finishedAtMs: null,
+            lap: 0,
+        },
+        vehicleId: 'sport',
+    });
+
+    it('should snap and persist grounded state on flat-track fast path', () => {
+        const player = createMockPlayer();
+        let translation = { x: 0, y: 0.5, z: 0 };
+        let linvel = { x: 0, y: -2, z: 0 };
+        const rigidBody = {
+            linvel: () => linvel,
+            setLinvel: (next: { x: number; y: number; z: number }) => {
+                linvel = next;
+            },
+            setTranslation: (next: { x: number; y: number; z: number }) => {
+                translation = next;
+            },
+            translation: () => translation,
+        };
+        const world = {
+            castRay: () => null,
+        };
+
+        const result = snapPlayerToGround(
+            { Ray: class {} } as any,
+            player,
+            rigidBody as any,
+            world as any,
+            1 / 60,
+            true,
+        );
+
+        expect(result.grounded).toBeTrue();
+        expect(player.isGrounded).toBeTrue();
+        expect(translation.y).toBeCloseTo(0.5, 2);
+        expect(player.motion.positionY).toBeCloseTo(0, 2);
+    });
+
+    it('should use world raycast on non-flat tracks', () => {
+        const player = createMockPlayer();
+        let translation = { x: 0, y: 4, z: 0 };
+        let linvel = { x: 0, y: 0, z: 0 };
+        const rigidBody = {
+            linvel: () => linvel,
+            setLinvel: (next: { x: number; y: number; z: number }) => {
+                linvel = next;
+            },
+            setTranslation: (next: { x: number; y: number; z: number }) => {
+                translation = next;
+            },
+            translation: () => translation,
+        };
+        let castRayCalls = 0;
+        const world = {
+            castRay: () => {
+                castRayCalls += 1;
+                return { timeOfImpact: 5 };
+            },
+        };
+
+        const result = snapPlayerToGround(
+            { Ray: class {} } as any,
+            player,
+            rigidBody as any,
+            world as any,
+            1 / 60,
+            false,
+        );
+
+        expect(castRayCalls).toBe(1);
+        expect(result.grounded).toBeTrue();
+        expect(player.isGrounded).toBeTrue();
     });
 });

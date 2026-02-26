@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
 import * as THREE from 'three';
-import { ParticlePool } from '../ParticlePool';
+import { ParticlePool } from './ParticlePool';
 
 describe('ParticlePool', () => {
     let scene: THREE.Scene;

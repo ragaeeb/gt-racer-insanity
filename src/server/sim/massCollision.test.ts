@@ -3,9 +3,9 @@ import type { RigidBody } from '@dimforge/rapier3d-compat';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { RaceEventPayload } from '@/shared/network/types';
-import { CollisionManager, toPairKey } from '../collisionManager';
-import { applyPlayerBumpResponse } from '../collisionSystem';
-import type { SimPlayerState } from '../types';
+import { CollisionManager, toPairKey } from './collisionManager';
+import { applyPlayerBumpResponse } from './collisionSystem';
+import type { SimPlayerState } from './types';
 
 type Vector3 = { x: number; y: number; z: number };
 

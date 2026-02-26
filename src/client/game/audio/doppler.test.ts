@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import * as THREE from 'three';
-import { calculateDopplerRate, calculateRadialVelocity } from '../dopplerEffect';
+import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
+import { calculateDopplerRate, calculateRadialVelocity } from './dopplerEffect';
 
 describe('Doppler Effect', () => {
     it('should increase pitch when car approaches listener', () => {
@@ -46,6 +47,17 @@ describe('Doppler Effect', () => {
         // Very small velocities should not cause issues
         const rate = calculateDopplerRate(0.001);
         expect(rate).toBeCloseTo(1.0, 1);
+    });
+
+    it('should use gameplay tuning doppler values by default', () => {
+        const tuning = DEFAULT_GAMEPLAY_TUNING.audio.doppler;
+        const relativeVelocity = 42;
+
+        const expectedRaw = tuning.speedOfSound / (tuning.speedOfSound + relativeVelocity + 0.001);
+        const expectedScaled = 1 + (expectedRaw - 1) * tuning.coefficient;
+        const expected = Math.max(tuning.minRate, Math.min(tuning.maxRate, expectedScaled));
+
+        expect(calculateDopplerRate(relativeVelocity)).toBeCloseTo(expected, 6);
     });
 });
 

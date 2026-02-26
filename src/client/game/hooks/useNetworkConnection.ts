@@ -13,7 +13,6 @@ import type { PendingSpikeShot } from '@/client/game/state/abilityFxStore';
 import { useAbilityFxStore } from '@/client/game/state/abilityFxStore';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
-import { triggerCameraShake } from '@/client/game/systems/cameraShake';
 import { createInterpolationBuffer, pushInterpolationSample } from '@/client/game/systems/interpolationSystem';
 import { SceneryManager } from '@/client/game/systems/SceneryManager';
 import { TrackManager } from '@/client/game/systems/TrackManager';
@@ -172,6 +171,7 @@ type UseNetworkConnectionParams = {
     audioListenerRef: React.RefObject<THREE.AudioListener | null>;
     carAssetsBundle: CarAssetsBundle;
     onConnectionStatusChange: (status: ConnectionStatus) => void;
+    onCollisionShake: (intensity: number) => void;
     onGameOverChange: (isGameOver: boolean) => void;
     onRaceStateChange: (state: RaceState | null) => void;
     playerName: string;
@@ -187,6 +187,7 @@ export const useNetworkConnection = ({
     audioListenerRef,
     carAssetsBundle,
     onConnectionStatusChange,
+    onCollisionShake,
     onGameOverChange,
     onRaceStateChange,
     playerName,
@@ -309,6 +310,10 @@ export const useNetworkConnection = ({
             session.connectionStatus = status;
             useRuntimeStore.getState().setConnectionStatus(status);
             onConnectionStatusChange(status);
+        });
+        const unsubscribeJoinError = networkManager.onJoinError((payload) => {
+            const message = payload.message ?? `Join failed (${payload.reason})`;
+            useHudStore.getState().showToast(message.toUpperCase(), 'error');
         });
 
         networkManager.onRoomJoined((seed, players, roomJoinedPayload) => {
@@ -477,7 +482,7 @@ export const useNetworkConnection = ({
                                 session,
                                 snapshot: useRuntimeStore.getState().latestSnapshot,
                             });
-                            triggerCameraShake(shakeIntensity);
+                            onCollisionShake(shakeIntensity);
 
                             // Emit collision sparks on the local car
                             session.localCar?.onCollision(collisionForce);
@@ -701,6 +706,7 @@ export const useNetworkConnection = ({
             session.sceneryManager = null;
             clearCars();
             unsubscribeConnectionStatus();
+            unsubscribeJoinError();
             unsubscribeRaceEvent();
             session.connectionStatus = 'disconnected';
             onConnectionStatusChange('disconnected');
@@ -716,6 +722,7 @@ export const useNetworkConnection = ({
         audioListenerRef,
         carAssetsBundle,
         onConnectionStatusChange,
+        onCollisionShake,
         onGameOverChange,
         onRaceStateChange,
         playerName,

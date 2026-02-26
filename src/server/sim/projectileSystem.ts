@@ -188,6 +188,12 @@ export const stepAllProjectiles = (
         if (result === 'hit') {
             const target = proj.targetId ? state.players.get(proj.targetId) : null;
             if (target) {
+                const timeSinceLastHit = nowMs - (target.lastHitByProjectileAtMs ?? 0);
+                if (timeSinceLastHit < config.projectileHitImmunityMs) {
+                    toRemove.push(i);
+                    continue;
+                }
+
                 applyStatusEffectToPlayer(target, 'stunned', nowMs, 1, config.stunnedEffectDurationMs);
                 target.lastHitByProjectileAtMs = nowMs;
 

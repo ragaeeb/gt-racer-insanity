@@ -121,6 +121,7 @@ type SceneryLODGroup = {
     center: THREE.Vector3;
     maxVisibleDistance: number;
     mesh: THREE.InstancedMesh;
+    radius: number;
 };
 
 export class SceneryManager {
@@ -180,10 +181,14 @@ export class SceneryManager {
      * Call once per frame from the render loop.
      */
     public update = (camera: THREE.Camera): void => {
+        const visibilityByMesh = new Map<THREE.InstancedMesh, boolean>();
         for (const group of this.lodGroups) {
             const dist = camera.position.distanceTo(group.center);
-            const radius = group.mesh.boundingSphere?.radius ?? 0;
-            group.mesh.visible = dist <= group.maxVisibleDistance + radius;
+            const visible = dist <= group.maxVisibleDistance + group.radius;
+            visibilityByMesh.set(group.mesh, (visibilityByMesh.get(group.mesh) ?? false) || visible);
+        }
+        for (const [mesh, visible] of visibilityByMesh) {
+            mesh.visible = visible;
         }
     };
 
@@ -192,6 +197,60 @@ export class SceneryManager {
     };
 
     private buildingMaterials: THREE.MeshStandardMaterial[] = [];
+
+    private registerLODGroupsForPoints = (
+        mesh: THREE.InstancedMesh,
+        maxVisibleDistance: number,
+        points: Array<{ x: number; z: number }>,
+        clusterLengthMeters = 200,
+    ) => {
+        if (points.length === 0) {
+            return;
+        }
+
+        type ClusterStats = {
+            count: number;
+            maxX: number;
+            maxZ: number;
+            minX: number;
+            minZ: number;
+            sumX: number;
+            sumZ: number;
+        };
+
+        const clusters = new Map<number, ClusterStats>();
+        for (const point of points) {
+            const key = Math.floor(point.z / clusterLengthMeters);
+            const existing = clusters.get(key);
+            if (existing) {
+                existing.count += 1;
+                existing.sumX += point.x;
+                existing.sumZ += point.z;
+                existing.minX = Math.min(existing.minX, point.x);
+                existing.maxX = Math.max(existing.maxX, point.x);
+                existing.minZ = Math.min(existing.minZ, point.z);
+                existing.maxZ = Math.max(existing.maxZ, point.z);
+                continue;
+            }
+            clusters.set(key, {
+                count: 1,
+                maxX: point.x,
+                maxZ: point.z,
+                minX: point.x,
+                minZ: point.z,
+                sumX: point.x,
+                sumZ: point.z,
+            });
+        }
+
+        for (const cluster of clusters.values()) {
+            const center = new THREE.Vector3(cluster.sumX / cluster.count, 0, cluster.sumZ / cluster.count);
+            const halfSpanX = (cluster.maxX - cluster.minX) * 0.5;
+            const halfSpanZ = (cluster.maxZ - cluster.minZ) * 0.5;
+            const radius = Math.max(8, Math.sqrt(halfSpanX * halfSpanX + halfSpanZ * halfSpanZ) + 6);
+            this.lodGroups.push({ center, maxVisibleDistance, mesh, radius });
+        }
+    };
 
     private createSharedBuildingMaterials = () => {
         const colors = this.palette.buildingColors;
@@ -312,14 +371,11 @@ export class SceneryManager {
             this.scene.add(instancedMesh);
             this.objects.push(instancedMesh);
 
-            // Register LOD visibility group with average building position
-            const center = new THREE.Vector3();
-            for (const b of group) {
-                center.x += b.x;
-                center.z += b.z;
-            }
-            center.divideScalar(group.length);
-            this.lodGroups.push({ center, maxVisibleDistance: LOD_DISTANCE_BUILDINGS, mesh: instancedMesh });
+            this.registerLODGroupsForPoints(
+                instancedMesh,
+                LOD_DISTANCE_BUILDINGS,
+                group.map((building) => ({ x: building.x, z: building.z })),
+            );
         }
 
         this.logicalObjectCount += buildings.length;
@@ -413,23 +469,9 @@ export class SceneryManager {
         this.scene.add(bulbsInstancedMesh);
         this.objects.push(bulbsInstancedMesh);
 
-        // Register LOD visibility groups for street lights
-        const lightCenter = new THREE.Vector3();
-        for (const l of lights) {
-            lightCenter.x += l.x;
-            lightCenter.z += l.z;
-        }
-        lightCenter.divideScalar(lights.length);
-        this.lodGroups.push({
-            center: lightCenter.clone(),
-            maxVisibleDistance: LOD_DISTANCE_STREET_LIGHTS,
-            mesh: polesInstancedMesh,
-        });
-        this.lodGroups.push({
-            center: lightCenter.clone(),
-            maxVisibleDistance: LOD_DISTANCE_STREET_LIGHTS,
-            mesh: bulbsInstancedMesh,
-        });
+        const lightPoints = lights.map((light) => ({ x: light.x, z: light.z }));
+        this.registerLODGroupsForPoints(polesInstancedMesh, LOD_DISTANCE_STREET_LIGHTS, lightPoints);
+        this.registerLODGroupsForPoints(bulbsInstancedMesh, LOD_DISTANCE_STREET_LIGHTS, lightPoints);
 
         this.logicalObjectCount += totalLights;
     };
@@ -475,18 +517,12 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
-        // Register LOD visibility group for cones
-        const coneCenter = new THREE.Vector3();
-        for (const c of cones) {
-            coneCenter.x += c.x;
-            coneCenter.z += c.z;
-        }
-        coneCenter.divideScalar(cones.length);
-        this.lodGroups.push({
-            center: coneCenter,
-            maxVisibleDistance: LOD_DISTANCE_TRAFFIC_CONES,
-            mesh: instancedMesh,
-        });
+        this.registerLODGroupsForPoints(
+            instancedMesh,
+            LOD_DISTANCE_TRAFFIC_CONES,
+            cones.map((cone) => ({ x: cone.x, z: cone.z })),
+            160,
+        );
 
         this.logicalObjectCount += cones.length;
     };
@@ -540,18 +576,12 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
-        // Register LOD visibility group for rock pillars
-        const pillarCenter = new THREE.Vector3();
-        for (const p of pillars) {
-            pillarCenter.x += p.x;
-            pillarCenter.z += p.z;
-        }
-        pillarCenter.divideScalar(pillars.length);
-        this.lodGroups.push({
-            center: pillarCenter,
-            maxVisibleDistance: LOD_DISTANCE_ROCK_PILLARS,
-            mesh: instancedMesh,
-        });
+        this.registerLODGroupsForPoints(
+            instancedMesh,
+            LOD_DISTANCE_ROCK_PILLARS,
+            pillars.map((pillar) => ({ x: pillar.x, z: pillar.z })),
+            240,
+        );
 
         this.logicalObjectCount += pillars.length;
     };
@@ -604,14 +634,12 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
-        // Register LOD visibility group for mesa formations
-        const mesaCenter = new THREE.Vector3();
-        for (const m of mesas) {
-            mesaCenter.x += m.x;
-            mesaCenter.z += m.z;
-        }
-        mesaCenter.divideScalar(mesas.length);
-        this.lodGroups.push({ center: mesaCenter, maxVisibleDistance: LOD_DISTANCE_MESAS, mesh: instancedMesh });
+        this.registerLODGroupsForPoints(
+            instancedMesh,
+            LOD_DISTANCE_MESAS,
+            mesas.map((mesa) => ({ x: mesa.x, z: mesa.z })),
+            240,
+        );
 
         this.logicalObjectCount += mesas.length;
     };
@@ -666,14 +694,12 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
-        // Register LOD visibility group for billboards
-        const bbCenter = new THREE.Vector3();
-        for (const bb of billboards) {
-            bbCenter.x += bb.x;
-            bbCenter.z += bb.z;
-        }
-        bbCenter.divideScalar(billboards.length);
-        this.lodGroups.push({ center: bbCenter, maxVisibleDistance: LOD_DISTANCE_BILLBOARDS, mesh: instancedMesh });
+        this.registerLODGroupsForPoints(
+            instancedMesh,
+            LOD_DISTANCE_BILLBOARDS,
+            billboards.map((billboard) => ({ x: billboard.x, z: billboard.z })),
+            180,
+        );
 
         this.logicalObjectCount += billboards.length;
     };
@@ -780,20 +806,10 @@ export class SceneryManager {
         this.scene.add(rightArmMesh);
         this.objects.push(rightArmMesh);
 
-        // Register LOD visibility groups for cacti
-        const cactiCenter = new THREE.Vector3();
-        for (const c of cacti) {
-            cactiCenter.x += c.x;
-            cactiCenter.z += c.z;
-        }
-        cactiCenter.divideScalar(cacti.length);
-        this.lodGroups.push({ center: cactiCenter.clone(), maxVisibleDistance: LOD_DISTANCE_CACTI, mesh: trunkMesh });
-        this.lodGroups.push({ center: cactiCenter.clone(), maxVisibleDistance: LOD_DISTANCE_CACTI, mesh: leftArmMesh });
-        this.lodGroups.push({
-            center: cactiCenter.clone(),
-            maxVisibleDistance: LOD_DISTANCE_CACTI,
-            mesh: rightArmMesh,
-        });
+        const cactiPoints = cacti.map((cactus) => ({ x: cactus.x, z: cactus.z }));
+        this.registerLODGroupsForPoints(trunkMesh, LOD_DISTANCE_CACTI, cactiPoints, 180);
+        this.registerLODGroupsForPoints(leftArmMesh, LOD_DISTANCE_CACTI, cactiPoints, 180);
+        this.registerLODGroupsForPoints(rightArmMesh, LOD_DISTANCE_CACTI, cactiPoints, 180);
 
         this.logicalObjectCount += cacti.length;
     };

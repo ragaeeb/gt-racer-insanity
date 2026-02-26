@@ -12,25 +12,6 @@ export type EmitConfig = {
     velocityZ?: number;
 };
 
-// Global particle pool instance for game-wide access
-let globalParticlePool: ParticlePool | null = null;
-
-/**
- * Set the global particle pool instance.
- * Should be called once when the game scene is initialized.
- */
-export const setGlobalParticlePool = (pool: ParticlePool | null): void => {
-    globalParticlePool = pool;
-};
-
-/**
- * Get the global particle pool instance.
- * Returns null if not yet initialized.
- */
-export const getGlobalParticlePool = (): ParticlePool | null => {
-    return globalParticlePool;
-};
-
 // Particle data structure for CPU-side simulation
 type Particle = {
     active: boolean;
@@ -90,6 +71,7 @@ export class ParticlePool {
     private material: THREE.PointsMaterial;
     private maxParticles: number;
     private nextIndex = 0;
+    private activeCount = 0;
 
     // Pre-allocated scratch objects to avoid GC in hot paths
     private scratchColor = new THREE.Color();
@@ -158,9 +140,13 @@ export class ParticlePool {
         this.nextIndex = (this.nextIndex + 1) % this.maxParticles;
 
         const particle = this.particles[idx];
+        const wasActive = particle.active;
         const typeConfig = PARTICLE_CONFIGS[config.type];
 
         particle.active = true;
+        if (!wasActive) {
+            this.activeCount += 1;
+        }
         particle.age = 0;
         particle.lifetime = config.lifetime ?? typeConfig.lifetime;
         particle.type = config.type;
@@ -260,6 +246,7 @@ export class ParticlePool {
             // Check if particle has expired
             if (particle.age >= particle.lifetime) {
                 particle.active = false;
+                this.activeCount = Math.max(0, this.activeCount - 1);
                 this.sizes[i] = 0; // Hide by setting size to 0
                 continue;
             }
@@ -311,13 +298,7 @@ export class ParticlePool {
      * Get the number of currently active particles.
      */
     public getActiveCount(): number {
-        let count = 0;
-        for (let i = 0; i < this.maxParticles; i++) {
-            if (this.particles[i].active) {
-                count++;
-            }
-        }
-        return count;
+        return this.activeCount;
     }
 
     /**

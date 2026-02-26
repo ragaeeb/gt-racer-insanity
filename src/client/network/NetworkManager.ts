@@ -6,6 +6,7 @@ import type {
     AbilityActivatePayload,
     ClientInputFrame,
     ConnectionStatus,
+    JoinErrorPayload,
     JoinRoomPayload,
     PlayerState,
     ProtocolVersion,
@@ -28,6 +29,7 @@ export type OnPlayerLeftCallback = (playerId: string) => void;
 export type OnConnectionStatusCallback = (status: ConnectionStatus) => void;
 export type OnServerSnapshotCallback = (payload: ServerSnapshotPayload) => void;
 export type OnRaceEventCallback = (payload: RaceEventPayload) => void;
+export type OnJoinErrorCallback = (payload: JoinErrorPayload) => void;
 
 export const shouldEmitByInterval = (nowMs: number, lastEmitAtMs: number, intervalMs: number) => {
     return nowMs - lastEmitAtMs >= intervalMs;
@@ -50,6 +52,7 @@ export const buildSequencedInputFrame = (
 export class NetworkManager {
     private socket: Socket;
     private readonly connectionStatusCallbacks = new Set<OnConnectionStatusCallback>();
+    private readonly joinErrorCallbacks = new Set<OnJoinErrorCallback>();
     private readonly minInputFrameEmitIntervalMs: number;
     private lastInputFrameEmitAt = 0;
     private readonly protocolVersion: ProtocolVersion;
@@ -100,6 +103,13 @@ export class NetworkManager {
             this.emitConnectionStatus('reconnecting');
         });
 
+        this.socket.on('join_error', (payload: JoinErrorPayload) => {
+            this.emitConnectionStatus('disconnected');
+            for (const callback of this.joinErrorCallbacks) {
+                callback(payload);
+            }
+        });
+
         this.emitConnectionStatus('connecting');
     }
 
@@ -129,6 +139,13 @@ export class NetworkManager {
 
         return () => {
             this.connectionStatusCallbacks.delete(callback);
+        };
+    }
+
+    public onJoinError(callback: OnJoinErrorCallback) {
+        this.joinErrorCallbacks.add(callback);
+        return () => {
+            this.joinErrorCallbacks.delete(callback);
         };
     }
 
@@ -198,5 +215,6 @@ export class NetworkManager {
         this.socket.removeAllListeners();
         this.socket.disconnect();
         this.connectionStatusCallbacks.clear();
+        this.joinErrorCallbacks.clear();
     }
 }

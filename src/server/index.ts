@@ -5,7 +5,7 @@ import { RoomStore } from '@/server/roomStore';
 import { isTrackId } from '@/shared/game/track/trackManifest';
 import { isInputFramePayload } from '@/shared/network/inputFrame';
 import { coerceProtocolVersion, PROTOCOL_V2 } from '@/shared/network/protocolVersion';
-import type { AbilityActivatePayload, JoinRoomPayload } from '@/shared/network/types';
+import type { AbilityActivatePayload, JoinErrorPayload, JoinRoomPayload } from '@/shared/network/types';
 
 const roomStore = new RoomStore();
 
@@ -117,6 +117,9 @@ io.on('connection', (socket) => {
     console.log(`[+] Player connected: ${socket.id}`);
     let lastInputFrameAtMs = 0;
     const minimumInputTickIntervalMs = 1000 / Math.max(serverConfig.maxInputRateHz, 1);
+    const emitJoinError = (payload: JoinErrorPayload) => {
+        socket.emit('join_error', payload);
+    };
 
     socket.on('join_room', (rawJoinRoom: unknown) => {
         let roomId = '';
@@ -129,6 +132,10 @@ io.on('connection', (socket) => {
             roomId = rawJoinRoom.trim();
         } else if (isJoinRoomPayload(rawJoinRoom)) {
             if (getPayloadBytes(rawJoinRoom) > serverConfig.maxJoinRoomPayloadBytes) {
+                emitJoinError({
+                    message: 'Join payload exceeded max size.',
+                    reason: 'payload_too_large',
+                });
                 return;
             }
 
@@ -143,13 +150,25 @@ io.on('connection', (socket) => {
             }
 
             if (coerceProtocolVersion(rawJoinRoom.protocolVersion) !== PROTOCOL_V2) {
+                emitJoinError({
+                    message: 'Client/server protocol mismatch.',
+                    reason: 'unsupported_protocol',
+                });
                 return;
             }
         } else {
+            emitJoinError({
+                message: 'Join payload format is invalid.',
+                reason: 'invalid_payload',
+            });
             return;
         }
 
         if (roomId.length === 0 || roomId.length > 16) {
+            emitJoinError({
+                message: 'Room ID must be 1-16 characters.',
+                reason: 'invalid_room_id',
+            });
             return;
         }
 

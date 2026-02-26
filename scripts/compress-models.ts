@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readdir, rename, stat } from 'node:fs/promises';
+import { readdir, rename, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -51,14 +51,13 @@ async function compressModel(inputPath: string): Promise<void> {
         } else {
             console.log(`  ✓ Already optimized, skipping (${inputStats.size} bytes)`);
             // Remove the output file since it's not smaller
-            const { unlink } = await import('node:fs/promises');
             await unlink(outputPath);
         }
-    } catch (error: any) {
-        console.error(`  ✗ Failed to compress ${inputPath}:`, error.message);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`  ✗ Failed to compress ${inputPath}:`, message);
         // Clean up any partial output
         try {
-            const { unlink } = await import('node:fs/promises');
             await unlink(outputPath);
         } catch {
             // Ignore cleanup errors
