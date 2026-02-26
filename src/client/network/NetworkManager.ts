@@ -1,4 +1,7 @@
-import { io, Socket } from 'socket.io-client';
+import { io, type Socket } from 'socket.io-client';
+import { clientConfig } from '@/client/app/config';
+import { sanitizeClientInputFrame } from '@/shared/network/inputFrame';
+import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 import type {
     AbilityActivatePayload,
     ClientInputFrame,
@@ -11,13 +14,11 @@ import type {
     ServerSnapshotEventPayload,
     ServerSnapshotPayload,
 } from '@/shared/network/types';
-import { clientConfig } from '@/client/app/config';
-import { sanitizeClientInputFrame } from '@/shared/network/inputFrame';
-import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
 type NetworkManagerOptions = {
     protocolVersion?: ProtocolVersion;
     selectedColorId?: string;
+    selectedTrackId?: string;
     selectedVehicleId?: string;
 };
 
@@ -33,9 +34,10 @@ export const shouldEmitByInterval = (nowMs: number, lastEmitAtMs: number, interv
 };
 
 export const buildSequencedInputFrame = (
-    frame: Omit<ClientInputFrame, 'protocolVersion' | 'roomId'> & Partial<Pick<ClientInputFrame, 'protocolVersion' | 'roomId'>>,
+    frame: Omit<ClientInputFrame, 'protocolVersion' | 'roomId'> &
+        Partial<Pick<ClientInputFrame, 'protocolVersion' | 'roomId'>>,
     roomId: string,
-    protocolVersion: ProtocolVersion
+    protocolVersion: ProtocolVersion,
 ) => {
     return sanitizeClientInputFrame({
         ...frame,
@@ -53,6 +55,7 @@ export class NetworkManager {
     private readonly protocolVersion: ProtocolVersion;
     private readonly selectedVehicleId: string;
     private readonly selectedColorId: string;
+    private readonly selectedTrackId?: string;
     public roomId: string;
     public readonly playerName: string;
 
@@ -62,6 +65,7 @@ export class NetworkManager {
         this.protocolVersion = options.protocolVersion ?? PROTOCOL_V2;
         this.selectedVehicleId = options.selectedVehicleId ?? 'sport';
         this.selectedColorId = options.selectedColorId ?? 'red';
+        this.selectedTrackId = options.selectedTrackId;
 
         this.minInputFrameEmitIntervalMs = 1000 / clientConfig.inputFrameRateHz;
 
@@ -78,6 +82,7 @@ export class NetworkManager {
                 protocolVersion: this.protocolVersion,
                 roomId: this.roomId,
                 selectedColorId: this.selectedColorId,
+                selectedTrackId: this.selectedTrackId,
                 selectedVehicleId: this.selectedVehicleId,
             };
             this.socket.emit('join_room', payload);
@@ -144,11 +149,18 @@ export class NetworkManager {
         };
     }
 
-    public emitInputFrame(frame: Omit<ClientInputFrame, 'protocolVersion' | 'roomId'> & Partial<Pick<ClientInputFrame, 'protocolVersion' | 'roomId'>>) {
-        if (!this.socket.connected) return;
+    public emitInputFrame(
+        frame: Omit<ClientInputFrame, 'protocolVersion' | 'roomId'> &
+            Partial<Pick<ClientInputFrame, 'protocolVersion' | 'roomId'>>,
+    ) {
+        if (!this.socket.connected) {
+            return;
+        }
 
         const now = Date.now();
-        if (!shouldEmitByInterval(now, this.lastInputFrameEmitAt, this.minInputFrameEmitIntervalMs)) return;
+        if (!shouldEmitByInterval(now, this.lastInputFrameEmitAt, this.minInputFrameEmitIntervalMs)) {
+            return;
+        }
         this.lastInputFrameEmitAt = now;
 
         const sanitizedFrame = buildSequencedInputFrame(frame, this.roomId, this.protocolVersion);
@@ -160,7 +172,9 @@ export class NetworkManager {
     }
 
     public emitAbilityActivate(payload: Omit<AbilityActivatePayload, 'roomId'>) {
-        if (!this.socket.connected) return;
+        if (!this.socket.connected) {
+            return;
+        }
         this.socket.emit('ability_activate', {
             ...payload,
             roomId: this.roomId,
@@ -168,7 +182,9 @@ export class NetworkManager {
     }
 
     public emitRestartRace() {
-        if (!this.socket.connected) return;
+        if (!this.socket.connected) {
+            return;
+        }
         this.socket.emit('restart_race', {
             roomId: this.roomId,
         });

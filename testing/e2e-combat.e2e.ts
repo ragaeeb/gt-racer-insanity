@@ -6,26 +6,13 @@ import {
     readDebugState,
     STARTUP_TIMEOUT_MS,
     setDrivingKeyState,
+    waitForCarSpawn,
     waitForCarsToMoveForward,
     waitForMultiplayerReady,
 } from './e2e-helpers';
 
 const OIL_SLICK_LIFETIME_MS = Math.round((DEFAULT_GAMEPLAY_TUNING.combat.deployableOilSlickLifetimeTicks / 60) * 1000);
 const OIL_SLICK_LIFETIME_TOLERANCE_MS = 3_000;
-
-const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
-    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-
-    while (Date.now() < deadline) {
-        const state = await readDebugState(page);
-        if (state && state.localCarZ !== null && state.isRunning) {
-            return state;
-        }
-        await page.waitForTimeout(250);
-    }
-
-    throw new Error('Timed out waiting for local car spawn');
-};
 
 const waitForDebugState = async (
     page: Parameters<typeof readDebugState>[0],

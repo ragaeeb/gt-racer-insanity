@@ -1,3 +1,8 @@
+import { serverConfig } from '@/server/config';
+import type { HazardTrigger } from '@/server/sim/hazardSystem';
+import type { PowerupTrigger } from '@/server/sim/powerupSystem';
+import { RoomSimulation } from '@/server/sim/roomSimulation';
+import { getTrackManifestById, getTrackManifestIds, isTrackId, type TrackId } from '@/shared/game/track/trackManifest';
 import type {
     AbilityActivatePayload,
     JoinRoomPayload,
@@ -5,11 +10,6 @@ import type {
     RaceEventPayload,
     ServerSnapshotPayload,
 } from '@/shared/network/types';
-import { getTrackManifestById, getTrackManifestIds, isTrackId, type TrackId } from '@/shared/game/track/trackManifest';
-import { serverConfig } from '@/server/config';
-import { RoomSimulation } from '@/server/sim/roomSimulation';
-import type { HazardTrigger } from '@/server/sim/hazardSystem';
-import type { PowerupTrigger } from '@/server/sim/powerupSystem';
 
 export type Room = {
     id: string;
@@ -34,7 +34,7 @@ type RoomStoreRuntimeOptions = {
     totalLaps: number;
 };
 
-type JoinRoomOptions = Pick<JoinRoomPayload, 'selectedColorId' | 'selectedVehicleId'>;
+type JoinRoomOptions = Pick<JoinRoomPayload, 'selectedColorId' | 'selectedTrackId' | 'selectedVehicleId'>;
 
 export type RoomSnapshotEnvelope = {
     roomId: string;
@@ -71,7 +71,7 @@ export class RoomStore {
 
     constructor(
         private readonly seedGenerator: RandomSeedGenerator = () => Math.floor(Math.random() * 0xffffffff),
-        runtimeOptions: Partial<RoomStoreRuntimeOptions> = {}
+        runtimeOptions: Partial<RoomStoreRuntimeOptions> = {},
     ) {
         this.runtimeOptions = {
             defaultTrackId: runtimeOptions.defaultTrackId ?? serverConfig.defaultTrackId,
@@ -80,9 +80,9 @@ export class RoomStore {
         };
     }
 
-    private createRoom = (roomId: string): Room => {
+    private createRoom = (roomId: string, selectedTrackId?: string): Room => {
         const seed = this.seedGenerator();
-        const trackId = this.resolveTrackId(seed);
+        const trackId = this.resolveTrackId(seed, selectedTrackId);
 
         return {
             id: roomId,
@@ -100,7 +100,11 @@ export class RoomStore {
         };
     };
 
-    private resolveTrackId = (seed: number): TrackId => {
+    private resolveTrackId = (seed: number, selectedTrackId?: string): TrackId => {
+        if (selectedTrackId && isTrackId(selectedTrackId)) {
+            return selectedTrackId;
+        }
+
         const configuredTrackId = this.runtimeOptions.defaultTrackId.trim().toLowerCase();
 
         if (isTrackId(configuredTrackId)) {
@@ -112,13 +116,11 @@ export class RoomStore {
             const manifest = getTrackManifestById(configuredTrackId);
             if (!manifest || trackIds.length === 0) {
                 console.warn(
-                    `[RoomStore] Unknown defaultTrackId "${configuredTrackId}" and no track manifests available; falling back to "sunset-loop"`
+                    `[RoomStore] Unknown defaultTrackId "${configuredTrackId}" and no track manifests available; falling back to "sunset-loop"`,
                 );
                 return 'sunset-loop';
             }
-            console.warn(
-                `[RoomStore] Unknown defaultTrackId "${configuredTrackId}"; falling back to "${manifest.id}"`
-            );
+            console.warn(`[RoomStore] Unknown defaultTrackId "${configuredTrackId}"; falling back to "${manifest.id}"`);
             return manifest.id;
         }
 
@@ -142,13 +144,13 @@ export class RoomStore {
         roomId: string,
         playerId: string,
         playerName: string,
-        joinOptions: JoinRoomOptions = {}
+        joinOptions: JoinRoomOptions = {},
     ): JoinRoomResult => {
         let room = this.rooms.get(roomId);
         const created = !room;
 
         if (!room) {
-            room = this.createRoom(roomId);
+            room = this.createRoom(roomId, joinOptions.selectedTrackId);
             this.rooms.set(roomId, room);
         }
 
@@ -163,7 +165,7 @@ export class RoomStore {
             sanitizedName,
             joinOptions.selectedVehicleId ?? 'sport',
             joinOptions.selectedColorId ?? 'red',
-            Date.now()
+            Date.now(),
         );
 
         const player = {
@@ -180,10 +182,7 @@ export class RoomStore {
         return { created, player, room };
     };
 
-    public removePlayerFromRoom = (
-        roomId: string,
-        playerId: string
-    ): { removed: boolean; roomDeleted: boolean } => {
+    public removePlayerFromRoom = (roomId: string, playerId: string): { removed: boolean; roomDeleted: boolean } => {
         const room = this.rooms.get(roomId);
         if (!room) {
             return { removed: false, roomDeleted: false };
@@ -217,7 +216,7 @@ export class RoomStore {
     public queueInputFrame = (
         roomId: string,
         playerId: string,
-        frame: Parameters<RoomSimulation['queueInputFrame']>[1]
+        frame: Parameters<RoomSimulation['queueInputFrame']>[1],
     ) => {
         const room = this.rooms.get(roomId);
         if (!room) {
@@ -231,7 +230,7 @@ export class RoomStore {
     public queueAbilityActivation = (
         roomId: string,
         playerId: string,
-        payload: Omit<AbilityActivatePayload, 'roomId'>
+        payload: Omit<AbilityActivatePayload, 'roomId'>,
     ) => {
         const room = this.rooms.get(roomId);
         if (!room) {

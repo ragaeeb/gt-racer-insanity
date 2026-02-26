@@ -38,6 +38,14 @@ export const SceneEnvironment = ({ profileId, sunLightRef }: SceneEnvironmentPro
                 shadow-camera-top={profile.sunLight.shadowBounds}
             />
 
+            {profile.fillLight ? (
+                <directionalLight
+                    color={profile.fillLight.color}
+                    intensity={profile.fillLight.intensity}
+                    position={profile.fillLight.position}
+                />
+            ) : null}
+
             {profile.cloud.clusters.map((cluster) => (
                 <group key={cluster.id} position={cluster.position} scale={cluster.scale}>
                     {profile.cloud.puffs.map((puff, index) => (

@@ -1,10 +1,11 @@
 import { Server as Engine } from '@socket.io/bun-engine';
 import { Server } from 'socket.io';
+import { serverConfig } from '@/server/config';
+import { RoomStore } from '@/server/roomStore';
+import { isTrackId } from '@/shared/game/track/trackManifest';
 import { isInputFramePayload } from '@/shared/network/inputFrame';
 import { coerceProtocolVersion, PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 import type { AbilityActivatePayload, JoinRoomPayload } from '@/shared/network/types';
-import { serverConfig } from '@/server/config';
-import { RoomStore } from '@/server/roomStore';
 
 const roomStore = new RoomStore();
 
@@ -28,6 +29,7 @@ const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
     const payload = value as Record<string, unknown>;
     const protocolVersion = payload.protocolVersion;
     const selectedColorId = payload.selectedColorId;
+    const selectedTrackId = payload.selectedTrackId;
     const selectedVehicleId = payload.selectedVehicleId;
 
     return (
@@ -35,6 +37,7 @@ const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
         isString(payload.playerName) &&
         (protocolVersion === undefined || isString(protocolVersion)) &&
         (selectedColorId === undefined || isString(selectedColorId)) &&
+        (selectedTrackId === undefined || isString(selectedTrackId)) &&
         (selectedVehicleId === undefined || isString(selectedVehicleId))
     );
 };
@@ -120,6 +123,7 @@ io.on('connection', (socket) => {
         let playerName = 'Player';
         let selectedVehicleId: string | undefined;
         let selectedColorId: string | undefined;
+        let selectedTrackId: string | undefined;
 
         if (isString(rawJoinRoom)) {
             roomId = rawJoinRoom.trim();
@@ -132,6 +136,11 @@ io.on('connection', (socket) => {
             playerName = rawJoinRoom.playerName;
             selectedVehicleId = rawJoinRoom.selectedVehicleId;
             selectedColorId = rawJoinRoom.selectedColorId;
+            selectedTrackId = rawJoinRoom.selectedTrackId;
+
+            if (selectedTrackId !== undefined && !isTrackId(selectedTrackId)) {
+                selectedTrackId = undefined;
+            }
 
             if (coerceProtocolVersion(rawJoinRoom.protocolVersion) !== PROTOCOL_V2) {
                 return;
@@ -148,6 +157,7 @@ io.on('connection', (socket) => {
 
         const { created, player, room } = roomStore.joinRoom(roomId, socket.id, playerName, {
             selectedColorId,
+            selectedTrackId,
             selectedVehicleId,
         });
 
@@ -158,14 +168,15 @@ io.on('connection', (socket) => {
         const snapshot = roomStore.buildRoomSnapshot(roomId, Date.now());
         socket.emit('room_joined', {
             localPlayerId: socket.id,
-            players: snapshot?.players.map((snapshotPlayer) => ({
-                id: snapshotPlayer.id,
-                name: snapshotPlayer.name,
-                rotationY: snapshotPlayer.rotationY,
-                x: snapshotPlayer.x,
-                y: snapshotPlayer.y,
-                z: snapshotPlayer.z,
-            })) ?? Array.from(room.players.values()),
+            players:
+                snapshot?.players.map((snapshotPlayer) => ({
+                    id: snapshotPlayer.id,
+                    name: snapshotPlayer.name,
+                    rotationY: snapshotPlayer.rotationY,
+                    x: snapshotPlayer.x,
+                    y: snapshotPlayer.y,
+                    z: snapshotPlayer.z,
+                })) ?? Array.from(room.players.values()),
             protocolVersion: PROTOCOL_V2,
             seed: room.seed,
             snapshot: snapshot ?? undefined,
@@ -308,7 +319,7 @@ Bun.serve({
                 },
                 {
                     headers: new Headers(corsHeaders),
-                }
+                },
             );
         }
 

@@ -62,6 +62,7 @@ type RaceWorldProps = {
     resetNonce: number;
     roomId: string;
     selectedColorId: string;
+    selectedTrackId: string;
     selectedVehicleId: VehicleClassId;
 };
 
@@ -74,6 +75,7 @@ export const RaceWorld = ({
     resetNonce,
     roomId,
     selectedColorId,
+    selectedTrackId,
     selectedVehicleId,
 }: RaceWorldProps) => {
     const { camera, scene } = useThree();
@@ -137,6 +139,7 @@ export const RaceWorld = ({
         resetNonce,
         roomId,
         selectedColorId,
+        selectedTrackId,
         selectedVehicleId,
         sessionRef,
     });

@@ -22,6 +22,10 @@ const collectMeshes = (root: THREE.Object3D): THREE.Mesh[] => {
     return meshes;
 };
 
+const toLuminance = (color: THREE.Color): number => {
+    return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+};
+
 describe('TrackManager', () => {
     describe('finish line', () => {
         it('should create a finish line group in the scene', () => {
@@ -103,6 +107,21 @@ describe('TrackManager', () => {
             const names = collectNames(manager.finishLineGroup!);
             expect(names).toContain('finish-banner');
             expect(names.filter((n) => n === 'finish-flag').length).toBe(2);
+        });
+
+        it('should keep neon-city road readable against dark cars', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 99, 'neon-city');
+            const mats = manager as unknown as {
+                lineMat: THREE.MeshStandardMaterial;
+                roadMat: THREE.MeshStandardMaterial;
+            };
+
+            const roadLuminance = toLuminance(mats.roadMat.color);
+            const lineLuminance = toLuminance(mats.lineMat.color);
+
+            expect(roadLuminance).toBeGreaterThan(0.04);
+            expect(lineLuminance).toBeGreaterThan(roadLuminance + 0.25);
         });
     });
 

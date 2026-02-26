@@ -190,7 +190,11 @@ export class Car {
         context.textAlign = 'center';
         context.textBaseline = 'middle';
         context.fillStyle = '#f5fbff';
-        context.fillText(this.playerName.slice(0, 18), nameTextureCanvas.width / 2, nameTextureCanvas.height / 2 + 4);
+        context.fillText(
+            this.playerName.toUpperCase().slice(0, 18),
+            nameTextureCanvas.width / 2,
+            nameTextureCanvas.height / 2 + 4,
+        );
 
         const texture = new THREE.CanvasTexture(nameTextureCanvas);
         texture.needsUpdate = true;
@@ -490,10 +494,7 @@ export class Car {
         const shouldEmitHandbrakeSmoke = handbrakeActive && Math.abs(speed) > 5;
 
         // Emit smoke during drift (INITIATING or DRIFTING) and local handbrake slides.
-        if (
-            (shouldEmitDriftSmoke || shouldEmitHandbrakeSmoke) &&
-            this.lastSmokeEmitTime >= smokeInterval
-        ) {
+        if ((shouldEmitDriftSmoke || shouldEmitHandbrakeSmoke) && this.lastSmokeEmitTime >= smokeInterval) {
             this.lastSmokeEmitTime = 0;
 
             // Get rear wheel positions (approximate based on car position and rotation)

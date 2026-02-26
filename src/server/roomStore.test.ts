@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { RoomStore } from '@/server/roomStore';
+import { getTrackManifestIds } from '@/shared/game/track/trackManifest';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
 const createInputFrame = (
@@ -85,9 +86,10 @@ describe('RoomStore', () => {
 
         const firstTrack = firstStore.buildRoomSnapshot('ROOM1', 1_000)?.raceState.trackId;
         const secondTrack = secondStore.buildRoomSnapshot('ROOM2', 1_000)?.raceState.trackId;
+        const trackIds = getTrackManifestIds();
 
-        expect(firstTrack).toEqual('canyon-sprint');
-        expect(secondTrack).toEqual('sunset-loop');
+        expect(firstTrack).toEqual(trackIds[Math.abs(1) % trackIds.length]);
+        expect(secondTrack).toEqual(trackIds[Math.abs(2) % trackIds.length]);
     });
 
     it('should honor explicitly configured default track ids', () => {
@@ -99,6 +101,19 @@ describe('RoomStore', () => {
         const snapshot = store.buildRoomSnapshot('ROOM1', 1_000);
 
         expect(snapshot?.raceState.trackId).toEqual('canyon-sprint');
+    });
+
+    it('should honor selectedTrackId from join options when creating a room', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'rotation',
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            selectedTrackId: 'neon-city',
+        });
+        const snapshot = store.buildRoomSnapshot('ROOM1', 1_000);
+
+        expect(snapshot?.raceState.trackId).toEqual('neon-city');
     });
 
     it('should return false when queueing input for an unknown room', () => {
