@@ -2,6 +2,8 @@ import { expect, type Page } from '@playwright/test';
 import type { GTDebugState as DiagnosticsGTDebugState } from '../src/client/game/hooks/diagnostics/types';
 
 export const STARTUP_TIMEOUT_MS = 90_000;
+const LOBBY_GOTO_RETRIES = 4;
+const LOBBY_GOTO_RETRY_DELAY_MS = 750;
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export type GTDebugState = DiagnosticsGTDebugState;
@@ -42,10 +44,12 @@ export const joinRace = async (
         vehicleLabel?: string;
     },
 ) => {
-    await page.goto(`/lobby?room=${roomId}`, {
-        timeout: STARTUP_TIMEOUT_MS,
-        waitUntil: 'domcontentloaded',
-    });
+    const lobbyMode = options?.trackId ? 'create' : 'join';
+    await page.addInitScript((mode) => {
+        window.sessionStorage.setItem('gt-lobby-mode', mode);
+    }, lobbyMode);
+
+    await gotoLobby(page, roomId);
     await page.bringToFront();
     await page.focus('body');
     await page.locator('#player-name-input').fill(name);
@@ -58,6 +62,7 @@ export const joinRace = async (
     }
     if (options?.trackId) {
         const destinationFieldset = page.locator('fieldset').filter({ hasText: 'DESTINATION' }).first();
+        await expect(destinationFieldset).toBeVisible();
         const trackLabel = options.trackId.replace(/-/g, ' ');
         const escapedTrackLabel = escapeRegex(trackLabel);
         await destinationFieldset
@@ -68,6 +73,34 @@ export const joinRace = async (
     await page.waitForURL(new RegExp(`/race\\?room=${roomId}$`), { timeout: STARTUP_TIMEOUT_MS });
     await page.locator('canvas').waitFor({ timeout: STARTUP_TIMEOUT_MS });
     await page.locator('#speed').waitFor({ timeout: STARTUP_TIMEOUT_MS });
+};
+
+const isRefusedNavigationError = (error: unknown) =>
+    error instanceof Error &&
+    (error.message.includes('net::ERR_CONNECTION_REFUSED') ||
+        error.message.includes('net::ERR_CONNECTION_RESET') ||
+        error.message.includes('net::ERR_CONNECTION_ABORTED'));
+
+export const gotoLobby = async (page: Page, roomId: string) => {
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= LOBBY_GOTO_RETRIES; attempt += 1) {
+        try {
+            await page.goto(`/lobby?room=${roomId}`, {
+                timeout: STARTUP_TIMEOUT_MS,
+                waitUntil: 'domcontentloaded',
+            });
+            return;
+        } catch (error) {
+            lastError = error;
+            if (!isRefusedNavigationError(error) || attempt === LOBBY_GOTO_RETRIES) {
+                throw error;
+            }
+            await page.waitForTimeout(LOBBY_GOTO_RETRY_DELAY_MS * attempt);
+        }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Failed to navigate to lobby');
 };
 
 export const waitForCarSpawn = async (page: Page) => {

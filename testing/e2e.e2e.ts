@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { expectHidden, readDebugState, STARTUP_TIMEOUT_MS } from './e2e-helpers';
+import { expectHidden, gotoLobby, readDebugState, STARTUP_TIMEOUT_MS } from './e2e-helpers';
 
 test.describe('e2e smoke', () => {
     test('should load the game, move the local car, and avoid runtime errors', async ({ page }) => {
@@ -20,10 +20,7 @@ test.describe('e2e smoke', () => {
         });
 
         const roomId = `E2E${Date.now()}`;
-        await page.goto(`/lobby?room=${roomId}`, {
-            timeout: STARTUP_TIMEOUT_MS,
-            waitUntil: 'domcontentloaded',
-        });
+        await gotoLobby(page, roomId);
         await page.bringToFront();
         await page.focus('body');
 
