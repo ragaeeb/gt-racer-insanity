@@ -117,19 +117,20 @@ export const RaceScreen = ({
     };
 
     const handleShareRaceLink = async () => {
-        const shareUrl = await buildShareRaceUrl(roomId);
-        if (!shareUrl) {
-            toast.error('No room URL available to share.');
-            return;
-        }
         try {
+            const shareUrl = await buildShareRaceUrl(roomId);
+            if (!shareUrl) {
+                toast.error('No room URL available to share.');
+                return;
+            }
             if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(shareUrl);
                 toast.success('Race link copied to clipboard.');
                 return;
             }
         } catch {
-            // fall through
+            toast.error('Unable to generate race link right now. Please try again.');
+            return;
         }
         toast.error('Clipboard unavailable. Please allow clipboard access and try again.');
     };

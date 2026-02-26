@@ -206,13 +206,14 @@ export class RoomSimulation {
         this.state.activeProjectiles.length = 0;
         this.state.activeDeployables.length = 0;
 
-        Object.assign(this.state.raceState, {
-            endedAtMs: null,
-            playerOrder: [],
-            startedAtMs: nowMs,
-            status: 'running',
-            winnerPlayerId: null,
+        const freshRaceState = buildInitialRaceState({
+            roomId: this.state.roomId,
+            seed: this.state.seed,
+            tickHz: 1 / this.dtSeconds,
+            totalLaps: this.state.raceState.totalLaps,
+            trackId: this.state.raceState.trackId,
         });
+        Object.assign(this.state.raceState, freshRaceState, { startedAtMs: nowMs });
 
         if (this.state.players.size >= 2) {
             this.pushRaceEvent({

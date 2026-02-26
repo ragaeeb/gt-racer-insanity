@@ -22,8 +22,8 @@ const getLanIpv4Addresses = (): string[] => {
 
     for (const entries of Object.values(nets)) {
         for (const entry of entries ?? []) {
-            const family = typeof entry.family === 'string' ? entry.family : String(entry.family);
-            if (family !== 'IPv4' || entry.internal) {
+            const isIPv4 = entry.family === 'IPv4' || entry.family === 4;
+            if (!isIPv4 || entry.internal) {
                 continue;
             }
             addresses.add(entry.address);

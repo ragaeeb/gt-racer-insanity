@@ -55,6 +55,7 @@ describe('car physics stability', () => {
 
             let state: CarMotionState = { ...origin, speed: config.maxForwardSpeed };
             const dt = 1 / 60;
+            expect(config.friction).toBeGreaterThan(0);
             const secondsToStop = config.maxForwardSpeed / config.friction;
             const simulationFrames = Math.ceil((secondsToStop + 0.5) / dt);
             for (let i = 0; i < simulationFrames; i++) {

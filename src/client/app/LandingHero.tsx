@@ -432,17 +432,7 @@ export const LandingHero = ({
                             href="https://github.com/ragaeeb/gt-racer-insanity"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="transition-all duration-300"
-                            style={{ color: 'rgba(102,242,255,0.82)' }}
-                            onMouseEnter={(e) => {
-                                (e.currentTarget as HTMLElement).style.color = '#00E5FF';
-                                (e.currentTarget as HTMLElement).style.filter =
-                                    'drop-shadow(0 0 8px rgba(0,229,255,0.6))';
-                            }}
-                            onMouseLeave={(e) => {
-                                (e.currentTarget as HTMLElement).style.color = 'rgba(102,242,255,0.82)';
-                                (e.currentTarget as HTMLElement).style.filter = 'none';
-                            }}
+                            className="transition-all duration-300 text-[rgba(102,242,255,0.82)] hover:text-[#00E5FF] hover:drop-shadow-[0_0_8px_rgba(0,229,255,0.6)]"
                         >
                             <GithubIcon />
                         </a>

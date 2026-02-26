@@ -152,4 +152,11 @@ export const sanitizeRoomId = (value: string) =>
         .replace(/[^A-Z0-9_-]/g, '')
         .slice(0, 16);
 
-export const generateRoomId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+export const generateRoomId = () => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let roomId = '';
+    for (let index = 0; index < 6; index += 1) {
+        roomId += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    return roomId;
+};

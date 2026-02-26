@@ -5,6 +5,7 @@ import type { PowerupTrigger } from './powerupSystem';
 import type { ActiveHazard, ActivePowerup, SimRoomState } from './types';
 
 const POWERUP_PICKUP_RADIUS = 4;
+const POWERUP_PICKUP_RADIUS_SQ = POWERUP_PICKUP_RADIUS * POWERUP_PICKUP_RADIUS;
 const HAZARD_CAR_HALF_LENGTH = 2;
 
 export const checkPowerupCollisions = (
@@ -30,7 +31,7 @@ export const checkPowerupCollisions = (
         for (const player of players.values()) {
             const dx = player.motion.positionX - powerup.position.x;
             const dz = player.motion.positionZ - powerup.position.z;
-            if (Math.sqrt(dx * dx + dz * dz) < POWERUP_PICKUP_RADIUS) {
+            if (dx * dx + dz * dz < POWERUP_PICKUP_RADIUS_SQ) {
                 powerup.collectedAtMs = nowMs;
                 powerup.respawnAtMs = nowMs + manifest.respawnMs;
                 powerupTriggerQueue.push({ playerId: player.id, powerupType: manifest.type });
@@ -58,7 +59,8 @@ export const checkHazardCollisions = (
 
             const dx = player.motion.positionX - hazard.position.x;
             const dz = player.motion.positionZ - hazard.position.z;
-            if (Math.sqrt(dx * dx + dz * dz) < manifest.collisionRadius + HAZARD_CAR_HALF_LENGTH) {
+            const collisionRadius = manifest.collisionRadius + HAZARD_CAR_HALF_LENGTH;
+            if (dx * dx + dz * dz < collisionRadius * collisionRadius) {
                 hazardTriggerQueue.push({
                     applyFlipOnHit: manifest.applyFlipOnHit,
                     effectDurationMs: manifest.statusEffectDurationMs,

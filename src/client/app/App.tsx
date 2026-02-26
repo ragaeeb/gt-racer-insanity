@@ -26,7 +26,7 @@ export const App = () => {
     const [selectedTrackId, setSelectedTrackId] = useState<string>('');
 
     const routeParams = new URLSearchParams(routeSearch);
-    const roomIdFromUrl = routeParams.get('room') ?? '';
+    const roomIdFromUrl = sanitizeRoomId(routeParams.get('room') ?? '');
 
     const setLocationState = () => {
         setRoutePath(window.location.pathname);
@@ -52,7 +52,7 @@ export const App = () => {
 
     // Route guards
     useEffect(() => {
-        const searchRoomId = new URLSearchParams(routeSearch).get('room');
+        const searchRoomId = sanitizeRoomId(new URLSearchParams(routeSearch).get('room') ?? '');
         const hasPlayerName = playerName.trim().length > 0;
 
         if (routePath === '/' && searchRoomId) {
@@ -161,6 +161,9 @@ export const App = () => {
     }
 
     if (routePath === '/race') {
+        if (!roomIdFromUrl || playerName.trim().length === 0) {
+            return null;
+        }
         return (
             <RaceScreen
                 playerName={playerName}

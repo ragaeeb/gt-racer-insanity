@@ -307,7 +307,9 @@ canvas {
 }
 
 #generate-debug-log-btn:hover,
-#share-race-link-btn:hover {
+#share-race-link-btn:hover,
+#generate-debug-log-btn:focus-visible,
+#share-race-link-btn:focus-visible {
     border-color: rgba(0, 229, 255, 0.5);
     color: var(--gt-cyan);
     text-shadow: 0 0 8px rgba(0, 229, 255, 0.5);

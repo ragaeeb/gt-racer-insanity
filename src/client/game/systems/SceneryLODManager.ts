@@ -97,7 +97,7 @@ export class SceneryLODManager {
      * Culls instances outside camera range. Call once per frame.
      */
     public update = (camera: THREE.Camera): void => {
-        const visibleIndicesByMesh = new Map<THREE.InstancedMesh, number[]>();
+        const visibleIndicesByMesh = new Map<THREE.InstancedMesh, Set<number>>();
 
         for (const group of this.groups) {
             const dist = camera.position.distanceTo(group.center);
@@ -105,13 +105,16 @@ export class SceneryLODManager {
                 continue;
             }
 
-            const indices = visibleIndicesByMesh.get(group.mesh) ?? [];
-            indices.push(...group.instanceIndices);
+            const indices = visibleIndicesByMesh.get(group.mesh) ?? new Set<number>();
+            for (const index of group.instanceIndices) {
+                indices.add(index);
+            }
             visibleIndicesByMesh.set(group.mesh, indices);
         }
 
         for (const [mesh, state] of this.stateByMesh) {
-            const visibleIndices = visibleIndicesByMesh.get(mesh) ?? [];
+            const visibleIndicesSet = visibleIndicesByMesh.get(mesh);
+            const visibleIndices = visibleIndicesSet ? [...visibleIndicesSet] : [];
             if (visibleIndices.length === 0) {
                 mesh.count = 0;
                 mesh.visible = false;
