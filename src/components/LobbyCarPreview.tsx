@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
 import { applyCarPaint } from '@/client/game/paintSystem';
 import { colorIdToHSL, VEHICLE_CLASS_TO_CATALOG_ID } from '@/client/game/vehicleSelections';
+import { TRACK_MANIFESTS } from '@/shared/game/track/trackManifest';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 
 const getModelPathForVehicleClass = (vehicleClassId: VehicleClassId): string => {
@@ -134,6 +135,8 @@ const FullScene = ({ vehicleClassId, colorId }: SceneProps) => {
 type LobbyCarPreviewProps = {
     selectedVehicleId: VehicleClassId;
     selectedColorId: string;
+    selectedTrackId: string;
+    onSelectTrack: (trackId: string) => void;
 };
 
 const PRELOAD_PATHS = [
@@ -147,23 +150,83 @@ for (const path of PRELOAD_PATHS) {
     useLoader.preload(GLTFLoader, path, configureMeshopt);
 }
 
-export const LobbyCarPreview = ({ selectedVehicleId, selectedColorId }: LobbyCarPreviewProps) => {
+export const LobbyCarPreview = ({
+    selectedVehicleId,
+    selectedColorId,
+    selectedTrackId,
+    onSelectTrack,
+}: LobbyCarPreviewProps) => {
     return (
-        <div
-            className="aspect-video w-full overflow-hidden"
-            style={{
-                background: '#020810',
-                border: '1px solid rgba(0,229,255,0.18)',
-                boxShadow: 'inset 0 0 20px rgba(0,229,255,0.04)',
-            }}
-        >
-            <Canvas
-                camera={{ position: [0, 2.5, 6], fov: 42 }}
-                gl={{ antialias: true, alpha: false }}
-                style={{ width: '100%', height: '100%', display: 'block' }}
+        <div className="flex flex-col gap-4">
+            <fieldset className="space-y-2 border-none p-0 m-0">
+                <legend className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/40 uppercase mb-2 block">
+                    DESTINATION
+                </legend>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    <button
+                        type="button"
+                        onClick={() => onSelectTrack('')}
+                        className="py-3 px-2 font-mono text-xs uppercase tracking-wider transition-all"
+                        style={{
+                            background: selectedTrackId === '' ? 'rgba(0,229,255,0.12)' : 'rgba(0,0,0,0.3)',
+                            border:
+                                selectedTrackId === ''
+                                    ? '1px solid rgba(0,229,255,0.6)'
+                                    : '1px solid rgba(0,229,255,0.12)',
+                            color: selectedTrackId === '' ? '#00E5FF' : 'rgba(0,229,255,0.4)',
+                            boxShadow: selectedTrackId === '' ? '0 0 12px rgba(0,229,255,0.15)' : 'none',
+                        }}
+                    >
+                        <div className="flex flex-col items-center gap-0.5">
+                            <span className="font-bold">RANDOM</span>
+                            <span className="text-[9px] tracking-wide opacity-70">ANY TRACK</span>
+                        </div>
+                    </button>
+                    {TRACK_MANIFESTS.map((track) => {
+                        const isSelected = selectedTrackId === track.id;
+                        return (
+                            <button
+                                key={track.id}
+                                type="button"
+                                onClick={() => onSelectTrack(track.id)}
+                                className="py-3 px-2 font-mono text-xs uppercase tracking-wider transition-all"
+                                style={{
+                                    background: isSelected ? 'rgba(0,229,255,0.12)' : 'rgba(0,0,0,0.3)',
+                                    border: isSelected
+                                        ? '1px solid rgba(0,229,255,0.6)'
+                                        : '1px solid rgba(0,229,255,0.12)',
+                                    color: isSelected ? '#00E5FF' : 'rgba(0,229,255,0.4)',
+                                    boxShadow: isSelected ? '0 0 12px rgba(0,229,255,0.15)' : 'none',
+                                }}
+                            >
+                                <div className="flex flex-col items-center gap-0.5">
+                                    <span className="font-bold leading-tight text-center">{track.label}</span>
+                                    <span className="text-[9px] tracking-wide opacity-70">
+                                        {(track.lengthMeters / 1000).toFixed(1)}KM
+                                    </span>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </fieldset>
+
+            <div
+                className="aspect-video w-full overflow-hidden shrink-0 mt-4"
+                style={{
+                    background: '#020810',
+                    border: '1px solid rgba(0,229,255,0.18)',
+                    boxShadow: 'inset 0 0 20px rgba(0,229,255,0.04)',
+                }}
             >
-                <FullScene vehicleClassId={selectedVehicleId} colorId={selectedColorId} />
-            </Canvas>
+                <Canvas
+                    camera={{ position: [0, 2.5, 6], fov: 42 }}
+                    gl={{ antialias: true, alpha: false }}
+                    style={{ width: '100%', height: '100%', display: 'block' }}
+                >
+                    <FullScene vehicleClassId={selectedVehicleId} colorId={selectedColorId} />
+                </Canvas>
+            </div>
         </div>
     );
 };

@@ -35,12 +35,12 @@ const TRACK_THEME_PALETTES: Record<TrackThemeId, TrackPalette> = {
         wallEmissive: 0x542d1e,
     },
     'cyberpunk-night': {
-        line: 0x3af6ff,
+        line: 0x66dbff,
         obstacle: 0xff4fd8,
         obstacleEmissive: 0x550a43,
-        road: 0x1a2037,
-        wall: 0x6f44ff,
-        wallEmissive: 0x2a1a66,
+        road: 0x2f3d66,
+        wall: 0x7f5dff,
+        wallEmissive: 0x3a2a8f,
     },
     'desert-sunset': {
         line: 0xffe4b8,

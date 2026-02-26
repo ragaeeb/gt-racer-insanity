@@ -128,12 +128,14 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
             { id: 'pu-3', powerupId: 'powerup-speed', x: -3, z: 650 },
             { id: 'pu-4', powerupId: 'powerup-speed', x: 0, z: 950 },
         ],
+        // Keep this track flat until slope/bank colliders are upgraded from rotated
+        // cuboids to robust ramp geometry (same mitigation as canyon-sprint).
         segments: [
             { frictionMultiplier: 1.0, id: 'seg-a', lengthMeters: 200 },
-            { bankAngleDeg: 15, frictionMultiplier: 1.0, id: 'seg-b', lengthMeters: 150 },
-            { elevationEndM: 5, elevationStartM: 0, frictionMultiplier: 0.95, id: 'seg-c', lengthMeters: 200 },
-            { elevationEndM: 5, elevationStartM: 5, frictionMultiplier: 1.0, id: 'seg-d', lengthMeters: 150 },
-            { elevationEndM: 0, elevationStartM: 5, frictionMultiplier: 1.0, id: 'seg-e', lengthMeters: 200 },
+            { frictionMultiplier: 1.0, id: 'seg-b', lengthMeters: 150 },
+            { frictionMultiplier: 0.95, id: 'seg-c', lengthMeters: 200 },
+            { frictionMultiplier: 1.0, id: 'seg-d', lengthMeters: 150 },
+            { frictionMultiplier: 1.0, id: 'seg-e', lengthMeters: 200 },
             { frictionMultiplier: 1.0, id: 'seg-f', lengthMeters: 300 },
         ],
         themeId: 'cyberpunk-night',
@@ -159,18 +161,13 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
             { id: 'pu-3', powerupId: 'powerup-speed', x: -4, z: 900 },
             { id: 'pu-4', powerupId: 'powerup-speed', x: 0, z: 1_250 },
         ],
+        // Keep this track flat until slope/bank colliders are upgraded from rotated
+        // cuboids to robust ramp geometry (same mitigation as canyon-sprint).
         segments: [
             { frictionMultiplier: 0.85, id: 'seg-a', lengthMeters: 250 },
-            { elevationEndM: 10, elevationStartM: 0, frictionMultiplier: 1.0, id: 'seg-b', lengthMeters: 200 },
-            {
-                bankAngleDeg: 20,
-                elevationEndM: 10,
-                elevationStartM: 10,
-                frictionMultiplier: 1.0,
-                id: 'seg-c',
-                lengthMeters: 150,
-            },
-            { elevationEndM: 0, elevationStartM: 10, frictionMultiplier: 0.9, id: 'seg-d', lengthMeters: 200 },
+            { frictionMultiplier: 1.0, id: 'seg-b', lengthMeters: 200 },
+            { frictionMultiplier: 1.0, id: 'seg-c', lengthMeters: 150 },
+            { frictionMultiplier: 0.9, id: 'seg-d', lengthMeters: 200 },
             { frictionMultiplier: 0.85, id: 'seg-e', lengthMeters: 300 },
             { frictionMultiplier: 1.0, id: 'seg-f', lengthMeters: 300 },
         ],

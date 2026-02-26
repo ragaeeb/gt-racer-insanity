@@ -45,6 +45,11 @@ export type SceneEnvironmentProfile = {
         shadowBounds: number;
         shadowMapSize: number;
     };
+    fillLight?: {
+        color: number;
+        intensity: number;
+        position: Vec3Tuple;
+    };
 };
 
 export const DEFAULT_SCENE_ENVIRONMENT_ID: SceneEnvironmentProfileId = 'sunnyDay';
@@ -137,11 +142,11 @@ const SCENE_ENVIRONMENT_PROFILES: Record<SceneEnvironmentProfileId, SceneEnviron
     },
     neonCityNight: {
         id: 'neonCityNight',
-        backgroundColor: 0x0a0a1a,
+        backgroundColor: 0x122452,
         fog: {
-            color: 0x1a0a2a,
-            near: 50,
-            far: 420,
+            color: 0x2b3f74,
+            near: 85,
+            far: 520,
         },
         cloud: {
             color: 0x7f5dba,
@@ -161,20 +166,25 @@ const SCENE_ENVIRONMENT_PROFILES: Record<SceneEnvironmentProfileId, SceneEnviron
             ],
         },
         ambientLight: {
-            color: 0x4444ff,
-            intensity: 0.4,
+            color: 0xa5b7ff,
+            intensity: 0.9,
         },
         hemisphereLight: {
-            skyColor: 0x2c2e6c,
-            groundColor: 0x170e2b,
-            intensity: 0.48,
+            skyColor: 0x6886c9,
+            groundColor: 0x342654,
+            intensity: 0.9,
         },
         sunLight: {
-            color: 0xff00ff,
-            followOffset: [50, 100, 50],
-            intensity: 0.6,
+            color: 0xff8ef0,
+            followOffset: [44, 90, 44],
+            intensity: 1.25,
             shadowBounds: 130,
             shadowMapSize: 2048,
+        },
+        fillLight: {
+            color: 0x7ad6ff,
+            intensity: 0.75,
+            position: [-28, 36, -24],
         },
     },
     desertSunset: {

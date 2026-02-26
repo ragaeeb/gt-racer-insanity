@@ -22,6 +22,7 @@ export type TrackColliderBuildResult = {
 
 const DEFAULT_WALL_HEIGHT_METERS = 3;
 const FLOOR_HALF_HEIGHT = 0.6;
+const START_RUNOFF_LENGTH_METERS = 30;
 
 //
 // Euler XYZ → quaternion conversion. Avoids a Three.js dependency on the
@@ -154,6 +155,51 @@ const createSegmentFloorColliders = (
     }
 };
 
+const createStartRunoffColliders = (
+    rapier: typeof RAPIER,
+    world: World,
+    segments: TrackSegmentManifest[],
+    trackWidthMeters: number,
+    wallHeightMeters: number,
+    staticBody: ReturnType<World['createRigidBody']>,
+) => {
+    const firstSegment = segments[0];
+    if (!firstSegment) {
+        return;
+    }
+
+    const halfTrackWidth = trackWidthMeters * 0.5;
+    const startElevation = firstSegment.elevationStartM ?? 0;
+    const halfRunoffLength = START_RUNOFF_LENGTH_METERS * 0.5;
+    const runoffCenterZ = -halfRunoffLength;
+    const wallCenterY = startElevation + wallHeightMeters;
+
+    const floorDesc = rapier.ColliderDesc.cuboid(halfTrackWidth, FLOOR_HALF_HEIGHT, halfRunoffLength)
+        .setFriction(1.1)
+        .setTranslation(0, startElevation - FLOOR_HALF_HEIGHT, runoffCenterZ);
+
+    world.createCollider(floorDesc, staticBody);
+
+    const leftWall = rapier.ColliderDesc.cuboid(1, wallHeightMeters, halfRunoffLength)
+        .setTranslation(-halfTrackWidth - 1, wallCenterY, runoffCenterZ)
+        .setFriction(1.4)
+        .setRestitution(0.08);
+
+    const rightWall = rapier.ColliderDesc.cuboid(1, wallHeightMeters, halfRunoffLength)
+        .setTranslation(halfTrackWidth + 1, wallCenterY, runoffCenterZ)
+        .setFriction(1.4)
+        .setRestitution(0.08);
+
+    const rearBarrier = rapier.ColliderDesc.cuboid(halfTrackWidth, wallHeightMeters, 1)
+        .setTranslation(0, wallCenterY, -START_RUNOFF_LENGTH_METERS - 1)
+        .setFriction(1.4)
+        .setRestitution(0.06);
+
+    world.createCollider(leftWall, staticBody);
+    world.createCollider(rightWall, staticBody);
+    world.createCollider(rearBarrier, staticBody);
+};
+
 const createFinishBarrierCollider = (
     rapier: typeof RAPIER,
     world: World,
@@ -221,6 +267,24 @@ export const buildTrackColliders = (
     const wallHeightMeters = options.wallHeightMeters ?? DEFAULT_WALL_HEIGHT_METERS;
 
     const staticBody = world.createRigidBody(rapier.RigidBodyDesc.fixed());
+
+    const requiresStartRunoffSafety = trackManifest.segments.some(
+        (segment) =>
+            (segment.elevationStartM ?? 0) !== 0 ||
+            (segment.elevationEndM ?? 0) !== 0 ||
+            (segment.bankAngleDeg ?? 0) !== 0,
+    );
+
+    if (requiresStartRunoffSafety) {
+        createStartRunoffColliders(
+            rapier,
+            world,
+            trackManifest.segments,
+            trackWidthMeters,
+            wallHeightMeters,
+            staticBody,
+        );
+    }
 
     createSegmentFloorColliders(
         rapier,

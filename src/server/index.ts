@@ -28,6 +28,7 @@ const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
     const payload = value as Record<string, unknown>;
     const protocolVersion = payload.protocolVersion;
     const selectedColorId = payload.selectedColorId;
+    const selectedTrackId = payload.selectedTrackId;
     const selectedVehicleId = payload.selectedVehicleId;
 
     return (
@@ -35,6 +36,7 @@ const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
         isString(payload.playerName) &&
         (protocolVersion === undefined || isString(protocolVersion)) &&
         (selectedColorId === undefined || isString(selectedColorId)) &&
+        (selectedTrackId === undefined || isString(selectedTrackId)) &&
         (selectedVehicleId === undefined || isString(selectedVehicleId))
     );
 };
@@ -120,6 +122,7 @@ io.on('connection', (socket) => {
         let playerName = 'Player';
         let selectedVehicleId: string | undefined;
         let selectedColorId: string | undefined;
+        let selectedTrackId: string | undefined;
 
         if (isString(rawJoinRoom)) {
             roomId = rawJoinRoom.trim();
@@ -132,6 +135,7 @@ io.on('connection', (socket) => {
             playerName = rawJoinRoom.playerName;
             selectedVehicleId = rawJoinRoom.selectedVehicleId;
             selectedColorId = rawJoinRoom.selectedColorId;
+            selectedTrackId = rawJoinRoom.selectedTrackId;
 
             if (coerceProtocolVersion(rawJoinRoom.protocolVersion) !== PROTOCOL_V2) {
                 return;
@@ -148,6 +152,7 @@ io.on('connection', (socket) => {
 
         const { created, player, room } = roomStore.joinRoom(roomId, socket.id, playerName, {
             selectedColorId,
+            selectedTrackId,
             selectedVehicleId,
         });
 

@@ -23,6 +23,7 @@ export type JoinRoomPayload = {
     protocolVersion?: ProtocolVersion;
     roomId: string;
     selectedColorId?: string;
+    selectedTrackId?: string;
     selectedVehicleId?: string;
 };
 

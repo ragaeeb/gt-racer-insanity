@@ -91,6 +91,7 @@ type RaceSceneCanvasProps = {
     resetNonce: number;
     roomId: string;
     selectedColorId: string;
+    selectedTrackId: string;
     selectedVehicleId: VehicleClassId;
 };
 
@@ -197,6 +198,7 @@ const RaceSceneCanvas = memo(
         resetNonce,
         roomId,
         selectedColorId,
+        selectedTrackId,
         selectedVehicleId,
     }: RaceSceneCanvasProps) => {
         const renderProbeRef = useRef<{
@@ -468,6 +470,7 @@ const RaceSceneCanvas = memo(
                             roomId={roomId}
                             resetNonce={resetNonce}
                             selectedColorId={selectedColorId}
+                            selectedTrackId={selectedTrackId}
                             selectedVehicleId={selectedVehicleId}
                         />
                     ) : null}
@@ -1003,6 +1006,7 @@ export const App = () => {
     const [diagnosticsVerbosity, setDiagnosticsVerbosity] = useState<DiagnosticsVerbosity>(() =>
         readDiagnosticsVerboseDefault() ? 'verbose' : 'standard',
     );
+    const [selectedTrackId, setSelectedTrackId] = useState<string>('');
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
     const [raceState, setRaceState] = useState<RaceState | null>(null);
     const appVersion = __APP_VERSION__;
@@ -1216,7 +1220,7 @@ export const App = () => {
                 />
 
                 <form
-                    className="w-full max-w-sm space-y-6 p-8 pb-8 backdrop-blur-md rounded relative z-10"
+                    className="w-full max-w-xl space-y-6 p-8 pb-8 backdrop-blur-md rounded relative z-10"
                     style={{
                         background: 'rgba(2, 8, 20, 0.9)',
                         border: '1px solid rgba(0, 229, 255, 0.2)',
@@ -1323,7 +1327,12 @@ export const App = () => {
 
                     {/* 3D Preview */}
                     <div className="mt-10">
-                        <LobbyCarPreview selectedVehicleId={selectedVehicleId} selectedColorId={selectedColorId} />
+                        <LobbyCarPreview
+                            selectedVehicleId={selectedVehicleId}
+                            selectedColorId={selectedColorId}
+                            selectedTrackId={selectedTrackId}
+                            onSelectTrack={setSelectedTrackId}
+                        />
                     </div>
 
                     {/* Submit */}
@@ -1495,6 +1504,7 @@ export const App = () => {
                 resetNonce={resetNonce}
                 roomId={roomIdFromUrl}
                 selectedColorId={selectedColorId}
+                selectedTrackId={selectedTrackId}
                 selectedVehicleId={selectedVehicleId}
             />
         </div>

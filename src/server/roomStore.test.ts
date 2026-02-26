@@ -103,6 +103,19 @@ describe('RoomStore', () => {
         expect(snapshot?.raceState.trackId).toEqual('canyon-sprint');
     });
 
+    it('should honor selectedTrackId from join options when creating a room', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'rotation',
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            selectedTrackId: 'neon-city',
+        });
+        const snapshot = store.buildRoomSnapshot('ROOM1', 1_000);
+
+        expect(snapshot?.raceState.trackId).toEqual('neon-city');
+    });
+
     it('should return false when queueing input for an unknown room', () => {
         const store = new RoomStore(() => 5);
 

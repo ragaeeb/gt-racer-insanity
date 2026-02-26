@@ -560,4 +560,79 @@ describe('speed cap regression', () => {
             expect(minY).toBeGreaterThanOrEqual(-0.5);
         }
     });
+
+    it('should recover after reversing behind the start line on newly added tracks', () => {
+        for (const trackId of ['neon-city', 'desert-oasis']) {
+            const sim = createSimulation(trackId, 1);
+            sim.joinPlayer('p1', 'Alice', 'sport', 'red');
+
+            let nowMs = 1_000;
+            let minY = Infinity;
+            let minZ = Infinity;
+
+            // Repro path: reverse from the start line into z < 0.
+            for (let step = 1; step <= 240; step += 1) {
+                nowMs = 1_000 + step * 16;
+                sim.queueInputFrame('p1', createInputFrame('ELEV-TEST', step, nowMs, -1, 0));
+                sim.step(nowMs);
+                sim.drainRaceEvents();
+
+                const snap = sim.buildSnapshot(nowMs);
+                const player = snap.players[0];
+                if (player) {
+                    minY = Math.min(minY, player.y);
+                    minZ = Math.min(minZ, player.z);
+                }
+            }
+
+            for (let step = 241; step <= 480; step += 1) {
+                nowMs = 1_000 + step * 16;
+                sim.queueInputFrame('p1', createInputFrame('ELEV-TEST', step, nowMs, 1, 0));
+                sim.step(nowMs);
+                sim.drainRaceEvents();
+
+                const snap = sim.buildSnapshot(nowMs);
+                const player = snap.players[0];
+                if (player) {
+                    minY = Math.min(minY, player.y);
+                }
+            }
+
+            const finalSnapshot = sim.buildSnapshot(nowMs);
+            const finalPlayer = finalSnapshot.players[0];
+            expect(finalPlayer).toBeDefined();
+            expect(minY).toBeGreaterThanOrEqual(-0.5);
+            expect(finalPlayer!.z).toBeGreaterThan(minZ + 10);
+            expect(finalPlayer!.speed).toBeGreaterThan(5);
+            expect(Number.isFinite(finalPlayer!.y)).toBeTrue();
+        }
+    });
+
+    it('should never exceed sport-class max speed on newly added tracks', () => {
+        const MAX_SPEED_KPH = 44 * 3.6;
+
+        for (const trackId of ['neon-city', 'desert-oasis']) {
+            const sim = createSimulation(trackId, 1);
+            sim.joinPlayer('p1', 'Alice', 'sport', 'red');
+
+            let nowMs = 1_000;
+            let peakSpeedKph = 0;
+            for (let step = 1; step <= 900; step += 1) {
+                nowMs = 1_000 + step * 16;
+                const steering = step > 240 ? 0.25 : 0;
+                sim.queueInputFrame('p1', createInputFrame('ELEV-TEST', step, nowMs, 1, steering));
+                sim.step(nowMs);
+                sim.drainRaceEvents();
+
+                const snap = sim.buildSnapshot(nowMs);
+                const player = snap.players[0];
+                if (player) {
+                    peakSpeedKph = Math.max(peakSpeedKph, Math.abs(player.speed) * 3.6);
+                    expect(player.y).toBeGreaterThanOrEqual(-0.5);
+                }
+            }
+
+            expect(peakSpeedKph).toBeLessThan(MAX_SPEED_KPH * 1.05);
+        }
+    });
 });

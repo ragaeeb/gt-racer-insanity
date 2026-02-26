@@ -178,6 +178,7 @@ type UseNetworkConnectionParams = {
     resetNonce: number;
     roomId: string;
     selectedColorId: string;
+    selectedTrackId: string;
     selectedVehicleId: string;
     sessionRef: React.RefObject<RaceSession>;
 };
@@ -192,6 +193,7 @@ export const useNetworkConnection = ({
     resetNonce,
     roomId,
     selectedColorId,
+    selectedTrackId,
     selectedVehicleId,
     sessionRef,
 }: UseNetworkConnectionParams) => {
@@ -298,6 +300,7 @@ export const useNetworkConnection = ({
         const networkManager = new NetworkManager(playerName, roomId, {
             protocolVersion: PROTOCOL_V2,
             selectedColorId,
+            selectedTrackId,
             selectedVehicleId,
         });
         session.networkManager = networkManager;
@@ -513,11 +516,7 @@ export const useNetworkConnection = ({
                     if (event.playerId && event.playerId !== localPlayerId) {
                         session.opponents.get(event.playerId)?.onCollision(collisionForce);
                     }
-                    if (
-                        againstPlayerId &&
-                        againstPlayerId !== localPlayerId &&
-                        againstPlayerId !== event.playerId
-                    ) {
+                    if (againstPlayerId && againstPlayerId !== localPlayerId && againstPlayerId !== event.playerId) {
                         session.opponents.get(againstPlayerId)?.onCollision(collisionForce);
                     }
 
@@ -598,7 +597,8 @@ export const useNetworkConnection = ({
                 session.latestLocalSnapshotSeq = localSnapshotPlayer ? snapshot.seq : null;
                 session.lastSnapshotReceivedAtMs = Date.now();
                 const totalRaceDistanceMeters = Math.max(
-                    getTrackManifestById(snapshot.raceState.trackId).lengthMeters * Math.max(snapshot.raceState.totalLaps, 1),
+                    getTrackManifestById(snapshot.raceState.trackId).lengthMeters *
+                        Math.max(snapshot.raceState.totalLaps, 1),
                     1,
                 );
                 const toDirtIntensity = (distanceMeters: number) =>
@@ -722,6 +722,7 @@ export const useNetworkConnection = ({
         roomId,
         scene,
         selectedColorId,
+        selectedTrackId,
         selectedVehicleId,
         session,
     ]);
