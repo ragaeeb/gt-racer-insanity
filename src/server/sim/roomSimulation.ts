@@ -11,6 +11,7 @@ import { CollisionManager } from './collisionManager';
 import { applyDriveStep, drainStartedCollisions, syncPlayerMotionFromRigidBody } from './collisionSystem';
 import { checkDeployableCollisions, spawnDeployable, updateDeployables } from './deployableSystem';
 import { tickStatusEffects } from './effectSystem';
+import { snapPlayerToGround } from './groundSnapSystem';
 import { applyHazardTriggers, type HazardTrigger } from './hazardSystem';
 import { InputQueue } from './inputQueue';
 import { PlayerManager } from './playerManager';
@@ -483,6 +484,7 @@ export class RoomSimulation {
             }
 
             syncPlayerMotionFromRigidBody(player, rigidBody, this.trackBoundaryX);
+            snapPlayerToGround(this.rapierContext.rapier, player, rigidBody, this.rapierContext.world, this.dtSeconds);
             this.progressTracker.updateProgress(player, this.state.raceState, nowMs, this.pushRaceEvent);
         }
 
@@ -556,7 +558,7 @@ export class RoomSimulation {
             name: player.name,
             rotationY: player.motion.rotationY,
             x: player.motion.positionX,
-            y: 0,
+            y: player.motion.positionY ?? 0,
             z: player.motion.positionZ,
         };
     };

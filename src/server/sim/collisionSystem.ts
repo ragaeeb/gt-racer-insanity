@@ -178,6 +178,7 @@ export const syncPlayerMotionFromRigidBody = (
     }
 
     player.motion.positionX = x;
+    player.motion.positionY = position.y;
     player.motion.positionZ = position.z;
     player.motion.rotationY = yawRadians;
 };

@@ -41,7 +41,7 @@ export class PlayerManager {
 
         const rigidBody = world.createRigidBody(rigidBodyDesc);
         rigidBody.setEnabledRotations(false, true, false, true);
-        rigidBody.setEnabledTranslations(true, false, true, true);
+        rigidBody.setEnabledTranslations(true, true, true, true);
         rigidBody.setAdditionalMass(Math.max(vehicleClass.physics.collisionMass, 1), true);
 
         const colliderDesc = rapier.ColliderDesc.cuboid(
@@ -49,10 +49,7 @@ export class PlayerManager {
             0.5,
             PLAYER_COLLIDER_HALF_LENGTH_METERS,
         )
-            .setActiveEvents(
-                rapier.ActiveEvents.COLLISION_EVENTS |
-                rapier.ActiveEvents.CONTACT_FORCE_EVENTS
-            )
+            .setActiveEvents(rapier.ActiveEvents.COLLISION_EVENTS | rapier.ActiveEvents.CONTACT_FORCE_EVENTS)
             .setFriction(0.8)
             .setRestitution(0.45);
 

@@ -25,7 +25,7 @@ const toSnapshotPlayerState = (
         speed: player.motion.speed,
         vehicleId: player.vehicleId,
         x: player.motion.positionX,
-        y: 0,
+        y: player.motion.positionY ?? 0,
         z: player.motion.positionZ,
     };
 };

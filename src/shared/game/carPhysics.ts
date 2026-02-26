@@ -9,6 +9,7 @@ export type CarMotionState = {
     speed: number;
     rotationY: number;
     positionX: number;
+    positionY?: number;
     positionZ: number;
 };
 
@@ -40,7 +41,7 @@ export const stepCarMotion = (
     state: CarMotionState,
     controls: CarControlState,
     dt: number,
-    config: CarPhysicsConfig = DEFAULT_CAR_PHYSICS_CONFIG
+    config: CarPhysicsConfig = DEFAULT_CAR_PHYSICS_CONFIG,
 ): CarMotionState => {
     let speed = state.speed;
     let rotationY = state.rotationY;
