@@ -15,21 +15,7 @@
  */
 import { expect, test } from '@playwright/test';
 
-import { joinRace, readDebugState, STARTUP_TIMEOUT_MS, setDrivingKeyState } from './e2e-helpers';
-
-const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
-    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-
-    while (Date.now() < deadline) {
-        const state = await readDebugState(page);
-        if (state && state.localCarZ !== null && state.isRunning) {
-            return state;
-        }
-        await page.waitForTimeout(250);
-    }
-
-    throw new Error('Timed out waiting for local car spawn');
-};
+import { joinRace, readDebugState, STARTUP_TIMEOUT_MS, setDrivingKeyState, waitForCarSpawn } from './e2e-helpers';
 
 test.describe('e2e elevation regression', () => {
     test('should drive forward on flat track with ground snap enabled', async ({ page }) => {

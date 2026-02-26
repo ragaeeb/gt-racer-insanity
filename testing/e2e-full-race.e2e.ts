@@ -13,23 +13,9 @@
  */
 import { expect, test } from '@playwright/test';
 
-import { joinRace, readDebugState, STARTUP_TIMEOUT_MS, setDrivingKeyState } from './e2e-helpers';
+import { joinRace, readDebugState, STARTUP_TIMEOUT_MS, setDrivingKeyState, waitForCarSpawn } from './e2e-helpers';
 
 const ALL_TRACK_IDS = ['sunset-loop', 'canyon-sprint', 'neon-city', 'desert-oasis'] as const;
-
-const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
-    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-
-    while (Date.now() < deadline) {
-        const state = await readDebugState(page);
-        if (state && state.localCarZ !== null && state.isRunning) {
-            return state;
-        }
-        await page.waitForTimeout(250);
-    }
-
-    throw new Error('Timed out waiting for local car spawn');
-};
 
 test.describe('e2e full race — all tracks load', () => {
     for (const trackId of ALL_TRACK_IDS) {
@@ -134,7 +120,7 @@ test.describe('e2e full race — integrated features', () => {
         expect(pageErrors).toHaveLength(0);
     });
 
-    test('should maintain stable Y position on neon-city elevation segments', async ({ page }) => {
+    test('should progress and remain connected on neon-city elevation segments', async ({ page }) => {
         test.setTimeout(STARTUP_TIMEOUT_MS);
 
         const pageErrors: string[] = [];

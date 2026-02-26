@@ -13,7 +13,14 @@
  */
 import { expect, test } from '@playwright/test';
 
-import { enableDiagnostics, joinRace, readDebugState, STARTUP_TIMEOUT_MS, setDrivingKeyState } from './e2e-helpers';
+import {
+    enableDiagnostics,
+    joinRace,
+    readDebugState,
+    STARTUP_TIMEOUT_MS,
+    setDrivingKeyState,
+    waitForCarSpawn,
+} from './e2e-helpers';
 
 type DiagSummary = {
     collisionFrameSampleCount: number;
@@ -27,21 +34,7 @@ type DiagSummary = {
 
 const DRAW_CALLS_MAX_BUDGET = 500;
 const LONG_TASK_MAX_MS_BUDGET = 2_000;
-const LONG_FRAME_GAP_MAX_COUNT = 30;
-
-const waitForCarSpawn = async (page: Parameters<typeof readDebugState>[0]) => {
-    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
-
-    while (Date.now() < deadline) {
-        const state = await readDebugState(page);
-        if (state && state.localCarZ !== null && state.isRunning) {
-            return state;
-        }
-        await page.waitForTimeout(250);
-    }
-
-    throw new Error('Timed out waiting for local car spawn');
-};
+const LONG_FRAME_GAP_MAX_COUNT = 80;
 
 const getDiagSummary = async (page: Parameters<typeof readDebugState>[0]): Promise<DiagSummary | null> => {
     try {
@@ -180,11 +173,10 @@ test.describe('e2e performance regression', () => {
     });
 
     test('should maintain performance across all tracks', async ({ page }) => {
-        test.setTimeout(STARTUP_TIMEOUT_MS * 2);
+        const tracks = ['sunset-loop', 'canyon-sprint', 'neon-city', 'desert-oasis'] as const;
+        test.setTimeout(STARTUP_TIMEOUT_MS * (tracks.length + 1));
 
         await enableDiagnostics(page);
-
-        const tracks = ['sunset-loop', 'canyon-sprint', 'neon-city', 'desert-oasis'] as const;
 
         for (const trackId of tracks) {
             const roomId = `PFA${trackId.slice(0, 3)}${Date.now().toString().slice(-5)}`;

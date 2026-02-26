@@ -60,12 +60,28 @@ export const joinRace = async (
         const destinationFieldset = page.locator('fieldset').filter({ hasText: 'DESTINATION' }).first();
         const trackLabel = options.trackId.replace(/-/g, ' ');
         const escapedTrackLabel = escapeRegex(trackLabel);
-        await destinationFieldset.getByRole('button', { name: new RegExp(escapedTrackLabel, 'i') }).click();
+        await destinationFieldset
+            .getByRole('button', { name: new RegExp(`^\\s*${escapedTrackLabel}\\b`, 'i') })
+            .click();
     }
     await page.locator('#player-name-confirm').click();
     await page.waitForURL(new RegExp(`/race\\?room=${roomId}$`), { timeout: STARTUP_TIMEOUT_MS });
     await page.locator('canvas').waitFor({ timeout: STARTUP_TIMEOUT_MS });
     await page.locator('#speed').waitFor({ timeout: STARTUP_TIMEOUT_MS });
+};
+
+export const waitForCarSpawn = async (page: Page) => {
+    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+
+    while (Date.now() < deadline) {
+        const state = await readDebugState(page);
+        if (state && state.localCarZ !== null && state.isRunning) {
+            return state;
+        }
+        await page.waitForTimeout(250);
+    }
+
+    throw new Error('Timed out waiting for local car spawn');
 };
 
 export const setDrivingKeyState = async (page: Page, code: string, pressed: boolean) => {
