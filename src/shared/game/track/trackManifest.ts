@@ -11,6 +11,9 @@ export type TrackCheckpointManifest = {
 };
 
 export type TrackSegmentManifest = {
+    bankAngleDeg?: number;
+    elevationEndM?: number;
+    elevationStartM?: number;
     frictionMultiplier: number;
     id: string;
     lengthMeters: number;
