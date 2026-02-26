@@ -1,7 +1,8 @@
-import { useGLTF } from '@react-three/drei';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useLoader } from '@react-three/fiber';
+import { MeshoptDecoder } from 'meshoptimizer';
 import { Suspense, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
 import { applyCarPaint } from '@/client/game/paintSystem';
 import { colorIdToHSL, VEHICLE_CLASS_TO_CATALOG_ID } from '@/client/game/vehicleSelections';
@@ -57,8 +58,12 @@ const disposeWrappedCar = (wrappedCar: THREE.Group) => {
     });
 };
 
+const configureMeshopt = (loader: GLTFLoader) => {
+    loader.setMeshoptDecoder(MeshoptDecoder);
+};
+
 const CarModel = ({ modelPath, colorId }: CarModelProps) => {
-    const gltf = useGLTF(modelPath);
+    const gltf = useLoader(GLTFLoader, modelPath, configureMeshopt);
     const wrappedRef = useRef<THREE.Group | null>(null);
     const wrappedKeyRef = useRef('');
     const baseYawRef = useRef(0);
@@ -101,14 +106,14 @@ const PreviewScene = () => {
     return (
         <>
             <color attach="background" args={[PREVIEW_BG_COLOR.r, PREVIEW_BG_COLOR.g, PREVIEW_BG_COLOR.b]} />
-            <hemisphereLight args={[SKY_COLOR, GROUND_COLOR, 0.5]} />
-            <ambientLight intensity={0.7} />
+            <hemisphereLight args={[SKY_COLOR, GROUND_COLOR, 1.5]} />
+            <ambientLight intensity={1.5} />
             {/* Main key light — warm */}
-            <directionalLight position={[4, 6, 5]} intensity={1.4} />
+            <directionalLight position={[4, 6, 5]} intensity={3.5} />
             {/* Cyan rim light from left */}
-            <directionalLight position={[-4, 3, -2]} intensity={0.9} color={RIM_LIGHT_COLOR} />
+            <directionalLight position={[-4, 3, -2]} intensity={2.0} color={RIM_LIGHT_COLOR} />
             {/* Fill from right */}
-            <directionalLight position={[3, 2, -4]} intensity={0.4} />
+            <directionalLight position={[3, 2, -4]} intensity={1.5} />
         </>
     );
 };
@@ -139,7 +144,7 @@ const PRELOAD_PATHS = [
 ];
 
 for (const path of PRELOAD_PATHS) {
-    useGLTF.preload(path);
+    useLoader.preload(GLTFLoader, path, configureMeshopt);
 }
 
 export const LobbyCarPreview = ({ selectedVehicleId, selectedColorId }: LobbyCarPreviewProps) => {

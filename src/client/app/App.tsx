@@ -1,20 +1,11 @@
 import { Canvas, type RootState } from '@react-three/fiber';
-import React, {
-    type Dispatch,
-    lazy,
-    memo,
-    type SetStateAction,
-    Suspense,
-    useEffect,
-    useRef,
-    useState,
-} from 'react';
+import React, { type Dispatch, lazy, memo, type SetStateAction, Suspense, useEffect, useRef, useState } from 'react';
 import { Toaster, toast } from 'sonner';
 import * as THREE from 'three';
 import { clientConfig } from '@/client/app/config';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
-import { colorIdToHexString } from '@/client/game/vehicleSelections';
+import { COLOR_ID_TO_HSL, colorIdToHexString } from '@/client/game/vehicleSelections';
 import { AbilityIndicator } from '@/components/AbilityIndicator';
 import { LobbyCarPreview } from '@/components/LobbyCarPreview';
 import { Button } from '@/components/ui/button';
@@ -219,11 +210,7 @@ const RaceSceneCanvas = memo(
         const renderCleanupRef = useRef<(() => void) | null>(null);
         const renderDebugEnabledRef = useRef(parseRenderDebugFlag());
 
-        const appendRenderLog = (
-            kind: RenderDiagnosticEntry['kind'],
-            message: string,
-            details?: unknown,
-        ) => {
+        const appendRenderLog = (kind: RenderDiagnosticEntry['kind'], message: string, details?: unknown) => {
             const entry: RenderDiagnosticEntry = {
                 details,
                 kind,
@@ -331,7 +318,9 @@ const RaceSceneCanvas = memo(
                                     geometry.computeBoundingSphere();
                                 }
                                 if (geometry.boundingSphere) {
-                                    scratchBoundingSphere.copy(geometry.boundingSphere).applyMatrix4(object3D.matrixWorld);
+                                    scratchBoundingSphere
+                                        .copy(geometry.boundingSphere)
+                                        .applyMatrix4(object3D.matrixWorld);
                                     if (cameraFrustum.intersectsSphere(scratchBoundingSphere)) {
                                         frustumMeshCount += 1;
                                         if (frustumMeshSamples.length < 8) {
@@ -343,7 +332,9 @@ const RaceSceneCanvas = memo(
                                                     ? `#${material.color.getHexString()}`
                                                     : null;
                                             const opacity =
-                                                material && 'opacity' in material && typeof material.opacity === 'number'
+                                                material &&
+                                                'opacity' in material &&
+                                                typeof material.opacity === 'number'
                                                     ? Number(material.opacity.toFixed(3))
                                                     : null;
                                             frustumMeshSamples.push({
@@ -1001,7 +992,10 @@ export const App = () => {
     const [routeSearch, setRouteSearch] = useState(window.location.search);
 
     const [selectedVehicleId, setSelectedVehicleId] = useState<VehicleClassId>('sport');
-    const [selectedColorId, setSelectedColorId] = useState('red');
+    const [selectedColorId, setSelectedColorId] = useState(() => {
+        const colors = Object.keys(COLOR_ID_TO_HSL);
+        return colors[Math.floor(Math.random() * colors.length)];
+    });
     const [gameOver, setGameOver] = useState(false);
     const [resetNonce, setResetNonce] = useState(0);
     const [cruiseControlEnabled, setCruiseControlEnabled] = useState(true);
@@ -1105,9 +1099,9 @@ export const App = () => {
     const sanitizePlayerName = (value: string) => {
         const trimmed = value.trim();
         if (trimmed.length === 0) {
-            return 'Player';
+            return 'PLAYER';
         }
-        return trimmed.slice(0, 24);
+        return trimmed.slice(0, 24).toUpperCase();
     };
 
     const sanitizeRoomId = (value: string) =>

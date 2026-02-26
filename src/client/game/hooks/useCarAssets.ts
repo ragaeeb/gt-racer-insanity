@@ -1,4 +1,5 @@
 import { useLoader } from '@react-three/fiber';
+import { MeshoptDecoder } from 'meshoptimizer';
 import { useRef } from 'react';
 import * as THREE from 'three';
 import { type GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -10,6 +11,9 @@ export const useCarAssets = (): CarAssetsBundle => {
     const carModelGltfs = useLoader(
         GLTFLoader,
         CAR_MODEL_CATALOG.map((carModel) => carModel.modelPath),
+        (loader) => {
+            loader.setMeshoptDecoder(MeshoptDecoder);
+        },
     ) as GLTF[];
 
     const engineAudioBuffer = useLoader(THREE.AudioLoader, '/engine.mp3');

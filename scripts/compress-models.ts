@@ -35,8 +35,6 @@ async function compressModel(inputPath: string): Promise<void> {
             'optimize',
             inputPath,
             outputPath,
-            '--compress',
-            'draco',
             '--texture-compress',
             'webp',
             '--texture-size',
