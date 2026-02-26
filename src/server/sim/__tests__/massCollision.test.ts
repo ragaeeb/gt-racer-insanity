@@ -3,7 +3,7 @@ import type { RigidBody } from '@dimforge/rapier3d-compat';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 import type { RaceEventPayload } from '@/shared/network/types';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
-import { CollisionManager } from '../collisionManager';
+import { CollisionManager, toPairKey } from '../collisionManager';
 import { applyPlayerBumpResponse } from '../collisionSystem';
 import type { SimPlayerState } from '../types';
 
@@ -525,6 +525,29 @@ describe('Mass-Aware Collision Effects', () => {
         const bumpEvent = events.find((e) => e.kind === 'collision_bump');
         expect(bumpEvent).toBeDefined();
         expect(bumpEvent?.metadata?.rammerPlayerId).toBe('truck');
+    });
+
+    it('should publish contactForceMagnitude in collision metadata when provided', () => {
+        const sportPlayer = createPlayer('sport', 'sport', 20);
+        const truckPlayer = createPlayer('truck', 'truck', 10);
+
+        const { manager, events } = buildCollisionRig({
+            playerA: sportPlayer,
+            playerB: truckPlayer,
+            massA: 1050,
+            massB: 1800,
+        });
+
+        manager.processBumpCollisions(
+            [{ firstPlayerId: 'sport', secondPlayerId: 'truck' }],
+            [],
+            1000,
+            new Map([[toPairKey('sport', 'truck'), 420]]),
+        );
+
+        const bumpEvent = events.find((event) => event.kind === 'collision_bump');
+        expect(bumpEvent).toBeDefined();
+        expect(bumpEvent?.metadata?.contactForceMagnitude).toBe(420);
     });
 
     it('should NOT stun truck when sport car rams it at high speed (mass-gated stun)', () => {
