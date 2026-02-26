@@ -161,19 +161,46 @@ test.describe('e2e combat - EMP projectile', () => {
             await pageA.bringToFront();
             const initialState = await readDebugState(pageA);
             const initialProjectileCount = initialState?.projectileCount ?? 0;
+            const initialTargetState = await readDebugState(pageB);
+            const initialTargetStunned = initialTargetState?.activeEffectIds.includes('stunned') ?? false;
 
             await pageA.bringToFront();
             await setDrivingKeyState(pageA, 'KeyE', true);
             await pageA.waitForTimeout(450);
             await setDrivingKeyState(pageA, 'KeyE', false);
 
-            const state = await waitForDebugState(
-                pageA,
-                (s) => s.projectileCount > initialProjectileCount,
-                4_000,
-                'EMP projectile to spawn',
-            );
-            expect(state.projectileCount).toBeGreaterThan(initialProjectileCount);
+            const deadline = Date.now() + 4_000;
+            let sawProjectileInFlight = false;
+            let sawProjectileHit = false;
+            let lastShooterState: GTDebugState | null = null;
+            let lastTargetState: GTDebugState | null = null;
+
+            while (Date.now() < deadline) {
+                const [shooterState, targetState] = await Promise.all([readDebugState(pageA), readDebugState(pageB)]);
+                if (shooterState) {
+                    lastShooterState = shooterState;
+                    if (shooterState.projectileCount > initialProjectileCount) {
+                        sawProjectileInFlight = true;
+                    }
+                }
+                if (targetState) {
+                    lastTargetState = targetState;
+                    const targetStunned = targetState.activeEffectIds.includes('stunned');
+                    if (!initialTargetStunned && targetStunned) {
+                        sawProjectileHit = true;
+                    }
+                }
+
+                if (sawProjectileInFlight || sawProjectileHit) {
+                    break;
+                }
+                await pageA.waitForTimeout(100);
+            }
+
+            expect(
+                sawProjectileInFlight || sawProjectileHit,
+                `Timed out waiting for EMP projectile evidence. shooter=${JSON.stringify(lastShooterState)} target=${JSON.stringify(lastTargetState)}`,
+            ).toBe(true);
         } finally {
             await Promise.allSettled([pageA.close(), pageB.close()]);
         }

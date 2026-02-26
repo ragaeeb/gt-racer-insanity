@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { buildSpikeShotFxPayload } from '@/client/game/hooks/useNetworkConnection';
+import { buildSpikeShotFxPayload, computeDirtIntensityFromDistance } from '@/client/game/hooks/useNetworkConnection';
 import type { ServerSnapshotPayload, SnapshotPlayerState } from '@/shared/network/types';
 
 const createSnapshotPlayer = (id: string, x: number, z: number): SnapshotPlayerState => ({
@@ -77,5 +77,18 @@ describe('buildSpikeShotFxPayload', () => {
             targetZ: 16,
             triggeredAtMs: 4321,
         });
+    });
+});
+
+describe('computeDirtIntensityFromDistance', () => {
+    it('should return zero for invalid total race distance', () => {
+        expect(computeDirtIntensityFromDistance(100, 0)).toBe(0);
+        expect(computeDirtIntensityFromDistance(100, Number.NaN)).toBe(0);
+    });
+
+    it('should clamp intensity into [0, 1]', () => {
+        expect(computeDirtIntensityFromDistance(0, 1_000)).toBe(0);
+        expect(computeDirtIntensityFromDistance(500, 1_000)).toBe(0.5);
+        expect(computeDirtIntensityFromDistance(1_500, 1_000)).toBe(1);
     });
 });

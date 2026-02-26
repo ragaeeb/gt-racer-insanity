@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { clamp01 } from '@/shared/utils/math';
 
 type CameraShakeOptions = {
     damping: number;
@@ -15,10 +16,6 @@ type CameraShakeOptionsInput = Partial<CameraShakeOptions>;
 type CameraShakeTrigger = (intensity: number) => void;
 
 let cameraShakeTrigger: CameraShakeTrigger | null = null;
-
-const clamp01 = (value: number) => {
-    return Math.min(1, Math.max(0, value));
-};
 
 const createDefaultOptions = (): CameraShakeOptions => {
     return {
@@ -89,10 +86,15 @@ export class CameraShake {
             return;
         }
 
-        let remainingDt = dt;
         const maxStep = 1 / 120;
-        while (remainingDt > 0) {
+        const steps = Math.max(1, Math.ceil(dt / maxStep));
+        for (let i = 0; i < steps; i++) {
+            const consumedDt = i * maxStep;
+            const remainingDt = dt - consumedDt;
             const stepDt = Math.min(remainingDt, maxStep);
+            if (stepDt <= Number.EPSILON) {
+                break;
+            }
 
             const accelX = -this.options.spring * this.offset.x - this.options.damping * this.velocity.x;
             const accelY = -this.options.spring * this.offset.y - this.options.damping * this.velocity.y;
@@ -105,8 +107,6 @@ export class CameraShake {
             this.offset.x += this.velocity.x * stepDt;
             this.offset.y += this.velocity.y * stepDt;
             this.offset.z += this.velocity.z * stepDt;
-
-            remainingDt -= stepDt;
         }
 
         if (this.offset.lengthSq() <= this.options.settleOffsetSq && this.velocity.lengthSq() <= this.options.settleVelocitySq) {

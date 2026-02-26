@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { clamp01 } from '@/shared/utils/math';
 
 const SKIP_MATERIAL_NAMES = new Set(['Windows', 'Grey', 'Black', 'Headlights', 'TailLights', 'BrakeLight']);
 const WHEEL_MESH_RE = /wheel/i;
@@ -55,6 +56,20 @@ const toGrayscaleTexture = (src: THREE.Texture): THREE.Texture => {
 const shouldPaintMaterial = (mat: THREE.Material, isWheel: boolean): boolean =>
     hasColor(mat) && !SKIP_MATERIAL_NAMES.has(mat.name) && !isWheel;
 
+const DIRT_UNIFORM_DECLARATION = 'uniform float dirtIntensity;';
+
+export const injectDirtIntensityUniform = (fragmentShader: string): string => {
+    if (fragmentShader.includes(DIRT_UNIFORM_DECLARATION)) {
+        return fragmentShader;
+    }
+
+    if (fragmentShader.includes('#include <common>')) {
+        return fragmentShader.replace('#include <common>', `#include <common>\n${DIRT_UNIFORM_DECLARATION}`);
+    }
+
+    return `${DIRT_UNIFORM_DECLARATION}\n${fragmentShader}`;
+};
+
 /**
  * A reference to an active car paint material, exposing a live dirt-intensity
  * setter. The `material` property can be used for emissive flash effects.
@@ -80,6 +95,8 @@ export const createFallbackPaintMaterial = (
         clearcoatRoughness: 0.1,
         reflectivity: 0.8,
     });
+    // Intentionally ignore the fallback setter: fallback boxes are short-lived and
+    // real GLTF paint materials are the ones tracked in paintRefs for live updates.
     attachDirtOverlay(mat);
     clonedMaterialsOut?.add(mat);
     return mat;
@@ -97,6 +114,7 @@ const attachDirtOverlay = (mat: THREE.MeshPhysicalMaterial): ((value: number) =>
 
     mat.onBeforeCompile = (shader) => {
         shader.uniforms.dirtIntensity = { value: 0.0 };
+        shader.fragmentShader = injectDirtIntensityUniform(shader.fragmentShader);
         shader.fragmentShader = shader.fragmentShader.replace(
             '#include <dithering_fragment>',
             `
@@ -112,7 +130,7 @@ const attachDirtOverlay = (mat: THREE.MeshPhysicalMaterial): ((value: number) =>
     // Return a setter that targets whichever compiled shader instance is live
     return (value: number) => {
         if (cachedShader) {
-            (cachedShader.uniforms['dirtIntensity'] as { value: number }).value = value;
+            (cachedShader.uniforms['dirtIntensity'] as { value: number }).value = clamp01(value);
         }
     };
 };

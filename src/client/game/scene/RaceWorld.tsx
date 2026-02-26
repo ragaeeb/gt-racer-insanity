@@ -25,9 +25,13 @@ import type { ConnectionStatus, RaceState } from '@/shared/network/types';
 
 /**
  * Wire a particle pool to any cars in the session that haven't been wired yet.
- * Uses a Set as a guard to avoid redundant setParticlePool calls every frame.
+ * Uses a WeakSet as a guard to avoid redundant setParticlePool calls every frame.
  */
-const wireParticlePoolToCars = (pool: ParticlePool, session: RaceSession | undefined, wiredCars: Set<object>): void => {
+const wireParticlePoolToCars = (
+    pool: ParticlePool,
+    session: RaceSession | undefined,
+    wiredCars: WeakSet<object>,
+): void => {
     const localCar = session?.localCar;
     if (localCar && !wiredCars.has(localCar)) {
         localCar.setParticlePool(pool);
@@ -41,6 +45,12 @@ const wireParticlePoolToCars = (pool: ParticlePool, session: RaceSession | undef
             }
         }
     }
+};
+
+export const resolveParticlePoolCapacity = (hardwareConcurrency: number | undefined): number => {
+    const safeConcurrency =
+        typeof hardwareConcurrency === 'number' && Number.isFinite(hardwareConcurrency) ? hardwareConcurrency : 8;
+    return safeConcurrency < 4 ? 200 : 512;
 };
 
 type RaceWorldProps = {
@@ -71,7 +81,7 @@ export const RaceWorld = ({
     const inputManagerRef = useRef<InputManager | null>(null);
     const cameraShakeRef = useRef<CameraShake | null>(null);
     const particlePoolRef = useRef<ParticlePool | null>(null);
-    const wiredCarsRef = useRef(new Set<object>());
+    const wiredCarsRef = useRef<WeakSet<object>>(new WeakSet<object>());
 
     if (!inputManagerRef.current) {
         inputManagerRef.current = new InputManager();
@@ -89,8 +99,11 @@ export const RaceWorld = ({
             cameraShake.trigger(intensity);
         });
 
-        // Initialize particle pool
-        const particlePool = new ParticlePool(scene, 512);
+        const hardwareConcurrency = typeof navigator === 'undefined' ? undefined : navigator.hardwareConcurrency;
+        const maxParticles = resolveParticlePoolCapacity(hardwareConcurrency);
+
+        // Initialize particle pool (reduced capacity on low-end devices).
+        const particlePool = new ParticlePool(scene, maxParticles);
         particlePoolRef.current = particlePool;
         setGlobalParticlePool(particlePool);
 
@@ -105,8 +118,8 @@ export const RaceWorld = ({
                 particlePoolRef.current = null;
             }
             setGlobalParticlePool(null);
-            // Clear wired-cars tracking so the next pool creation rewires everything
-            wiredCarsRef.current.clear();
+            // Reset wired-cars tracking so the next pool creation rewires everything.
+            wiredCarsRef.current = new WeakSet<object>();
         };
     }, [camera, scene]);
 
@@ -150,7 +163,7 @@ export const RaceWorld = ({
             particlePool.update(dt);
             wireParticlePoolToCars(particlePool, sessionRef.current, wiredCarsRef.current);
         }
-    }, 1);
+    });
     useDiagnostics(sessionRef, cameraMetricsRef, wallClampCountRef);
 
     // TODO: Wire these to server config (requires server RPC or config sync)

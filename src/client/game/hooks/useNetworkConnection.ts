@@ -42,6 +42,7 @@ import type {
     RaceState,
     ServerSnapshotPayload,
 } from '@/shared/network/types';
+import { clamp01 } from '@/shared/utils/math';
 import { seededRandom } from '@/shared/utils/prng';
 
 const SHAKE_SPIKE_GRACE_PERIOD_MS = 1800;
@@ -56,10 +57,6 @@ const COLLISION_FORCE_METADATA_KEYS = [
     'impactForceMagnitude',
     'impactForce',
 ] as const;
-
-const clamp01 = (value: number) => {
-    return Math.min(1, Math.max(0, value));
-};
 
 const resolveCollisionForceMagnitude = (metadata: RaceEventPayload['metadata']) => {
     if (!metadata) {
@@ -91,6 +88,13 @@ const getSnapshotSpeedMps = (snapshot: ServerSnapshotPayload | null, playerId: s
         return null;
     }
     return Math.abs(player.speed);
+};
+
+export const computeDirtIntensityFromDistance = (distanceMeters: number, totalRaceDistanceMeters: number): number => {
+    if (!Number.isFinite(distanceMeters) || !Number.isFinite(totalRaceDistanceMeters) || totalRaceDistanceMeters <= 0) {
+        return 0;
+    }
+    return clamp01(distanceMeters / totalRaceDistanceMeters);
 };
 
 type CollisionShakeIntensityParams = {
@@ -438,6 +442,7 @@ export const useNetworkConnection = ({
                         typeof event.metadata?.rammerPlayerId === 'string' ? event.metadata.rammerPlayerId : null;
                     const rammerDriveLockMs =
                         typeof event.metadata?.rammerDriveLockMs === 'number' ? event.metadata.rammerDriveLockMs : 0;
+                    const collisionForce = resolveCollisionForceMagnitude(event.metadata) ?? 200;
                     const isLocalInvolved =
                         localPlayerId !== null &&
                         (event.playerId === localPlayerId ||
@@ -472,7 +477,6 @@ export const useNetworkConnection = ({
                             triggerCameraShake(shakeIntensity);
 
                             // Emit collision sparks on the local car
-                            const collisionForce = resolveCollisionForceMagnitude(event.metadata) ?? 200;
                             session.localCar?.onCollision(collisionForce);
                         }
 
@@ -505,9 +509,15 @@ export const useNetworkConnection = ({
                             }
                         }
                     }
-                    // Emit sparks on the colliding opponent so all players see the impact burst
-                    if (againstPlayerId) {
-                        const collisionForce = resolveCollisionForceMagnitude(event.metadata) ?? 200;
+                    // Emit sparks for both non-local participants so all clients see both cars impacted.
+                    if (event.playerId && event.playerId !== localPlayerId) {
+                        session.opponents.get(event.playerId)?.onCollision(collisionForce);
+                    }
+                    if (
+                        againstPlayerId &&
+                        againstPlayerId !== localPlayerId &&
+                        againstPlayerId !== event.playerId
+                    ) {
                         session.opponents.get(againstPlayerId)?.onCollision(collisionForce);
                     }
 
@@ -587,11 +597,18 @@ export const useNetworkConnection = ({
                 session.latestLocalSnapshot = localSnapshotPlayer;
                 session.latestLocalSnapshotSeq = localSnapshotPlayer ? snapshot.seq : null;
                 session.lastSnapshotReceivedAtMs = Date.now();
+                const totalRaceDistanceMeters = Math.max(
+                    getTrackManifestById(snapshot.raceState.trackId).lengthMeters * Math.max(snapshot.raceState.totalLaps, 1),
+                    1,
+                );
+                const toDirtIntensity = (distanceMeters: number) =>
+                    computeDirtIntensityFromDistance(distanceMeters, totalRaceDistanceMeters);
 
                 const localCar = session.localCar;
                 if (localCar && localSnapshotPlayer) {
                     localCar.targetPosition.set(localSnapshotPlayer.x, localSnapshotPlayer.y, localSnapshotPlayer.z);
                     localCar.targetRotationY = localSnapshotPlayer.rotationY;
+                    localCar.setDirtIntensity(toDirtIntensity(localSnapshotPlayer.progress.distanceMeters));
                     if (!session.hasLocalAuthoritativeTarget) {
                         session.hasLocalAuthoritativeTarget = true;
                         localCar.position.copy(localCar.targetPosition);
@@ -612,6 +629,7 @@ export const useNetworkConnection = ({
 
                     const opponentCar = session.opponents.get(snapshotPlayer.id);
                     if (opponentCar) {
+                        opponentCar.setDirtIntensity(toDirtIntensity(snapshotPlayer.progress.distanceMeters));
                         const flippedEffect = snapshotPlayer.activeEffects.find((e) => e.effectType === 'flipped');
                         const appliedAtMs = flippedEffect?.appliedAtMs ?? null;
                         const previousAppliedAtMs =

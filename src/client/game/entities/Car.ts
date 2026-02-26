@@ -7,6 +7,7 @@ import { CarVisual } from '@/client/game/entities/CarVisual';
 import type { PaintMaterialRef } from '@/client/game/paintSystem';
 import { applyCarPaint, createFallbackPaintMaterial } from '@/client/game/paintSystem';
 import type { InputManager } from '@/client/game/systems/InputManager';
+import type { ParticlePool } from '@/client/game/systems/ParticlePool';
 import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 import { FLIPPED_DURATION_MS } from '@/shared/game/effects/statusEffectManifest';
 import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
@@ -18,6 +19,41 @@ const AUDIO_FADE_RATE = 1.2;
 const FLIP_PROGRESS_DT_CAP_MS = 120;
 const FLIP_TOTAL_ROTATIONS = 1;
 const DOPPLER_DT_EPS = 1e-6;
+const LOW_END_PARTICLE_CAPACITY = 200;
+const LOW_END_EMISSION_INTERVAL_MULTIPLIER = 2;
+const DEFAULT_EMISSION_INTERVAL_MULTIPLIER = 1;
+
+const MATERIAL_TEXTURE_KEYS = [
+    'alphaMap',
+    'aoMap',
+    'bumpMap',
+    'clearcoatMap',
+    'clearcoatNormalMap',
+    'clearcoatRoughnessMap',
+    'displacementMap',
+    'emissiveMap',
+    'envMap',
+    'iridescenceMap',
+    'iridescenceThicknessMap',
+    'lightMap',
+    'map',
+    'metalnessMap',
+    'normalMap',
+    'roughnessMap',
+    'sheenColorMap',
+    'sheenRoughnessMap',
+    'specularColorMap',
+    'specularIntensityMap',
+    'thicknessMap',
+    'transmissionMap',
+] as const;
+
+const disposeMaterialTextures = (material: THREE.MeshStandardMaterial) => {
+    const textureSlots = material as unknown as Record<string, THREE.Texture | null | undefined>;
+    for (const key of MATERIAL_TEXTURE_KEYS) {
+        textureSlots[key]?.dispose();
+    }
+};
 
 export const advanceFlipElapsedMs = (elapsedMs: number, dt: number) => {
     const frameStepMs = Math.min(Math.max(dt * 1000, 0), FLIP_PROGRESS_DT_CAP_MS);
@@ -101,6 +137,14 @@ export class Car {
     public driftBoostTier: number = 0;
     private previousBoostTier: number = 0;
     private boostFlashIntensity: number = 0;
+
+    // Particle system for visual effects
+    private particlePool?: ParticlePool;
+    private particleEmissionIntervalMultiplier = DEFAULT_EMISSION_INTERVAL_MULTIPLIER;
+    private lastSmokeEmitTime = 0;
+    private lastBoostEmitTime = 0;
+    private readonly SMOKE_EMIT_INTERVAL = 0.05; // seconds between smoke particles
+    private readonly BOOST_EMIT_INTERVAL = 0.03; // seconds between boost particles
 
     /**
      * Friction multiplier of the current track segment the car occupies.
@@ -368,11 +412,122 @@ export class Car {
         this.updateSuspensionBounce(dt);
         this.updateDriftTilt();
         this.updateBoostFlash();
+        this.updateParticles(dt);
         this.updateAudio(dt);
 
         // Apply Doppler effect for remote cars
         if (!this.isLocalPlayer && listenerPosition && listenerVelocity) {
             this.updateDoppler(listenerPosition, listenerVelocity, dt);
+        }
+    }
+
+    /**
+     * Set the particle pool for emitting visual effects.
+     * Should be called by RaceWorld after creating the particle pool.
+     */
+    public setParticlePool(pool: ParticlePool): void {
+        this.particlePool = pool;
+        this.particleEmissionIntervalMultiplier =
+            pool.getCapacity() <= LOW_END_PARTICLE_CAPACITY
+                ? LOW_END_EMISSION_INTERVAL_MULTIPLIER
+                : DEFAULT_EMISSION_INTERVAL_MULTIPLIER;
+    }
+
+    /**
+     * Emit spark particles at a collision contact point.
+     * Called by collision handling code.
+     */
+    public emitCollisionSparks(
+        contactX: number,
+        contactY: number,
+        contactZ: number,
+        normalX?: number,
+        normalY?: number,
+        normalZ?: number,
+    ): void {
+        this.particlePool?.emitSpark(contactX, contactY, contactZ, normalX, normalY, normalZ);
+    }
+
+    /**
+     * Emit a burst of sparks scaled to collision force magnitude.
+     * Burst size: 1 spark per 50 N·s of force, capped at 12.
+     * Call this from network collision_bump handlers for immediate visual feedback.
+     *
+     * @param force - Contact force magnitude in N·s (from server event metadata)
+     */
+    public onCollision = (force: number): void => {
+        if (!this.particlePool) {
+            return;
+        }
+        const sparkCount = Math.min(Math.max(Math.floor(force / 50), 1), 12);
+        const cx = this.mesh.position.x;
+        const cy = this.mesh.position.y + 0.5;
+        const cz = this.mesh.position.z;
+        for (let i = 0; i < sparkCount; i++) {
+            this.particlePool.emitSpark(cx, cy, cz);
+        }
+    };
+
+    /**
+     * Update particle emissions based on car state.
+     */
+    private updateParticles(dt: number): void {
+        if (!this.particlePool) {
+            return;
+        }
+
+        // Update timing trackers
+        this.lastSmokeEmitTime += dt;
+        this.lastBoostEmitTime += dt;
+
+        const speed = this.controller.getSpeed();
+        const smokeInterval = this.SMOKE_EMIT_INTERVAL * this.particleEmissionIntervalMultiplier;
+        const boostInterval = this.BOOST_EMIT_INTERVAL * this.particleEmissionIntervalMultiplier;
+        const handbrakeActive =
+            this.isLocalPlayer && this.inputManager ? this.inputManager.isPrecisionOverrideActive() : false;
+        const shouldEmitDriftSmoke =
+            this.driftState === DriftState.INITIATING || this.driftState === DriftState.DRIFTING;
+        const shouldEmitHandbrakeSmoke = handbrakeActive && Math.abs(speed) > 5;
+
+        // Emit smoke during drift (INITIATING or DRIFTING) and local handbrake slides.
+        if (
+            (shouldEmitDriftSmoke || shouldEmitHandbrakeSmoke) &&
+            this.lastSmokeEmitTime >= smokeInterval
+        ) {
+            this.lastSmokeEmitTime = 0;
+
+            // Get rear wheel positions (approximate based on car position and rotation)
+            const rearOffset = -1.5; // Approximate rear of car
+            const sideOffset = 0.8; // Half track width
+
+            // Calculate wheel positions based on car rotation
+            const cosR = Math.cos(this.rotationY);
+            const sinR = Math.sin(this.rotationY);
+
+            // Left rear wheel
+            const leftRearX = this.position.x + cosR * rearOffset - sinR * sideOffset;
+            const leftRearZ = this.position.z + sinR * rearOffset + cosR * sideOffset;
+            this.particlePool.emitSmoke(leftRearX, this.position.y + 0.1, leftRearZ);
+
+            // Right rear wheel
+            const rightRearX = this.position.x + cosR * rearOffset + sinR * sideOffset;
+            const rightRearZ = this.position.z + sinR * rearOffset - cosR * sideOffset;
+            this.particlePool.emitSmoke(rightRearX, this.position.y + 0.1, rightRearZ);
+        }
+
+        // Emit boost trail during drift boost (tier > 0)
+        if (this.driftBoostTier > 0 && this.lastBoostEmitTime >= boostInterval) {
+            this.lastBoostEmitTime = 0;
+
+            // Exhaust position at rear of car
+            const exhaustOffset = -2.0;
+            const cosR = Math.cos(this.rotationY);
+            const sinR = Math.sin(this.rotationY);
+
+            const exhaustX = this.position.x + cosR * exhaustOffset;
+            const exhaustZ = this.position.z + sinR * exhaustOffset;
+
+            this.particlePool.emitBoost(exhaustX, this.position.y + 0.3, exhaustZ, this.driftBoostTier);
         }
     }
 
@@ -712,8 +867,8 @@ export class Car {
         this.disposeFallbackVisuals();
 
         for (const material of this.clonedMaterials) {
-            if (material instanceof THREE.MeshStandardMaterial && material.map) {
-                material.map.dispose();
+            if (material instanceof THREE.MeshStandardMaterial) {
+                disposeMaterialTextures(material);
             }
             material.dispose();
         }

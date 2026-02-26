@@ -218,6 +218,7 @@ export class CollisionManager {
             kind: 'collision_bump',
             metadata: {
                 againstPlayerId: pair.secondPlayerId,
+                contactForceMagnitude: forceMagnitude ?? null,
                 flippedPlayerId: didFlip ? bumpedPlayer.id : null,
                 rammerDriveLockMs: BUMP_DRIVE_RECOVERY_MS_RAMMER,
                 rammerPlayerId: rammerPlayer.id,

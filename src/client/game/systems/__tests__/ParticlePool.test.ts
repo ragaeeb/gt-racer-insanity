@@ -21,6 +21,12 @@ describe('ParticlePool', () => {
         expect(pool.getActiveCount()).toBe(0);
     });
 
+    it('should reject non-positive or non-integer maxParticles values', () => {
+        expect(() => new ParticlePool(scene, 0)).toThrow();
+        expect(() => new ParticlePool(scene, -4)).toThrow();
+        expect(() => new ParticlePool(scene, 3.5)).toThrow();
+    });
+
     it('should add points mesh to scene', () => {
         pool = new ParticlePool(scene, 128);
 
@@ -171,11 +177,10 @@ describe('ParticlePool', () => {
         // Verify mesh exists before dispose
         expect(mesh.geometry).toBeDefined();
         expect(mesh.material).toBeDefined();
+        expect(scene.children).toContain(mesh);
 
         // Dispose should not throw
         pool.dispose();
-
-        // After dispose, geometry and material should be cleaned up
-        // The dispose method is called on the internal resources
+        expect(scene.children).not.toContain(mesh);
     });
 });
