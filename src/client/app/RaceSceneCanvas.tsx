@@ -233,7 +233,9 @@ export const RaceSceneCanvas = memo(
                                     geometry.computeBoundingSphere();
                                 }
                                 if (geometry.boundingSphere) {
-                                    scratchBoundingSphere.copy(geometry.boundingSphere).applyMatrix4(object3D.matrixWorld);
+                                    scratchBoundingSphere
+                                        .copy(geometry.boundingSphere)
+                                        .applyMatrix4(object3D.matrixWorld);
                                     if (cameraFrustum.intersectsSphere(scratchBoundingSphere)) {
                                         frustumMeshCount += 1;
                                         if (frustumMeshSamples.length < 8) {

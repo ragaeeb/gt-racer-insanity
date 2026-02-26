@@ -601,6 +601,83 @@ const formatRaceDurationMs = (durationMs: number) => {
         .padStart(2, '0')}`;
 };
 
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
+
+const isPrivateLanIpv4 = (value: string) => {
+    if (value.startsWith('10.')) {
+        return true;
+    }
+    if (value.startsWith('192.168.')) {
+        return true;
+    }
+    const octets = value.split('.');
+    if (octets.length !== 4) {
+        return false;
+    }
+    const first = Number(octets[0]);
+    const second = Number(octets[1]);
+    return first === 172 && Number.isFinite(second) && second >= 16 && second <= 31;
+};
+
+const resolveShareOrigin = async () => {
+    if (typeof window === 'undefined') {
+        return '';
+    }
+
+    const locationUrl = new URL(window.location.href);
+    if (!LOCAL_HOSTNAMES.has(locationUrl.hostname)) {
+        return locationUrl.origin;
+    }
+
+    try {
+        const response = await fetch(`${clientConfig.serverUrl}/network-info`);
+        if (!response.ok) {
+            return locationUrl.origin;
+        }
+        const payload = (await response.json()) as { lanIpv4?: unknown };
+        const lanIpv4 = Array.isArray(payload.lanIpv4) ? payload.lanIpv4.filter((ip): ip is string => typeof ip === 'string') : [];
+        const preferredIp = lanIpv4.find((ip) => isPrivateLanIpv4(ip)) ?? lanIpv4[0];
+        if (!preferredIp) {
+            return locationUrl.origin;
+        }
+        const portSuffix = locationUrl.port.length > 0 ? `:${locationUrl.port}` : '';
+        return `${locationUrl.protocol}//${preferredIp}${portSuffix}`;
+    } catch {
+        return locationUrl.origin;
+    }
+};
+
+const buildShareRaceUrl = async (roomId: string) => {
+    if (typeof window === 'undefined' || roomId.trim().length === 0) {
+        return '';
+    }
+    const origin = await resolveShareOrigin();
+    if (!origin) {
+        return '';
+    }
+    const url = new URL(`${origin}/lobby`);
+    url.searchParams.set('room', roomId);
+    return url.toString();
+};
+
+const LOBBY_MODE_KEY = 'gt-lobby-mode';
+type LobbyMode = 'create' | 'join';
+
+const readLobbyMode = (): LobbyMode => {
+    if (typeof window === 'undefined') {
+        return 'join';
+    }
+    const value = window.sessionStorage.getItem(LOBBY_MODE_KEY);
+    return value === 'create' ? 'create' : 'join';
+};
+
+const writeLobbyMode = (mode: LobbyMode) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    window.sessionStorage.setItem(LOBBY_MODE_KEY, mode);
+};
+
 export const App = () => {
     const [playerName, setPlayerName] = useState(() => window.sessionStorage.getItem('gt-player-name-session') ?? '');
     const [nameInput, setNameInput] = useState(playerName);
@@ -636,7 +713,8 @@ export const App = () => {
     const pendingToasts = useHudStore((state) => state.pendingToasts);
     const clearPendingToast = useHudStore((state) => state.clearPendingToast);
     const latestSnapshot = useRuntimeStore((state) => state.latestSnapshot);
-    const roomIdFromUrl = new URLSearchParams(routeSearch).get('room') ?? '';
+    const routeParams = new URLSearchParams(routeSearch);
+    const roomIdFromUrl = routeParams.get('room') ?? '';
     const winnerName = raceState?.winnerPlayerId
         ? (latestSnapshot?.players.find((player) => player.id === raceState.winnerPlayerId)?.name ??
           raceState.winnerPlayerId)
@@ -752,6 +830,7 @@ export const App = () => {
             if (!response.ok) {
                 throw new Error('Server health check failed');
             }
+            writeLobbyMode('create');
             navigateTo('/lobby', generateRoomId());
         } catch {
             setHomeError('Server is not running');
@@ -771,6 +850,7 @@ export const App = () => {
         if (!sanitizedRoomId) {
             return;
         }
+        writeLobbyMode('join');
         navigateTo('/lobby', sanitizedRoomId);
     };
 
@@ -786,6 +866,25 @@ export const App = () => {
 
     const handleGenerateDebugLog = () => {
         getDiagControls()?.downloadReport();
+    };
+
+    const handleShareRaceLink = async () => {
+        const shareUrl = await buildShareRaceUrl(roomIdFromUrl);
+        if (!shareUrl) {
+            toast.error('No room URL available to share.');
+            return;
+        }
+
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(shareUrl);
+                toast.success('Race link copied to clipboard.');
+                return;
+            }
+        } catch {
+            // Fall through to error toast below.
+        }
+        toast.error('Clipboard unavailable. Please allow clipboard access and try again.');
     };
 
     const handleDiagnosticsEnabledChange = (enabled: boolean) => {
@@ -823,7 +922,8 @@ export const App = () => {
 
     /* ── Lobby / Pilot Config ── */
     if (routePath === '/lobby') {
-        const roomCode = new URLSearchParams(routeSearch).get('room') ?? '';
+        const roomCode = routeParams.get('room') ?? '';
+        const allowTrackSelection = readLobbyMode() === 'create';
 
         return (
             <div
@@ -938,6 +1038,7 @@ export const App = () => {
                     <div className="mt-10">
                         <LobbyCarPreview
                             onSelectColor={setSelectedColorId}
+                            allowTrackSelection={allowTrackSelection}
                             selectedVehicleId={selectedVehicleId}
                             selectedColorId={selectedColorId}
                             selectedTrackId={selectedTrackId}
@@ -1014,6 +1115,9 @@ export const App = () => {
                     </label>
                     <button id="generate-debug-log-btn" onClick={handleGenerateDebugLog} type="button">
                         EXPORT LOG
+                    </button>
+                    <button id="share-race-link-btn" onClick={handleShareRaceLink} type="button">
+                        SHARE RACE LINK
                     </button>
                     <div id="player-name-badge">{playerName || 'UNKNOWN'}</div>
                     {activeEffectIds.length > 0 && (

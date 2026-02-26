@@ -83,7 +83,7 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
     },
     {
         abilityId: 'turbo-boost',
-        colorPaletteIds: ['red', 'silver', 'black'],
+        colorPaletteIds: ['red', 'silver', 'blue'],
         id: 'bike',
         label: 'Motorcycle',
         physics: {
