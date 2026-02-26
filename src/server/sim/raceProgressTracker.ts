@@ -21,11 +21,28 @@ export type MutableRaceState = {
  * Mutates both `player.progress` and `raceState` in-place.
  */
 export class RaceProgressTracker {
+    /** Pre-computed slope correction factor for the entire track.
+     *  For flat tracks this is 1.0. For tracks with elevation, the actual
+     *  driven distance is longer than the flat Z-projection by this factor. */
+    private readonly slopeCorrectionFactor: number;
+
     constructor(
         private readonly roomId: string,
         private readonly trackManifest: TrackManifest,
         private readonly totalTrackLengthMeters: number,
-    ) {}
+    ) {
+        // Compute an overall slope correction: sum of each segment's slope
+        // distance vs. its flat projection length.
+        let slopeDist = 0;
+        let flatDist = 0;
+        for (const seg of trackManifest.segments) {
+            const rise = (seg.elevationEndM ?? 0) - (seg.elevationStartM ?? 0);
+            const run = seg.lengthMeters;
+            slopeDist += Math.sqrt(run * run + rise * rise);
+            flatDist += run;
+        }
+        this.slopeCorrectionFactor = flatDist > 0 ? slopeDist / flatDist : 1;
+    }
 
     updateProgress(
         player: SimPlayerState,
@@ -37,7 +54,10 @@ export class RaceProgressTracker {
         const previousLap = previousProgress.lap;
         const previousDistance = previousProgress.distanceMeters;
 
-        const clampedDistance = Math.max(0, Math.min(this.totalTrackLengthMeters, player.motion.positionZ));
+        // Apply slope correction: on elevated tracks the actual driven distance
+        // is longer than the flat Z-projection.
+        const clampedZ = Math.max(0, Math.min(this.totalTrackLengthMeters, player.motion.positionZ));
+        const clampedDistance = clampedZ * this.slopeCorrectionFactor;
         const nextDistance = Math.max(previousDistance, clampedDistance);
         const progressUpdate = advanceRaceProgress(
             previousProgress,

@@ -111,7 +111,12 @@ export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveSte
     const multipliers = getMotionMultipliers(player);
 
     applyScalarSpeed(player, dtSeconds, multipliers.movementMultiplier);
-    applySteering(player, rigidBody, multipliers.steeringMultiplier);
+
+    // Suppress steering when airborne — the grounded flag is set by
+    // snapPlayerToGround on the previous tick before this runs.
+    if (player.isGrounded) {
+        applySteering(player, rigidBody, multipliers.steeringMultiplier);
+    }
 
     const vehicleClass = getVehicleClassManifestById(player.vehicleId);
     const rotation = rigidBody.rotation();

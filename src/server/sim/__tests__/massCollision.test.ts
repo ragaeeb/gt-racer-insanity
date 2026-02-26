@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import type { RigidBody } from '@dimforge/rapier3d-compat';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
-import type { RaceEventPayload } from '@/shared/network/types';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
+import type { RaceEventPayload } from '@/shared/network/types';
 import { CollisionManager, toPairKey } from '../collisionManager';
 import { applyPlayerBumpResponse } from '../collisionSystem';
 import type { SimPlayerState } from '../types';
@@ -65,9 +65,11 @@ const createPlayer = (id: string, vehicleId: VehicleClassId, speed: number): Sim
         steering: 0,
         throttle: 0,
     },
+    isGrounded: true,
     lastProcessedInputSeq: 0,
     motion: {
         positionX: 0,
+        positionY: 0,
         positionZ: 0,
         rotationY: 0,
         speed,

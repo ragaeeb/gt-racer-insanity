@@ -35,9 +35,11 @@ const mockPlayer = (overrides: {
             steering: overrides.steering ?? 0,
             throttle: 1,
         },
+        isGrounded: true,
         lastProcessedInputSeq: 0,
         motion: {
             positionX: 0,
+            positionY: 0,
             positionZ: 0,
             rotationY: 0,
             speed: overrides.speed ?? 0,

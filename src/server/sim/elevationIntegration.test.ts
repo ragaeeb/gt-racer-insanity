@@ -86,9 +86,36 @@ describe('elevation snapshot integration', () => {
         expect(Number.isFinite(player!.z)).toBeTrue();
         expect(Number.isNaN(player!.y)).toBeFalse();
 
-        // On flat track, Y should be near ground level (0.5 ± margin)
-        expect(player!.y).toBeGreaterThan(-1);
-        expect(player!.y).toBeLessThan(5);
+        // On flat track, Y should be at ground-level (0) — NOT the collider center (0.5).
+        // Regression: the server previously sent the physics rigid body Y (which includes
+        // the half-height offset) instead of the visual ground-surface Y.
+        expect(player!.y).toBeGreaterThanOrEqual(-0.1);
+        expect(player!.y).toBeLessThanOrEqual(0.1);
+    });
+
+    // ──── Regression: floating car (positionY = collider center, not ground) ────
+
+    it('should send ground-level Y (0) in snapshot, not collider-center Y (0.5)', () => {
+        const sim = createSimulation();
+        sim.joinPlayer('p1', 'Alice', 'sport', 'red');
+
+        // Run enough ticks for the ground snap to fully converge
+        let nowMs = 1_000;
+        for (let step = 1; step <= 60; step += 1) {
+            nowMs = 1_000 + step * 16;
+            sim.queueInputFrame('p1', createInputFrame('ELEV-TEST', step, nowMs, 0, 0));
+            sim.step(nowMs);
+            sim.drainRaceEvents();
+        }
+
+        const snapshot = sim.buildSnapshot(nowMs);
+        const player = snapshot.players.find((p) => p.id === 'p1');
+
+        expect(player).toBeDefined();
+        // Ground-level Y on a flat track must be ~0.0, NOT ~0.5.
+        // If this test fails with y ≈ 0.5, the server is leaking the physics
+        // collider-center Y instead of the visual ground-surface Y.
+        expect(player!.y).toBeCloseTo(0, 1);
     });
 
     it('should produce finite Y for all players in a multi-player race', () => {
@@ -324,17 +351,20 @@ describe('canyon-sprint track with elevation enabled', () => {
         let nowMs = 1_000;
         for (let step = 1; step <= 600; step += 1) {
             nowMs = 1_000 + step * 16;
-            sim.queueInputFrame('ELEV-TEST', createInputFrame('ELEV-TEST', step, nowMs, 1, 0.05));
+            sim.queueInputFrame('p1', createInputFrame('ELEV-TEST', step, nowMs, 1, 0.05));
             sim.step(nowMs);
             sim.drainRaceEvents();
         }
 
         const snapshot = sim.buildSnapshot(nowMs);
-        const player = snapshot.players[0];
+        const player = snapshot.players.find((p) => p.id === 'p1');
 
         expect(player).toBeDefined();
         expect(Number.isFinite(player!.y)).toBeTrue();
         expect(player!.y).toBeGreaterThan(-2);
+        // Verify the player actually moved forward (was receiving input)
+        expect(player!.z).toBeGreaterThan(10);
+        expect(player!.speed).toBeGreaterThan(0);
     });
 
     it('should handle different vehicle classes on canyon-sprint', () => {

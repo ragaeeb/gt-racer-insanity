@@ -59,6 +59,7 @@ export class RoomSimulation {
     private readonly combatTuning = DEFAULT_GAMEPLAY_TUNING.combat;
     private readonly deployInputPressedByPlayerId = new Map<string, boolean>();
     private readonly deployableLifetimeTicks: number;
+    private readonly isTrackFlat: boolean;
     private obstacleColliderHandles = new Set<number>();
     private tickMetrics = {
         lastTickDurationMs: 0,
@@ -86,6 +87,11 @@ export class RoomSimulation {
         });
         this.totalTrackLengthMeters = trackColliders.totalTrackLengthMeters;
         this.obstacleColliderHandles = trackColliders.obstacleColliderHandles;
+
+        // Pre-compute: all segments have zero elevation → skip per-tick raycasts
+        this.isTrackFlat = this.trackManifest.segments.every(
+            (seg) => (seg.elevationStartM ?? 0) === 0 && (seg.elevationEndM ?? 0) === 0,
+        );
 
         this.state = {
             activePowerups: this.buildActivePowerups(options.totalLaps),
@@ -483,8 +489,18 @@ export class RoomSimulation {
                 continue;
             }
 
+            // Step 1: sync rigid body position → player.motion (includes positionY)
             syncPlayerMotionFromRigidBody(player, rigidBody, this.trackBoundaryX);
-            snapPlayerToGround(this.rapierContext.rapier, player, rigidBody, this.rapierContext.world, this.dtSeconds);
+            // Step 2: ground-snap overwrites positionY with snapped value.
+            // This ordering is intentional — do not reorder steps 1 and 2.
+            snapPlayerToGround(
+                this.rapierContext.rapier,
+                player,
+                rigidBody,
+                this.rapierContext.world,
+                this.dtSeconds,
+                this.isTrackFlat,
+            );
             this.progressTracker.updateProgress(player, this.state.raceState, nowMs, this.pushRaceEvent);
         }
 
@@ -558,7 +574,7 @@ export class RoomSimulation {
             name: player.name,
             rotationY: player.motion.rotationY,
             x: player.motion.positionX,
-            y: player.motion.positionY ?? 0,
+            y: player.motion.positionY,
             z: player.motion.positionZ,
         };
     };

@@ -53,8 +53,10 @@ export const getElevationAtZ = (segments: TrackSegmentManifest[], zPosition: num
         accumulated = segmentEnd;
     }
 
-    // Past end of all segments — default to 0
-    return 0;
+    // Past end of all segments — return the final segment's terminal elevation
+    // to avoid discontinuous drops (important for multi-lap races).
+    const lastSegment = segments[segments.length - 1];
+    return lastSegment ? (lastSegment.elevationEndM ?? 0) : 0;
 };
 
 /**
@@ -79,7 +81,34 @@ export const getBankAngleAtZ = (segments: TrackSegmentManifest[], zPosition: num
         accumulated = segmentEnd;
     }
 
+    // Past end of all segments — return the final segment's bank angle
+    const lastSegment = segments[segments.length - 1];
+    if (lastSegment) {
+        const angleDeg = interpolateBankAngle(lastSegment);
+        return (angleDeg * Math.PI) / 180;
+    }
     return 0;
+};
+
+/**
+ * Returns the elevation at a distance that wraps around the track length.
+ * Use this in multi-lap contexts where Z may exceed total track length.
+ *
+ * @param segments - Ordered array of track segments
+ * @param distance - Global distance (may exceed lap length)
+ * @param lapLength - Total track length for one lap
+ * @returns Elevation in meters at the wrapped Z
+ */
+export const getElevationAtDistanceModuloLap = (
+    segments: TrackSegmentManifest[],
+    distance: number,
+    lapLength: number,
+): number => {
+    if (lapLength <= 0) {
+        return 0;
+    }
+    const wrappedZ = ((distance % lapLength) + lapLength) % lapLength;
+    return getElevationAtZ(segments, wrappedZ);
 };
 
 /**

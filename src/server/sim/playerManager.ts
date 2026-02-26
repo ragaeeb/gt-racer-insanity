@@ -41,6 +41,8 @@ export class PlayerManager {
 
         const rigidBody = world.createRigidBody(rigidBodyDesc);
         rigidBody.setEnabledRotations(false, true, false, true);
+        // Y translation enabled for ground-snap elevation support (M5-Elevation).
+        // TODO(M5-D): Use getElevationAtZ(segments, spawnZ) for spawn Y instead of 0.45.
         rigidBody.setEnabledTranslations(true, true, true, true);
         rigidBody.setAdditionalMass(Math.max(vehicleClass.physics.collisionMass, 1), true);
 
@@ -94,9 +96,11 @@ export class PlayerManager {
             driftContext: createInitialDriftContext(),
             id: playerId,
             inputState: { boost: false, brake: false, handbrake: false, steering: 0, throttle: 0 },
+            isGrounded: true,
             lastProcessedInputSeq: -1,
             motion: {
                 positionX: getSpawnPositionX(playerIndex),
+                positionY: 0,
                 positionZ: getSpawnPositionZ(playerIndex),
                 rotationY: 0,
                 speed: 0,
@@ -127,9 +131,11 @@ export class PlayerManager {
         player.activeEffects = [];
         player.driftContext = createInitialDriftContext();
         player.inputState = { boost: false, brake: false, handbrake: false, steering: 0, throttle: 0 };
+        player.isGrounded = true;
         player.lastProcessedInputSeq = -1;
         player.motion = {
             positionX: getSpawnPositionX(playerIndex),
+            positionY: 0,
             positionZ: getSpawnPositionZ(playerIndex),
             rotationY: 0,
             speed: 0,

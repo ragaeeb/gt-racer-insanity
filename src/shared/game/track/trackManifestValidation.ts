@@ -56,8 +56,31 @@ export const validateTrackManifests = (manifests: TrackManifest[]): TrackManifes
             issues.push(`Track ${manifest.id} segment lengths must sum to track length`);
         }
 
-        for (const segment of manifest.segments) {
+        for (let i = 0; i < manifest.segments.length; i++) {
+            const segment = manifest.segments[i]!;
             validateSegmentElevation(manifest.id, segment, issues);
+
+            // Reject negative elevation (no below-ground segments)
+            const elevStart = segment.elevationStartM ?? 0;
+            const elevEnd = segment.elevationEndM ?? 0;
+            if (elevStart < 0) {
+                issues.push(`Track ${manifest.id} segment ${segment.id} has negative elevationStartM (${elevStart})`);
+            }
+            if (elevEnd < 0) {
+                issues.push(`Track ${manifest.id} segment ${segment.id} has negative elevationEndM (${elevEnd})`);
+            }
+
+            // Boundary continuity: segment N's end must match segment N+1's start
+            if (i < manifest.segments.length - 1) {
+                const nextSegment = manifest.segments[i + 1]!;
+                const nextElevStart = nextSegment.elevationStartM ?? 0;
+                if (Math.abs(elevEnd - nextElevStart) > 0.001) {
+                    issues.push(
+                        `Track ${manifest.id} has elevation gap between segments ${segment.id} and ${nextSegment.id}: ` +
+                            `end=${elevEnd} != start=${nextElevStart}`,
+                    );
+                }
+            }
         }
     }
 

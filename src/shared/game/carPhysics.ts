@@ -9,7 +9,7 @@ export type CarMotionState = {
     speed: number;
     rotationY: number;
     positionX: number;
-    positionY?: number;
+    positionY: number;
     positionZ: number;
 };
 
@@ -75,6 +75,7 @@ export const stepCarMotion = (
 
     return {
         positionX,
+        positionY: 0,
         positionZ,
         rotationY,
         speed,

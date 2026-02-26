@@ -1,6 +1,7 @@
 import type RAPIER from '@dimforge/rapier3d-compat';
 import type { RigidBody, World } from '@dimforge/rapier3d-compat';
 import type { SimPlayerState } from '@/server/sim/types';
+import { PLAYER_COLLIDER_HALF_HEIGHT_METERS } from '@/shared/physics/constants';
 
 // ─────────────────────── constants ────────────────────────────
 
@@ -19,9 +20,6 @@ const GRAVITY = 9.81;
 
 /** Vertical offset from the ray origin above the player's Y position. */
 const RAY_PROBE_OFFSET_Y = 1;
-
-/** Half-height of the player collider — the target Y sits this far above ground. */
-const PLAYER_COLLIDER_HALF_HEIGHT = 0.5;
 
 // ─────────────────── pure snap logic ──────────────────────────
 
@@ -50,7 +48,7 @@ export type GroundSnapResult = {
  *
  * Design: The raycast probes from `currentY + RAY_PROBE_OFFSET_Y` downward.
  * If a hit is found, groundY = probeOriginY - hitDistance, and the player
- * snaps to groundY + PLAYER_COLLIDER_HALF_HEIGHT.
+ * snaps to groundY + PLAYER_COLLIDER_HALF_HEIGHT_METERS.
  */
 export const computeGroundSnap = (input: GroundSnapInput): GroundSnapResult => {
     const { currentY, groundHitDistance, currentYVelocity, dtSeconds } = input;
@@ -59,7 +57,7 @@ export const computeGroundSnap = (input: GroundSnapInput): GroundSnapResult => {
         // Grounded
         const probeOriginY = currentY + RAY_PROBE_OFFSET_Y;
         const groundY = probeOriginY - groundHitDistance;
-        const targetY = groundY + PLAYER_COLLIDER_HALF_HEIGHT;
+        const targetY = groundY + PLAYER_COLLIDER_HALF_HEIGHT_METERS;
 
         // Damp Y velocity: zero negative (stop falling), damp positive (prevent bounce)
         let yVelocity = currentYVelocity;
@@ -91,6 +89,12 @@ export const computeGroundSnap = (input: GroundSnapInput): GroundSnapResult => {
 
 // ─────────────── Rapier integration layer ─────────────────────
 
+// Composite filter flag: exclude sensors (obstacles, QueryFilterFlags.EXCLUDE_SENSORS = 8)
+// and dynamic bodies (players, QueryFilterFlags.EXCLUDE_DYNAMIC = 4).
+// We use numeric literals because the WASM module must be initialised before
+// the enum values are populated, and this constant is evaluated at module load.
+const GROUND_RAY_FILTER = 8 | 4; // EXCLUDE_SENSORS | EXCLUDE_DYNAMIC
+
 /**
  * Performs a downward raycast and snaps the player's rigid body to the
  * detected ground surface. Called once per tick per player, after the
@@ -98,6 +102,11 @@ export const computeGroundSnap = (input: GroundSnapInput): GroundSnapResult => {
  *
  * This function wraps the pure `computeGroundSnap` with actual Rapier
  * raycast calls so the core logic remains testable without WASM.
+ *
+ * **Ordering note**: This must run *after* `syncPlayerMotionFromRigidBody`
+ * which sets positionY from the Rapier rigid body. This function then
+ * overwrites positionY with the snapped value. The two-step ordering
+ * in `roomSimulation.ts` is intentional and cannot be reordered.
  */
 export const snapPlayerToGround = (
     rapier: typeof RAPIER,
@@ -105,21 +114,42 @@ export const snapPlayerToGround = (
     rigidBody: RigidBody,
     world: World,
     dtSeconds: number,
+    isTrackFlat = false,
 ): GroundSnapResult => {
     const pos = rigidBody.translation();
     const vel = rigidBody.linvel();
+
+    // Fast path: on completely flat tracks, skip the Rapier raycast entirely
+    // and snap to ground level directly. This avoids per-tick raycast overhead
+    // for all current production tracks (which have zero elevation).
+    if (isTrackFlat) {
+        const flatResult = computeGroundSnap({
+            currentY: pos.y,
+            currentYVelocity: vel.y,
+            dtSeconds,
+            // Simulate a hit at the expected distance for flat ground (Y=0)
+            groundHitDistance: pos.y + RAY_PROBE_OFFSET_Y,
+        });
+
+        if (flatResult.grounded && flatResult.targetY !== undefined) {
+            rigidBody.setTranslation({ x: pos.x, y: flatResult.targetY, z: pos.z }, true);
+            // Store ground-surface Y for rendering (not collider-center Y)
+            player.motion.positionY = flatResult.targetY - PLAYER_COLLIDER_HALF_HEIGHT_METERS;
+        } else {
+            player.motion.positionY = pos.y - PLAYER_COLLIDER_HALF_HEIGHT_METERS;
+        }
+
+        rigidBody.setLinvel({ x: vel.x, y: flatResult.yVelocity, z: vel.z }, true);
+        // Persist grounded flag for steering suppression on next tick
+        player.isGrounded = flatResult.grounded;
+        return flatResult;
+    }
 
     // Probe origin: slightly above the player to avoid self-intersection
     const probeOriginY = pos.y + RAY_PROBE_OFFSET_Y;
     const ray = new rapier.Ray({ x: pos.x, y: probeOriginY, z: pos.z }, { x: 0, y: -1, z: 0 });
 
-    // Exclude sensors (obstacles) and dynamic bodies (other players) from
-    // the ground-detect raycast.  Only static track geometry should respond.
-    const EXCLUDE_SENSORS = 8; // QueryFilterFlags.EXCLUDE_SENSORS
-    const EXCLUDE_DYNAMIC = 4; // QueryFilterFlags.EXCLUDE_DYNAMIC
-    const filterFlags = EXCLUDE_SENSORS | EXCLUDE_DYNAMIC;
-
-    const hit = world.castRay(ray, GROUND_SNAP_MAX_DISTANCE, true, filterFlags);
+    const hit = world.castRay(ray, GROUND_SNAP_MAX_DISTANCE, true, GROUND_RAY_FILTER);
 
     const result = computeGroundSnap({
         currentY: pos.y,
@@ -129,16 +159,20 @@ export const snapPlayerToGround = (
     });
 
     if (result.grounded && result.targetY !== undefined) {
-        // Snap Y position
+        // Snap rigid body to collider-center Y
         rigidBody.setTranslation({ x: pos.x, y: result.targetY, z: pos.z }, true);
-        player.motion.positionY = result.targetY;
+        // Store ground-surface Y for rendering (not collider-center Y)
+        player.motion.positionY = result.targetY - PLAYER_COLLIDER_HALF_HEIGHT_METERS;
     } else {
         // Airborne — update Y from velocity
-        player.motion.positionY = pos.y;
+        player.motion.positionY = pos.y - PLAYER_COLLIDER_HALF_HEIGHT_METERS;
     }
 
     // Apply computed Y velocity
     rigidBody.setLinvel({ x: vel.x, y: result.yVelocity, z: vel.z }, true);
+
+    // Persist grounded flag so applyDriveStep can suppress steering when airborne
+    player.isGrounded = result.grounded;
 
     return result;
 };

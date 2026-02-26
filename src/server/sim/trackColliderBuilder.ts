@@ -1,5 +1,6 @@
 import type RAPIER from '@dimforge/rapier3d-compat';
 import type { World } from '@dimforge/rapier3d-compat';
+import { getElevationAtZ } from '@/shared/game/track/elevationHelpers';
 import type { TrackSegmentManifest } from '@/shared/game/track/trackManifest';
 import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
 import { generateTrackObstacles } from '@/shared/game/track/trackObstacles';
@@ -132,14 +133,16 @@ const createSegmentFloorColliders = (
 
             world.createCollider(floorDesc, staticBody);
 
-            // --- per-segment walls ---
+            // --- per-segment walls (rotated to match slope/bank) ---
             const leftWall = rapier.ColliderDesc.cuboid(1, wallHeightMeters, transform.halfLength)
                 .setTranslation(-halfTrackWidth - 1, transform.wallCenterY, transform.centerZ)
+                .setRotation(transform.rotation)
                 .setFriction(1.4)
                 .setRestitution(0.08);
 
             const rightWall = rapier.ColliderDesc.cuboid(1, wallHeightMeters, transform.halfLength)
                 .setTranslation(halfTrackWidth + 1, transform.wallCenterY, transform.centerZ)
+                .setRotation(transform.rotation)
                 .setFriction(1.4)
                 .setRestitution(0.08);
 
@@ -156,13 +159,16 @@ const createSegmentFloorColliders = (
 const createFinishBarrierCollider = (
     rapier: typeof RAPIER,
     world: World,
+    segments: TrackSegmentManifest[],
     trackWidthMeters: number,
     totalTrackLengthMeters: number,
     wallHeightMeters: number,
     staticBody: ReturnType<World['createRigidBody']>,
 ) => {
+    // Compute the finish barrier Y from the terminal segment's elevation
+    const terminalElevation = getElevationAtZ(segments, totalTrackLengthMeters);
     const finishBarrier = rapier.ColliderDesc.cuboid(trackWidthMeters * 0.5, wallHeightMeters, 1)
-        .setTranslation(0, wallHeightMeters, totalTrackLengthMeters + 1)
+        .setTranslation(0, terminalElevation + wallHeightMeters, totalTrackLengthMeters + 1)
         .setFriction(1.4)
         .setRestitution(0.06)
         .setActiveEvents(rapier.ActiveEvents.COLLISION_EVENTS);
@@ -180,14 +186,17 @@ const createObstacleColliders = (
     seed: number,
     totalLaps: number,
     trackWidthMeters: number,
+    segments: TrackSegmentManifest[],
     staticBody: ReturnType<World['createRigidBody']>,
 ): Set<number> => {
     const layout = generateTrackObstacles(trackId, seed, totalLaps, trackWidthMeters);
     const handles = new Set<number>();
 
     for (const obs of layout.obstacles) {
+        // Compute obstacle Y from the segment elevation at its Z position
+        const elevationY = getElevationAtZ(segments, obs.positionZ);
         const colliderDesc = rapier.ColliderDesc.cuboid(obs.halfSize, obs.halfSize, obs.halfSize)
-            .setTranslation(obs.positionX, obs.halfSize, obs.positionZ)
+            .setTranslation(obs.positionX, elevationY + obs.halfSize, obs.positionZ)
             .setSensor(true)
             .setActiveEvents(rapier.ActiveEvents.COLLISION_EVENTS);
 
@@ -231,6 +240,7 @@ export const buildTrackColliders = (
     const finishBarrierColliderHandle = createFinishBarrierCollider(
         rapier,
         world,
+        trackManifest.segments,
         trackWidthMeters,
         totalTrackLengthMeters,
         wallHeightMeters,
@@ -244,6 +254,7 @@ export const buildTrackColliders = (
         options.seed,
         totalLaps,
         trackWidthMeters,
+        trackManifest.segments,
         staticBody,
     );
 

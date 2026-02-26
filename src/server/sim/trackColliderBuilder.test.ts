@@ -4,7 +4,6 @@ import { computeSegmentColliderTransform, eulerToQuaternion } from './trackColli
 
 // ───────────────────────── helpers ──────────────────────────
 
-const IDENTITY_QUAT = { w: 1, x: 0, y: 0, z: 0 };
 const FLOAT_EPSILON = 1e-6;
 
 const quatIsIdentity = (q: { w: number; x: number; y: number; z: number }) =>
@@ -272,7 +271,8 @@ describe('wall collider elevation', () => {
 
         // Wall base should match floor elevation
         // wallCenterY = midElevation + wallHeight
-        expect(transform.wallCenterY).toBeGreaterThan(IDENTITY_QUAT.w); // > 1 (non-zero elevation)
+        // wallCenterY = midElevation(8) + wallHeight(3) = 11
+        expect(transform.wallCenterY).toBeCloseTo(11, 1);
     });
 
     it('should produce wall colliders at ground level for flat segments', () => {

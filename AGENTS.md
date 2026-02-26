@@ -16,7 +16,7 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Always use `bun`, never `npm` or `node` commands.
 - Tests must use `bun:test`.
 - Test descriptions must follow `it('should ...')`.
-- Tests should always be adjacent to their implementation files, never in `__tests__` folders.
+- Unit tests should always be adjacent to their implementation files, never in `__tests__` folders. E2E tests live in `testing/`.
 - Prefer `type` over `interface`.
 - Prefer arrow functions over standalone `function` declarations.
 - Keep TS and runtime features aligned with `ESNext`.

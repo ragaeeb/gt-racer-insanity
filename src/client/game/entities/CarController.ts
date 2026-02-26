@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { InputManager } from '@/client/game/systems/InputManager';
-import { DEFAULT_CAR_PHYSICS_CONFIG, stepCarMotion, type CarPhysicsConfig } from '@/shared/game/carPhysics';
+import { type CarPhysicsConfig, DEFAULT_CAR_PHYSICS_CONFIG, stepCarMotion } from '@/shared/game/carPhysics';
 
 type CarControllerState = {
     position: THREE.Vector3;
@@ -24,11 +24,7 @@ export class CarController {
         this._movementMultiplier = Math.max(0, multiplier);
     };
 
-    public updateLocal = (
-        state: CarControllerState,
-        inputManager: InputManager,
-        dt: number
-    ): CarControllerState => {
+    public updateLocal = (state: CarControllerState, inputManager: InputManager, dt: number): CarControllerState => {
         if (Date.now() < this.driveLockUntilMs) {
             this.speed = 0;
             this.cruiseLatchActive = false;
@@ -40,14 +36,10 @@ export class CarController {
             };
         }
 
-        const isUpPressed =
-            inputManager.isKeyPressed('KeyW') || inputManager.isKeyPressed('ArrowUp');
-        const isDownPressed =
-            inputManager.isKeyPressed('KeyS') || inputManager.isKeyPressed('ArrowDown');
-        const isLeftPressed =
-            inputManager.isKeyPressed('KeyA') || inputManager.isKeyPressed('ArrowLeft');
-        const isRightPressed =
-            inputManager.isKeyPressed('KeyD') || inputManager.isKeyPressed('ArrowRight');
+        const isUpPressed = inputManager.isKeyPressed('KeyW') || inputManager.isKeyPressed('ArrowUp');
+        const isDownPressed = inputManager.isKeyPressed('KeyS') || inputManager.isKeyPressed('ArrowDown');
+        const isLeftPressed = inputManager.isKeyPressed('KeyA') || inputManager.isKeyPressed('ArrowLeft');
+        const isRightPressed = inputManager.isKeyPressed('KeyD') || inputManager.isKeyPressed('ArrowRight');
         const isCruiseEnabled = inputManager.isCruiseControlEnabled();
         const isPrecisionOverrideActive = inputManager.isPrecisionOverrideActive();
         const m = this._movementMultiplier;
@@ -69,23 +61,24 @@ export class CarController {
         }
 
         const shouldAutoCruise =
-            isCruiseEnabled &&
-            !isPrecisionOverrideActive &&
-            this.cruiseLatchActive &&
-            !isDownPressed;
+            isCruiseEnabled && !isPrecisionOverrideActive && this.cruiseLatchActive && !isDownPressed;
 
-        const scaledConfig = m === 1 ? this.physicsConfig : {
-            ...this.physicsConfig,
-            maxForwardSpeed: effectiveMaxForward,
-            maxReverseSpeed: this.physicsConfig.maxReverseSpeed * m,
-            acceleration: this.physicsConfig.acceleration * m,
-        };
+        const scaledConfig =
+            m === 1
+                ? this.physicsConfig
+                : {
+                      ...this.physicsConfig,
+                      maxForwardSpeed: effectiveMaxForward,
+                      maxReverseSpeed: this.physicsConfig.maxReverseSpeed * m,
+                      acceleration: this.physicsConfig.acceleration * m,
+                  };
 
         const movement = stepCarMotion(
             {
                 speed: this.speed,
                 rotationY: state.rotationY,
                 positionX: state.position.x,
+                positionY: state.position.y,
                 positionZ: state.position.z,
             },
             {
@@ -109,7 +102,7 @@ export class CarController {
     public updateRemote = (
         state: CarControllerState,
         targetPosition: THREE.Vector3,
-        targetRotationY: number
+        targetRotationY: number,
     ): CarControllerState => {
         const nextPosition = state.position.clone().lerp(targetPosition, 0.2);
         const diff = targetRotationY - state.rotationY;
