@@ -32,6 +32,24 @@ const SCENERY_THEME_PALETTES: Record<TrackThemeId, SceneryThemePalette> = {
         decorationSecondary: 0xaa8866,
         rockColor: 0x8b6b4a,
     },
+    'cyberpunk-night': {
+        buildingColors: [0x13172a, 0x1a2037, 0x20284a, 0x152038, 0x1f3251],
+        buildingWindow: 0x2de0ff,
+        lightColor: 0xff55f3,
+        lightEmissive: 0xff00dd,
+        decorationPrimary: 0x00e5ff,
+        decorationSecondary: 0x7d50ff,
+        rockColor: 0x242034,
+    },
+    'desert-sunset': {
+        buildingColors: [0xa9835d, 0xbd9469, 0x8d6f4d],
+        buildingWindow: 0x6b4a2e,
+        lightColor: 0xffc98f,
+        lightEmissive: 0xff9d54,
+        decorationPrimary: 0x5c8f3e,
+        decorationSecondary: 0xd9b075,
+        rockColor: 0xb4865e,
+    },
 };
 
 type BuildingDescriptor = {
@@ -70,15 +88,47 @@ type MesaDescriptor = {
     z: number;
 };
 
+type BillboardDescriptor = {
+    height: number;
+    x: number;
+    z: number;
+};
+
+type CactusDescriptor = {
+    armHeight: number;
+    hasSecondArm: boolean;
+    height: number;
+    x: number;
+    z: number;
+};
+
 const BUILDING_ZONE_INTERVAL = 40;
 const STREET_LIGHT_INTERVAL = 60;
 const TRACK_EDGE_OFFSET = 15;
+const BILLBOARD_INTERVAL = 90;
+const CACTUS_INTERVAL = 70;
+
+// LOD visibility distance thresholds per scenery type (meters)
+const LOD_DISTANCE_BUILDINGS = 400;
+const LOD_DISTANCE_STREET_LIGHTS = 200;
+const LOD_DISTANCE_TRAFFIC_CONES = 100;
+const LOD_DISTANCE_ROCK_PILLARS = 500;
+const LOD_DISTANCE_MESAS = 500;
+const LOD_DISTANCE_BILLBOARDS = 300;
+const LOD_DISTANCE_CACTI = 200;
+
+type SceneryLODGroup = {
+    center: THREE.Vector3;
+    maxVisibleDistance: number;
+    mesh: THREE.InstancedMesh;
+};
 
 export class SceneryManager {
     private readonly objects: THREE.Object3D[] = [];
     private readonly geometries: THREE.BufferGeometry[] = [];
     private readonly materials: THREE.Material[] = [];
     private readonly palette: SceneryThemePalette;
+    private readonly lodGroups: SceneryLODGroup[] = [];
     private logicalObjectCount = 0;
 
     constructor(
@@ -92,19 +142,52 @@ export class SceneryManager {
     }
 
     public build = () => {
-        if (this.themeId === 'sunny-day') {
-            this.placeCityBuildings();
-            this.placeStreetLights();
-            this.placeTrafficCones();
-        } else {
-            this.placeRockPillars();
-            this.placeMesaFormations();
-            this.placeStreetLights();
+        switch (this.themeId) {
+            case 'sunny-day':
+                this.placeCityBuildings();
+                this.placeStreetLights();
+                this.placeTrafficCones();
+                return;
+            case 'canyon-dusk':
+                this.placeRockPillars();
+                this.placeMesaFormations();
+                this.placeStreetLights();
+                return;
+            case 'cyberpunk-night':
+                this.placeCityBuildings();
+                this.placeStreetLights();
+                this.placeNeonBillboards();
+                return;
+            case 'desert-sunset':
+                this.placeRockPillars();
+                this.placeMesaFormations();
+                this.placeStreetLights();
+                this.placeCacti();
+                return;
+            default:
+                this.placeCityBuildings();
+                this.placeStreetLights();
+                this.placeTrafficCones();
         }
     };
 
     public getObjectCount = (): number => {
         return this.logicalObjectCount;
+    };
+
+    /**
+     * Updates LOD visibility for all scenery groups based on camera distance.
+     * Call once per frame from the render loop.
+     */
+    public update = (camera: THREE.Camera): void => {
+        for (const group of this.lodGroups) {
+            const dist = camera.position.distanceTo(group.center);
+            group.mesh.visible = dist < group.maxVisibleDistance;
+        }
+    };
+
+    public getLODGroupCount = (): number => {
+        return this.lodGroups.length;
     };
 
     private buildingMaterials: THREE.MeshStandardMaterial[] = [];
@@ -227,6 +310,15 @@ export class SceneryManager {
             instancedMesh.computeBoundingSphere();
             this.scene.add(instancedMesh);
             this.objects.push(instancedMesh);
+
+            // Register LOD visibility group with average building position
+            const center = new THREE.Vector3();
+            for (const b of group) {
+                center.x += b.x;
+                center.z += b.z;
+            }
+            center.divideScalar(group.length);
+            this.lodGroups.push({ center, maxVisibleDistance: LOD_DISTANCE_BUILDINGS, mesh: instancedMesh });
         }
 
         this.logicalObjectCount += buildings.length;
@@ -320,6 +412,24 @@ export class SceneryManager {
         this.scene.add(bulbsInstancedMesh);
         this.objects.push(bulbsInstancedMesh);
 
+        // Register LOD visibility groups for street lights
+        const lightCenter = new THREE.Vector3();
+        for (const l of lights) {
+            lightCenter.x += l.x;
+            lightCenter.z += l.z;
+        }
+        lightCenter.divideScalar(lights.length);
+        this.lodGroups.push({
+            center: lightCenter.clone(),
+            maxVisibleDistance: LOD_DISTANCE_STREET_LIGHTS,
+            mesh: polesInstancedMesh,
+        });
+        this.lodGroups.push({
+            center: lightCenter.clone(),
+            maxVisibleDistance: LOD_DISTANCE_STREET_LIGHTS,
+            mesh: bulbsInstancedMesh,
+        });
+
         this.logicalObjectCount += totalLights;
     };
 
@@ -363,6 +473,19 @@ export class SceneryManager {
         instancedMesh.computeBoundingSphere();
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
+
+        // Register LOD visibility group for cones
+        const coneCenter = new THREE.Vector3();
+        for (const c of cones) {
+            coneCenter.x += c.x;
+            coneCenter.z += c.z;
+        }
+        coneCenter.divideScalar(cones.length);
+        this.lodGroups.push({
+            center: coneCenter,
+            maxVisibleDistance: LOD_DISTANCE_TRAFFIC_CONES,
+            mesh: instancedMesh,
+        });
 
         this.logicalObjectCount += cones.length;
     };
@@ -416,6 +539,19 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
+        // Register LOD visibility group for rock pillars
+        const pillarCenter = new THREE.Vector3();
+        for (const p of pillars) {
+            pillarCenter.x += p.x;
+            pillarCenter.z += p.z;
+        }
+        pillarCenter.divideScalar(pillars.length);
+        this.lodGroups.push({
+            center: pillarCenter,
+            maxVisibleDistance: LOD_DISTANCE_ROCK_PILLARS,
+            mesh: instancedMesh,
+        });
+
         this.logicalObjectCount += pillars.length;
     };
 
@@ -467,7 +603,198 @@ export class SceneryManager {
         this.scene.add(instancedMesh);
         this.objects.push(instancedMesh);
 
+        // Register LOD visibility group for mesa formations
+        const mesaCenter = new THREE.Vector3();
+        for (const m of mesas) {
+            mesaCenter.x += m.x;
+            mesaCenter.z += m.z;
+        }
+        mesaCenter.divideScalar(mesas.length);
+        this.lodGroups.push({ center: mesaCenter, maxVisibleDistance: LOD_DISTANCE_MESAS, mesh: instancedMesh });
+
         this.logicalObjectCount += mesas.length;
+    };
+
+    private placeNeonBillboards = () => {
+        const halfWidth = this.trackWidth / 2;
+        const count = Math.floor(this.trackLength / BILLBOARD_INTERVAL);
+        if (count === 0) {
+            return;
+        }
+
+        const billboardGeo = new THREE.BoxGeometry(8, 3, 0.4);
+        const billboardMat = new THREE.MeshStandardMaterial({
+            color: this.palette.decorationPrimary,
+            emissive: this.palette.decorationSecondary,
+            emissiveIntensity: 2.4,
+            roughness: 0.35,
+            metalness: 0.25,
+            toneMapped: false,
+        });
+
+        this.geometries.push(billboardGeo);
+        this.materials.push(billboardMat);
+
+        const billboards: BillboardDescriptor[] = [];
+        for (let i = 0; i < count; i++) {
+            const z = i * BILLBOARD_INTERVAL + 45 + this.random() * 25;
+            const side = this.random() > 0.5 ? 1 : -1;
+            const x = side * (halfWidth + 10 + this.random() * 14);
+            const height = 9 + this.random() * 6;
+            billboards.push({ height, x, z });
+        }
+
+        const instancedMesh = new THREE.InstancedMesh(billboardGeo, billboardMat, billboards.length);
+        instancedMesh.castShadow = false;
+        instancedMesh.receiveShadow = false;
+        instancedMesh.frustumCulled = true;
+
+        const matrix = new THREE.Matrix4();
+        for (let i = 0; i < billboards.length; i++) {
+            const billboard = billboards[i];
+            matrix.compose(
+                new THREE.Vector3(billboard.x, billboard.height, billboard.z),
+                new THREE.Quaternion(),
+                new THREE.Vector3(1, 1, 1),
+            );
+            instancedMesh.setMatrixAt(i, matrix);
+        }
+
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        instancedMesh.computeBoundingSphere();
+        this.scene.add(instancedMesh);
+        this.objects.push(instancedMesh);
+
+        // Register LOD visibility group for billboards
+        const bbCenter = new THREE.Vector3();
+        for (const bb of billboards) {
+            bbCenter.x += bb.x;
+            bbCenter.z += bb.z;
+        }
+        bbCenter.divideScalar(billboards.length);
+        this.lodGroups.push({ center: bbCenter, maxVisibleDistance: LOD_DISTANCE_BILLBOARDS, mesh: instancedMesh });
+
+        this.logicalObjectCount += billboards.length;
+    };
+
+    private placeCacti = () => {
+        const halfWidth = this.trackWidth / 2;
+        const count = Math.floor(this.trackLength / CACTUS_INTERVAL);
+        if (count === 0) {
+            return;
+        }
+
+        const trunkGeo = new THREE.CylinderGeometry(0.35, 0.45, 1, 7);
+        const armGeo = new THREE.CylinderGeometry(0.16, 0.2, 1, 6);
+        const trunkMat = new THREE.MeshStandardMaterial({
+            color: this.palette.decorationPrimary,
+            roughness: 0.86,
+            metalness: 0.04,
+        });
+        const armMat = new THREE.MeshStandardMaterial({
+            color: this.palette.decorationPrimary,
+            roughness: 0.82,
+            metalness: 0.03,
+        });
+
+        this.geometries.push(trunkGeo, armGeo);
+        this.materials.push(trunkMat, armMat);
+
+        const cacti: CactusDescriptor[] = [];
+        for (let i = 0; i < count; i++) {
+            const z = i * CACTUS_INTERVAL + 25 + this.random() * 30;
+            const side = this.random() > 0.5 ? 1 : -1;
+            const x = side * (halfWidth + 12 + this.random() * 22);
+            const height = 2.8 + this.random() * 3.8;
+            const armHeight = 1.1 + this.random() * 1.8;
+            cacti.push({
+                armHeight,
+                hasSecondArm: this.random() > 0.35,
+                height,
+                x,
+                z,
+            });
+        }
+
+        const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, cacti.length);
+        trunkMesh.castShadow = true;
+        trunkMesh.receiveShadow = false;
+        trunkMesh.frustumCulled = true;
+
+        const leftArmMesh = new THREE.InstancedMesh(armGeo, armMat, cacti.length);
+        leftArmMesh.castShadow = true;
+        leftArmMesh.receiveShadow = false;
+        leftArmMesh.frustumCulled = true;
+
+        const rightArmCount = cacti.filter((cactus) => cactus.hasSecondArm).length;
+        const rightArmMesh = new THREE.InstancedMesh(armGeo, armMat, rightArmCount);
+        rightArmMesh.castShadow = true;
+        rightArmMesh.receiveShadow = false;
+        rightArmMesh.frustumCulled = true;
+
+        const matrix = new THREE.Matrix4();
+        const leftArmQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.PI / 2));
+        const rightArmQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -Math.PI / 2));
+
+        let rightArmIndex = 0;
+        for (let i = 0; i < cacti.length; i++) {
+            const cactus = cacti[i];
+
+            matrix.compose(
+                new THREE.Vector3(cactus.x, cactus.height / 2, cactus.z),
+                new THREE.Quaternion(),
+                new THREE.Vector3(1, cactus.height, 1),
+            );
+            trunkMesh.setMatrixAt(i, matrix);
+
+            matrix.compose(
+                new THREE.Vector3(cactus.x - 0.48, cactus.armHeight, cactus.z),
+                leftArmQuat,
+                new THREE.Vector3(1, 0.95 + this.random() * 0.45, 1),
+            );
+            leftArmMesh.setMatrixAt(i, matrix);
+
+            if (cactus.hasSecondArm) {
+                matrix.compose(
+                    new THREE.Vector3(cactus.x + 0.48, cactus.armHeight + 0.35, cactus.z),
+                    rightArmQuat,
+                    new THREE.Vector3(1, 0.8 + this.random() * 0.4, 1),
+                );
+                rightArmMesh.setMatrixAt(rightArmIndex, matrix);
+                rightArmIndex += 1;
+            }
+        }
+
+        trunkMesh.instanceMatrix.needsUpdate = true;
+        trunkMesh.computeBoundingSphere();
+        leftArmMesh.instanceMatrix.needsUpdate = true;
+        leftArmMesh.computeBoundingSphere();
+        rightArmMesh.instanceMatrix.needsUpdate = true;
+        rightArmMesh.computeBoundingSphere();
+
+        this.scene.add(trunkMesh);
+        this.objects.push(trunkMesh);
+        this.scene.add(leftArmMesh);
+        this.objects.push(leftArmMesh);
+        this.scene.add(rightArmMesh);
+        this.objects.push(rightArmMesh);
+
+        // Register LOD visibility groups for cacti
+        const cactiCenter = new THREE.Vector3();
+        for (const c of cacti) {
+            cactiCenter.x += c.x;
+            cactiCenter.z += c.z;
+        }
+        cactiCenter.divideScalar(cacti.length);
+        this.lodGroups.push({ center: cactiCenter.clone(), maxVisibleDistance: LOD_DISTANCE_CACTI, mesh: trunkMesh });
+        this.lodGroups.push({ center: cactiCenter.clone(), maxVisibleDistance: LOD_DISTANCE_CACTI, mesh: leftArmMesh });
+        this.lodGroups.push({
+            center: cactiCenter.clone(),
+            maxVisibleDistance: LOD_DISTANCE_CACTI,
+            mesh: rightArmMesh,
+        });
+
+        this.logicalObjectCount += cacti.length;
     };
 
     public dispose = () => {
@@ -480,6 +807,7 @@ export class SceneryManager {
             }
         }
         this.objects.length = 0;
+        this.lodGroups.length = 0;
         this.logicalObjectCount = 0;
 
         for (const geo of this.geometries) {

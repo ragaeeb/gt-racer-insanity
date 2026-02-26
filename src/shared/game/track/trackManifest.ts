@@ -1,8 +1,8 @@
 import type { HazardManifest } from '@/shared/game/hazard/hazardManifest';
 
-export type TrackId = 'sunset-loop' | 'canyon-sprint';
+export type TrackId = 'sunset-loop' | 'canyon-sprint' | 'neon-city' | 'desert-oasis';
 
-export type TrackThemeId = 'sunny-day' | 'canyon-dusk';
+export type TrackThemeId = 'sunny-day' | 'canyon-dusk' | 'cyberpunk-night' | 'desert-sunset';
 
 export type TrackCheckpointManifest = {
     id: string;
@@ -106,6 +106,75 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
             { frictionMultiplier: 1, id: 'seg-d', lengthMeters: 275 },
         ],
         themeId: 'canyon-dusk',
+        totalLaps: 3,
+    },
+    {
+        checkpoints: [
+            { id: 'cp-1', x: 0, z: 300 },
+            { id: 'cp-2', x: 5, z: 700 },
+            { id: 'cp-3', x: -5, z: 1_100 },
+        ],
+        hazardSpawns: [
+            { hazardId: 'spike-strip', id: 'hz-1', x: 5, z: 250 },
+            { hazardId: 'puddle-trap', id: 'hz-2', x: -5, z: 550 },
+            { hazardId: 'spike-strip', id: 'hz-3', x: 0, z: 850 },
+        ],
+        id: 'neon-city',
+        label: 'Neon City',
+        lengthMeters: 1_200,
+        powerupSpawns: [
+            { id: 'pu-1', powerupId: 'powerup-speed', x: 0, z: 150 },
+            { id: 'pu-2', powerupId: 'powerup-speed', x: 3, z: 400 },
+            { id: 'pu-3', powerupId: 'powerup-speed', x: -3, z: 650 },
+            { id: 'pu-4', powerupId: 'powerup-speed', x: 0, z: 950 },
+        ],
+        segments: [
+            { frictionMultiplier: 1.0, id: 'seg-a', lengthMeters: 200 },
+            { bankAngleDeg: 15, frictionMultiplier: 1.0, id: 'seg-b', lengthMeters: 150 },
+            { elevationEndM: 5, elevationStartM: 0, frictionMultiplier: 0.95, id: 'seg-c', lengthMeters: 200 },
+            { elevationEndM: 5, elevationStartM: 5, frictionMultiplier: 1.0, id: 'seg-d', lengthMeters: 150 },
+            { elevationEndM: 0, elevationStartM: 5, frictionMultiplier: 1.0, id: 'seg-e', lengthMeters: 200 },
+            { frictionMultiplier: 1.0, id: 'seg-f', lengthMeters: 300 },
+        ],
+        themeId: 'cyberpunk-night',
+        totalLaps: 3,
+    },
+    {
+        checkpoints: [
+            { id: 'cp-1', x: 0, z: 350 },
+            { id: 'cp-2', x: 4, z: 750 },
+            { id: 'cp-3', x: -4, z: 1_200 },
+        ],
+        hazardSpawns: [
+            { hazardId: 'spike-strip', id: 'hz-1', x: 6, z: 300 },
+            { hazardId: 'puddle-trap', id: 'hz-2', x: -6, z: 700 },
+            { hazardId: 'spike-strip', id: 'hz-3', x: 0, z: 1_100 },
+        ],
+        id: 'desert-oasis',
+        label: 'Desert Oasis',
+        lengthMeters: 1_400,
+        powerupSpawns: [
+            { id: 'pu-1', powerupId: 'powerup-speed', x: 0, z: 200 },
+            { id: 'pu-2', powerupId: 'powerup-speed', x: 4, z: 500 },
+            { id: 'pu-3', powerupId: 'powerup-speed', x: -4, z: 900 },
+            { id: 'pu-4', powerupId: 'powerup-speed', x: 0, z: 1_250 },
+        ],
+        segments: [
+            { frictionMultiplier: 0.85, id: 'seg-a', lengthMeters: 250 },
+            { elevationEndM: 10, elevationStartM: 0, frictionMultiplier: 1.0, id: 'seg-b', lengthMeters: 200 },
+            {
+                bankAngleDeg: 20,
+                elevationEndM: 10,
+                elevationStartM: 10,
+                frictionMultiplier: 1.0,
+                id: 'seg-c',
+                lengthMeters: 150,
+            },
+            { elevationEndM: 0, elevationStartM: 10, frictionMultiplier: 0.9, id: 'seg-d', lengthMeters: 200 },
+            { frictionMultiplier: 0.85, id: 'seg-e', lengthMeters: 300 },
+            { frictionMultiplier: 1.0, id: 'seg-f', lengthMeters: 300 },
+        ],
+        themeId: 'desert-sunset',
         totalLaps: 3,
     },
 ];

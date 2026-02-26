@@ -34,6 +34,22 @@ const TRACK_THEME_PALETTES: Record<TrackThemeId, TrackPalette> = {
         wall: 0xbe6d45,
         wallEmissive: 0x542d1e,
     },
+    'cyberpunk-night': {
+        line: 0x3af6ff,
+        obstacle: 0xff4fd8,
+        obstacleEmissive: 0x550a43,
+        road: 0x1a2037,
+        wall: 0x6f44ff,
+        wallEmissive: 0x2a1a66,
+    },
+    'desert-sunset': {
+        line: 0xffe4b8,
+        obstacle: 0xd88b4a,
+        obstacleEmissive: 0x6a3819,
+        road: 0x7a5a3a,
+        wall: 0xd59c62,
+        wallEmissive: 0x7a4a26,
+    },
     'sunny-day': {
         line: 0xf9f4dc,
         obstacle: 0xff6f5d,

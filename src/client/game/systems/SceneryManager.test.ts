@@ -20,6 +20,20 @@ describe('SceneryManager', () => {
         expect(manager.getObjectCount()).toBeGreaterThan(0);
     });
 
+    it('should place objects for cyberpunk-night theme', () => {
+        const scene = createScene();
+        const manager = new SceneryManager(scene, seededRandom(42), 76, 2700, 'cyberpunk-night');
+        manager.build();
+        expect(manager.getObjectCount()).toBeGreaterThan(0);
+    });
+
+    it('should place objects for desert-sunset theme', () => {
+        const scene = createScene();
+        const manager = new SceneryManager(scene, seededRandom(42), 76, 2700, 'desert-sunset');
+        manager.build();
+        expect(manager.getObjectCount()).toBeGreaterThan(0);
+    });
+
     it('should produce deterministic logical object count with same seed', () => {
         const scene1 = createScene();
         const m1 = new SceneryManager(scene1, seededRandom(42), 76, 2700, 'sunny-day');
