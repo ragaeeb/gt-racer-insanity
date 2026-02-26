@@ -1,22 +1,21 @@
 import { describe, expect, it } from 'bun:test';
+import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
 import {
-    DEFAULT_CAR_PHYSICS_CONFIG,
-    stepCarMotion,
     type CarControlState,
     type CarMotionState,
     type CarPhysicsConfig,
+    DEFAULT_CAR_PHYSICS_CONFIG,
+    stepCarMotion,
 } from './carPhysics';
-import { DEFAULT_TRACK_WIDTH_METERS } from './track/trackManifest';
 import { BOOST_MOVEMENT_MULTIPLIER } from './effects/statusEffectManifest';
-import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
+import { DEFAULT_TRACK_WIDTH_METERS } from './track/trackManifest';
 
 const TRACK_BOUNDARY_X = DEFAULT_TRACK_WIDTH_METERS * 0.5 - PLAYER_COLLIDER_HALF_WIDTH_METERS;
 
-const clamp = (value: number, min: number, max: number) =>
-    Math.max(min, Math.min(value, max));
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
 
 const fullThrottle: CarControlState = { isUp: true, isDown: false, isLeft: false, isRight: false };
-const origin: CarMotionState = { speed: 0, rotationY: 0, positionX: 0, positionZ: 0 };
+const origin: CarMotionState = { speed: 0, rotationY: 0, positionX: 0, positionY: 0, positionZ: 0 };
 const dt = 1 / 60;
 
 const scaleConfig = (config: CarPhysicsConfig, multiplier: number): CarPhysicsConfig => ({

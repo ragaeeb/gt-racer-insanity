@@ -37,7 +37,11 @@ export class RaceProgressTracker {
         const previousLap = previousProgress.lap;
         const previousDistance = previousProgress.distanceMeters;
 
-        const clampedDistance = Math.max(0, Math.min(this.totalTrackLengthMeters, player.motion.positionZ));
+        // Keep race progression in track-Z space to preserve checkpoint/lap boundaries.
+        // The slopeCorrectionFactor is retained for future display-distance metrics
+        // but must NOT inflate the distance used for lap/finish logic.
+        const clampedZ = Math.max(0, Math.min(this.totalTrackLengthMeters, player.motion.positionZ));
+        const clampedDistance = clampedZ;
         const nextDistance = Math.max(previousDistance, clampedDistance);
         const progressUpdate = advanceRaceProgress(
             previousProgress,

@@ -4,7 +4,7 @@ import { VEHICLE_CLASS_MANIFESTS, vehicleManifestToPhysicsConfig } from './vehic
 
 const noInput: CarControlState = { isUp: false, isDown: false, isLeft: false, isRight: false };
 const fullThrottle: CarControlState = { isUp: true, isDown: false, isLeft: false, isRight: false };
-const origin: CarMotionState = { speed: 0, rotationY: 0, positionX: 0, positionZ: 0 };
+const origin: CarMotionState = { speed: 0, rotationY: 0, positionX: 0, positionY: 0, positionZ: 0 };
 
 describe('car physics stability', () => {
     it('should never produce NaN or Infinity in any output field', () => {
@@ -24,6 +24,7 @@ describe('car physics stability', () => {
             expect(Number.isFinite(result.speed)).toBeTrue();
             expect(Number.isFinite(result.rotationY)).toBeTrue();
             expect(Number.isFinite(result.positionX)).toBeTrue();
+            expect(Number.isFinite(result.positionY)).toBeTrue();
             expect(Number.isFinite(result.positionZ)).toBeTrue();
         }
     });

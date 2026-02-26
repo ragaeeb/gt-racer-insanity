@@ -22,9 +22,11 @@ const mockPlayer = (overrides: {
     driftContext: createInitialDriftContext(),
     id: overrides.id ?? 'p1',
     inputState: { boost: false, brake: false, handbrake: false, steering: 0, throttle: 1 },
+    isGrounded: true,
     lastProcessedInputSeq: 0,
     motion: {
         positionX: overrides.positionX ?? 0,
+        positionY: 0,
         positionZ: overrides.positionZ ?? 0,
         rotationY: overrides.rotationY ?? 0,
         speed: overrides.speed ?? 10,
@@ -353,7 +355,9 @@ describe('Projectile System - Lifecycle', () => {
         // Simulate: target was hit recently (timestamp set 100ms ago).
         target.lastHitByProjectileAtMs = 4900;
         const initialEffectsLength = target.activeEffects.length;
-        const initialStunnedExpiresAtMs = target.activeEffects.find((effect) => effect.effectType === 'stunned')?.expiresAtMs;
+        const initialStunnedExpiresAtMs = target.activeEffects.find(
+            (effect) => effect.effectType === 'stunned',
+        )?.expiresAtMs;
 
         const state = mockRoomState([owner, target], [proj]);
         const nowMs = 5000;

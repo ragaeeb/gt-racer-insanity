@@ -11,6 +11,9 @@ export type TrackCheckpointManifest = {
 };
 
 export type TrackSegmentManifest = {
+    bankAngleDeg?: number;
+    elevationEndM?: number;
+    elevationStartM?: number;
     frictionMultiplier: number;
     id: string;
     lengthMeters: number;
@@ -92,6 +95,10 @@ export const TRACK_MANIFESTS: TrackManifest[] = [
             { id: 'pu-2', powerupId: 'powerup-speed', x: -10, z: 500 },
             { id: 'pu-3', powerupId: 'powerup-speed', x: 8, z: 780 },
         ],
+        // TODO: Elevation and banking data are commented out until the floor
+        // collider system supports proper ramp geometry (trimesh / heightfield).
+        // Rotated cuboids do not correctly model sloped surfaces — the car
+        // falls through the floor on segments with non-zero elevation.
         segments: [
             { frictionMultiplier: 1, id: 'seg-a', lengthMeters: 275 },
             { frictionMultiplier: 0.92, id: 'seg-b', lengthMeters: 275 },

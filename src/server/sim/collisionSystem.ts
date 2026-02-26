@@ -111,7 +111,17 @@ export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveSte
     const multipliers = getMotionMultipliers(player);
 
     applyScalarSpeed(player, dtSeconds, multipliers.movementMultiplier);
-    applySteering(player, rigidBody, multipliers.steeringMultiplier);
+
+    // Suppress steering when airborne — the grounded flag is set by
+    // snapPlayerToGround on the previous tick before this runs.
+    if (player.isGrounded) {
+        applySteering(player, rigidBody, multipliers.steeringMultiplier);
+    } else {
+        // Clear stale yaw angular velocity so the car doesn't continue
+        // rotating in mid-air from a pre-airborne steering input.
+        const angVel = rigidBody.angvel();
+        rigidBody.setAngvel({ x: angVel.x, y: 0, z: angVel.z }, true);
+    }
 
     const vehicleClass = getVehicleClassManifestById(player.vehicleId);
     const rotation = rigidBody.rotation();
@@ -178,6 +188,7 @@ export const syncPlayerMotionFromRigidBody = (
     }
 
     player.motion.positionX = x;
+    player.motion.positionY = position.y;
     player.motion.positionZ = position.z;
     player.motion.rotationY = yawRadians;
 };

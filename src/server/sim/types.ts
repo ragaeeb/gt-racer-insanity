@@ -11,6 +11,8 @@ export type SimPlayerState = {
     driftContext: DriftContext;
     id: string;
     inputState: InputFrameControlState;
+    /** Whether the player is currently on the ground (set by groundSnapSystem). */
+    isGrounded: boolean;
     lastHitByProjectileAtMs?: number;
     lastProcessedInputSeq: number;
     motion: CarMotionState;

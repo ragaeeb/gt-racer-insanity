@@ -11,6 +11,7 @@ import { CollisionManager } from './collisionManager';
 import { applyDriveStep, drainStartedCollisions, syncPlayerMotionFromRigidBody } from './collisionSystem';
 import { checkDeployableCollisions, spawnDeployable, updateDeployables } from './deployableSystem';
 import { tickStatusEffects } from './effectSystem';
+import { snapPlayerToGround } from './groundSnapSystem';
 import { applyHazardTriggers, type HazardTrigger } from './hazardSystem';
 import { InputQueue } from './inputQueue';
 import { PlayerManager } from './playerManager';
@@ -58,6 +59,7 @@ export class RoomSimulation {
     private readonly combatTuning = DEFAULT_GAMEPLAY_TUNING.combat;
     private readonly deployInputPressedByPlayerId = new Map<string, boolean>();
     private readonly deployableLifetimeTicks: number;
+    private readonly isTrackFlat: boolean;
     private obstacleColliderHandles = new Set<number>();
     private tickMetrics = {
         lastTickDurationMs: 0,
@@ -85,6 +87,12 @@ export class RoomSimulation {
         });
         this.totalTrackLengthMeters = trackColliders.totalTrackLengthMeters;
         this.obstacleColliderHandles = trackColliders.obstacleColliderHandles;
+
+        // Pre-compute: all segments have zero elevation and zero banking → skip per-tick raycasts
+        this.isTrackFlat = this.trackManifest.segments.every(
+            (seg) =>
+                (seg.elevationStartM ?? 0) === 0 && (seg.elevationEndM ?? 0) === 0 && (seg.bankAngleDeg ?? 0) === 0,
+        );
 
         this.state = {
             activePowerups: this.buildActivePowerups(options.totalLaps),
@@ -482,7 +490,18 @@ export class RoomSimulation {
                 continue;
             }
 
+            // Step 1: sync rigid body position → player.motion (includes positionY)
             syncPlayerMotionFromRigidBody(player, rigidBody, this.trackBoundaryX);
+            // Step 2: ground-snap overwrites positionY with snapped value.
+            // This ordering is intentional — do not reorder steps 1 and 2.
+            snapPlayerToGround(
+                this.rapierContext.rapier,
+                player,
+                rigidBody,
+                this.rapierContext.world,
+                this.dtSeconds,
+                this.isTrackFlat,
+            );
             this.progressTracker.updateProgress(player, this.state.raceState, nowMs, this.pushRaceEvent);
         }
 
@@ -556,7 +575,7 @@ export class RoomSimulation {
             name: player.name,
             rotationY: player.motion.rotationY,
             x: player.motion.positionX,
-            y: 0,
+            y: player.motion.positionY,
             z: player.motion.positionZ,
         };
     };

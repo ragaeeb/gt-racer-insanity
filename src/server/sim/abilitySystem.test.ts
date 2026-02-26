@@ -16,9 +16,11 @@ const createPlayer = (id: string): SimPlayerState => {
             steering: 0,
             throttle: 0,
         },
+        isGrounded: true,
         lastProcessedInputSeq: 0,
         motion: {
             positionX: 0,
+            positionY: 0,
             positionZ: 0,
             rotationY: 0,
             speed: 0,
@@ -49,7 +51,7 @@ describe('ability system', () => {
                 targetPlayerId: null,
             },
             1_000,
-            cooldownStore
+            cooldownStore,
         );
 
         expect(result.applied).toEqual(true);
@@ -71,7 +73,7 @@ describe('ability system', () => {
                 targetPlayerId: null,
             },
             1_000,
-            cooldownStore
+            cooldownStore,
         );
         const second = applyAbilityActivation(
             players,
@@ -82,7 +84,7 @@ describe('ability system', () => {
                 targetPlayerId: null,
             },
             1_001,
-            cooldownStore
+            cooldownStore,
         );
 
         expect(first.applied).toEqual(true);

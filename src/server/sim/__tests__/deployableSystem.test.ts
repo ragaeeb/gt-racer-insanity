@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
 import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
-import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 import {
     checkDeployableCollisions,
@@ -9,7 +8,8 @@ import {
     spawnDeployable,
     updateDeployables,
 } from '../deployableSystem';
-import type { ActiveDeployable, SimPlayerState } from '../types';
+import type { ActiveDeployable } from '../types';
+import { mockPlayer } from './testFactories';
 
 const combatTuning = DEFAULT_GAMEPLAY_TUNING.combat;
 const oilSlickLifetimeTicks = combatTuning.deployableOilSlickLifetimeTicks;
@@ -32,36 +32,6 @@ const createInputFrame = (roomId: string, seq: number, timestampMs: number, boos
         timestampMs,
     };
 };
-
-const mockPlayer = (overrides: { id?: string; x?: number; z?: number; rotationY?: number }): SimPlayerState => ({
-    activeEffects: [],
-    colorId: 'red',
-    driftContext: createInitialDriftContext(),
-    id: overrides.id ?? 'player-1',
-    inputState: {
-        boost: false,
-        brake: false,
-        handbrake: false,
-        steering: 0,
-        throttle: 0,
-    },
-    lastProcessedInputSeq: 0,
-    motion: {
-        positionX: overrides.x ?? 0,
-        positionZ: overrides.z ?? 0,
-        rotationY: overrides.rotationY ?? 0,
-        speed: 0,
-    },
-    name: 'Driver',
-    progress: {
-        checkpointIndex: 0,
-        completedCheckpoints: [],
-        distanceMeters: 0,
-        finishedAtMs: null,
-        lap: 0,
-    },
-    vehicleId: 'sport',
-});
 
 const mockDeployable = (overrides: {
     id?: number;

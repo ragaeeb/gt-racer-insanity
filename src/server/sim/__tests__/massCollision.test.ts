@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import type { RigidBody } from '@dimforge/rapier3d-compat';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
-import type { RaceEventPayload } from '@/shared/network/types';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
+import type { RaceEventPayload } from '@/shared/network/types';
 import { CollisionManager, toPairKey } from '../collisionManager';
 import { applyPlayerBumpResponse } from '../collisionSystem';
 import type { SimPlayerState } from '../types';
@@ -65,9 +65,11 @@ const createPlayer = (id: string, vehicleId: VehicleClassId, speed: number): Sim
         steering: 0,
         throttle: 0,
     },
+    isGrounded: true,
     lastProcessedInputSeq: 0,
     motion: {
         positionX: 0,
+        positionY: 0,
         positionZ: 0,
         rotationY: 0,
         speed,
@@ -126,8 +128,6 @@ const buildCollisionRig = (opts: {
 
     return { manager, players, events, bodyA, bodyB };
 };
-
-// ─── Physics impulse tests ───────────────────────────────────────────────────
 
 describe('Mass-Based Collision Impulse', () => {
     it('should produce higher impulse to sport car when truck hits it', () => {
@@ -421,7 +421,6 @@ describe('Mass-Based Collision Impulse', () => {
     });
 });
 
-// ─── Mass-aware flip/stun effect tests ──────────────────────────────────────
 // Tests the full bump pipeline via CollisionManager to verify that flip and
 // stun effects respect mass ratio, not just speed.
 

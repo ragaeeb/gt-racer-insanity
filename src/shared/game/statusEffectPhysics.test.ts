@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
-    DEFAULT_CAR_PHYSICS_CONFIG,
-    stepCarMotion,
     type CarControlState,
     type CarMotionState,
     type CarPhysicsConfig,
+    DEFAULT_CAR_PHYSICS_CONFIG,
+    stepCarMotion,
 } from './carPhysics';
 import {
     BOOST_DURATION_MS,
@@ -12,17 +12,17 @@ import {
     FLAT_TIRE_DURATION_MS,
     FLAT_TIRE_MOVEMENT_MULTIPLIER,
     FLAT_TIRE_STEERING_MULTIPLIER,
+    getStatusEffectManifestById,
     SLOWED_DURATION_MS,
     SLOWED_MOVEMENT_MULTIPLIER,
     SLOWED_STEERING_MULTIPLIER,
     STUNNED_DURATION_MS,
     STUNNED_MOVEMENT_MULTIPLIER,
     STUNNED_STEERING_MULTIPLIER,
-    getStatusEffectManifestById,
 } from './effects/statusEffectManifest';
 
 const fullThrottle: CarControlState = { isUp: true, isDown: false, isLeft: false, isRight: false };
-const origin: CarMotionState = { speed: 0, rotationY: 0, positionX: 0, positionZ: 0 };
+const origin: CarMotionState = { speed: 0, rotationY: 0, positionX: 0, positionY: 0, positionZ: 0 };
 const dt = 1 / 60;
 
 const scaleConfig = (config: CarPhysicsConfig, multiplier: number): CarPhysicsConfig => ({
@@ -46,10 +46,7 @@ describe('status effect physics integration', () => {
             }
 
             expect(boostedState.speed).toBeGreaterThan(normalState.speed);
-            expect(boostedState.speed).toBeCloseTo(
-                normalConfig.maxForwardSpeed * BOOST_MOVEMENT_MULTIPLIER,
-                1,
-            );
+            expect(boostedState.speed).toBeCloseTo(normalConfig.maxForwardSpeed * BOOST_MOVEMENT_MULTIPLIER, 1);
         });
 
         it('should produce lower max speed with flat tire multiplier', () => {
@@ -64,10 +61,7 @@ describe('status effect physics integration', () => {
             }
 
             expect(flatTireState.speed).toBeLessThan(normalState.speed);
-            expect(flatTireState.speed).toBeCloseTo(
-                normalConfig.maxForwardSpeed * FLAT_TIRE_MOVEMENT_MULTIPLIER,
-                1,
-            );
+            expect(flatTireState.speed).toBeCloseTo(normalConfig.maxForwardSpeed * FLAT_TIRE_MOVEMENT_MULTIPLIER, 1);
         });
 
         it('should cover more distance with boost than without over the same time', () => {

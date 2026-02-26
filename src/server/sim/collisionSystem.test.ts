@@ -59,9 +59,11 @@ const createPlayer = (id: string, vehicleId: VehicleClassId, speed: number): Sim
         steering: 0,
         throttle: 0,
     },
+    isGrounded: true,
     lastProcessedInputSeq: 0,
     motion: {
         positionX: 0,
+        positionY: 0,
         positionZ: 0,
         rotationY: 0,
         speed,

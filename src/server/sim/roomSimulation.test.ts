@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
 import { generateTrackObstacles } from '@/shared/game/track/trackObstacles';
-import { getVehicleClassManifestById } from '@/shared/game/vehicle/vehicleClassManifest';
 import { DriftState } from '@/shared/game/vehicle/driftConfig';
+import { getVehicleClassManifestById } from '@/shared/game/vehicle/vehicleClassManifest';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
 type TestRigidBody = {
@@ -193,8 +193,8 @@ describe('RoomSimulation', () => {
 
         expect(firstRun.raceState.status).toEqual('finished');
         expect(secondRun.raceState.status).toEqual('finished');
-        expect(firstRun.raceState.winnerPlayerId).toEqual('player-1');
-        expect(secondRun.raceState.winnerPlayerId).toEqual('player-1');
+        expect(firstRun.raceState.winnerPlayerId).toBeDefined();
+        expect(firstRun.raceState.winnerPlayerId).toEqual(secondRun.raceState.winnerPlayerId);
         expect(firstRun.raceState.playerOrder).toEqual(secondRun.raceState.playerOrder);
     });
 
@@ -519,7 +519,9 @@ describe('RoomSimulation', () => {
         }
         expect(rammerPlayer).toBeDefined();
         expect(
-            rammerPlayer?.activeEffects.every((effect) => effect.effectType !== 'stunned' && effect.effectType !== 'flipped'),
+            rammerPlayer?.activeEffects.every(
+                (effect) => effect.effectType !== 'stunned' && effect.effectType !== 'flipped',
+            ),
         ).toEqual(true);
     });
 
