@@ -4,11 +4,10 @@ import { clientConfig } from '@/client/app/config';
 import { RaceSceneCanvas } from '@/client/app/RaceSceneCanvas';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
-import { COLOR_ID_TO_HSL, colorIdToHexString } from '@/client/game/vehicleSelections';
+import { COLOR_ID_TO_HSL } from '@/client/game/vehicleSelections';
 import { AbilityIndicator } from '@/components/AbilityIndicator';
 import { LobbyCarPreview } from '@/components/LobbyCarPreview';
 import { Button } from '@/components/ui/button';
-import { ColorPicker } from '@/components/ui/color-picker';
 import { Input } from '@/components/ui/input';
 import { VEHICLE_CLASS_MANIFESTS, type VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
@@ -591,6 +590,17 @@ const getDiagControls = () => {
     return debugWindow.__GT_DIAG__ ?? null;
 };
 
+const formatRaceDurationMs = (durationMs: number) => {
+    const clamped = Math.max(0, Math.floor(durationMs));
+    const totalSeconds = Math.floor(clamped / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const centiseconds = Math.floor((clamped % 1000) / 10);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${centiseconds
+        .toString()
+        .padStart(2, '0')}`;
+};
+
 export const App = () => {
     const [playerName, setPlayerName] = useState(() => window.sessionStorage.getItem('gt-player-name-session') ?? '');
     const [nameInput, setNameInput] = useState(playerName);
@@ -631,6 +641,10 @@ export const App = () => {
         ? (latestSnapshot?.players.find((player) => player.id === raceState.winnerPlayerId)?.name ??
           raceState.winnerPlayerId)
         : null;
+    const raceDurationLabel =
+        raceState?.startedAtMs && raceState?.status === 'finished'
+            ? formatRaceDurationMs((raceState.endedAtMs ?? Date.now()) - raceState.startedAtMs)
+            : null;
 
     useEffect(() => {
         if (pendingToasts.length === 0) {
@@ -920,21 +934,10 @@ export const App = () => {
                         </div>
                     </fieldset>
 
-                    {/* Paintjob */}
-                    <fieldset className="space-y-2 border-none p-0 m-0">
-                        <legend className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/40 uppercase mb-2 block">
-                            PAINT MODULE
-                        </legend>
-                        <ColorPicker
-                            className="h-10 rounded-none"
-                            onChange={(value: string) => setSelectedColorId(value)}
-                            value={colorIdToHexString(selectedColorId)}
-                        />
-                    </fieldset>
-
                     {/* 3D Preview */}
                     <div className="mt-10">
                         <LobbyCarPreview
+                            onSelectColor={setSelectedColorId}
                             selectedVehicleId={selectedVehicleId}
                             selectedColorId={selectedColorId}
                             selectedTrackId={selectedTrackId}
@@ -1096,6 +1099,7 @@ export const App = () => {
                         LAPS: {lap}/{raceState?.totalLaps ?? lap}
                     </p>
                     <p id="race-result-track">TRACK: {trackLabel}</p>
+                    <p id="race-result-duration">TIME: {raceDurationLabel ?? '--:--.--'}</p>
                     <button id="restart-btn" onClick={handleRestart} type="button">
                         REINITIALIZE
                     </button>

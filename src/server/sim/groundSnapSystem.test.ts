@@ -236,20 +236,26 @@ describe('snapPlayerToGround', () => {
 
     it('should snap and persist grounded state on flat-track fast path', () => {
         const player = createMockPlayer();
-        let translation = { x: 0, y: 0.5, z: 0 };
+        let translation = { x: 0, y: 1.25, z: 0 };
         let linvel = { x: 0, y: -2, z: 0 };
+        let setTranslationCalls = 0;
         const rigidBody = {
             linvel: () => linvel,
             setLinvel: (next: { x: number; y: number; z: number }) => {
                 linvel = next;
             },
             setTranslation: (next: { x: number; y: number; z: number }) => {
+                setTranslationCalls += 1;
                 translation = next;
             },
             translation: () => translation,
         };
+        let castRayCalls = 0;
         const world = {
-            castRay: () => null,
+            castRay: () => {
+                castRayCalls += 1;
+                return null;
+            },
         };
 
         const result = snapPlayerToGround(
@@ -263,6 +269,8 @@ describe('snapPlayerToGround', () => {
 
         expect(result.grounded).toBeTrue();
         expect(player.isGrounded).toBeTrue();
+        expect(castRayCalls).toBe(0);
+        expect(setTranslationCalls).toBe(1);
         expect(translation.y).toBeCloseTo(0.5, 2);
         expect(player.motion.positionY).toBeCloseTo(0, 2);
     });
@@ -301,5 +309,7 @@ describe('snapPlayerToGround', () => {
         expect(castRayCalls).toBe(1);
         expect(result.grounded).toBeTrue();
         expect(player.isGrounded).toBeTrue();
+        expect(translation.y).toBeCloseTo(0.5, 2);
+        expect(player.motion.positionY).toBeCloseTo(0, 2);
     });
 });

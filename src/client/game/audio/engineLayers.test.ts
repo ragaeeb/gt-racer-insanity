@@ -134,10 +134,14 @@ describe('EngineLayerManager methods', () => {
         manager.update(24, 40, 1 / 60, 0.9);
         expect(idleSound.volume + midSound.volume + highSound.volume).toBeCloseTo(0.9, 2);
 
+        const idleRateBefore = idleSound.playbackRate;
+        const midRateBefore = midSound.playbackRate;
+        const highRateBefore = highSound.playbackRate;
+
         manager.setPlaybackRate(1.12);
-        expect(idleSound.playbackRate).toBeGreaterThan(0);
-        expect(midSound.playbackRate).toBeGreaterThan(0);
-        expect(highSound.playbackRate).toBeGreaterThan(0);
+        expect(idleSound.playbackRate).toBeCloseTo(idleRateBefore * 1.12, 4);
+        expect(midSound.playbackRate).toBeCloseTo(midRateBefore * 1.12, 4);
+        expect(highSound.playbackRate).toBeCloseTo(highRateBefore * 1.12, 4);
     });
 
     it('should stop and restart all layers', () => {

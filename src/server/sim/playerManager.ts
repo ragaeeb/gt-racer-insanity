@@ -36,7 +36,8 @@ export class PlayerManager {
     ) {}
 
     private getSpawnPositionY = (spawnZ: number): number => {
-        return getElevationAtZ(this.trackSegments, spawnZ) + PLAYER_COLLIDER_HALF_HEIGHT_METERS;
+        const clampedSpawnZ = Math.max(0, spawnZ);
+        return getElevationAtZ(this.trackSegments, clampedSpawnZ) + PLAYER_COLLIDER_HALF_HEIGHT_METERS;
     };
 
     private createRigidBody(playerId: string, vehicleId: VehicleClassId, playerIndex: number): void {

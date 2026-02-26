@@ -73,14 +73,26 @@ export const canTriggerFlip = (flipElapsedMs: number | null): boolean => {
 };
 
 export type CarAssets = {
-    engine?: AudioBuffer;
     accelerate?: AudioBuffer;
+    boost?: AudioBuffer;
     driving?: AudioBuffer;
     brake?: AudioBuffer;
+    collision?: AudioBuffer;
+    empFire?: AudioBuffer;
+    empStun?: AudioBuffer;
+    engine?: AudioBuffer;
+    finish?: AudioBuffer;
+    flat?: AudioBuffer;
+    ignition?: AudioBuffer;
+    obstacle?: AudioBuffer;
+    oilDeploy?: AudioBuffer;
+    oilTrigger?: AudioBuffer;
+    powerup?: AudioBuffer;
     /** Tire squeal sound — played on asphalt when drifting (optional, use brake.mp3 as stand-in) */
     squeal?: AudioBuffer;
     /** Gravel rumble sound — played on low-friction surfaces (optional, use driving-loop.wav as stand-in) */
     rumble?: AudioBuffer;
+    trap?: AudioBuffer;
 };
 
 export class Car {

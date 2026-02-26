@@ -18,22 +18,44 @@ export const useCarAssets = (): CarAssetsBundle => {
 
     const engineAudioBuffer = useLoader(THREE.AudioLoader, '/engine.mp3');
     const accelerateAudioBuffer = useLoader(THREE.AudioLoader, '/accelerate.mp3');
-    const drivingAudioBuffer = useLoader(THREE.AudioLoader, '/driving-loop.wav');
+    const drivingAudioBuffer = useLoader(THREE.AudioLoader, '/rpm_high.mp3');
+    const boostAudioBuffer = useLoader(THREE.AudioLoader, '/boost.mp3');
     const brakeAudioBuffer = useLoader(THREE.AudioLoader, '/brake.mp3');
-    // squeal.mp3: dedicated tire-squeal asset (loops during drift on asphalt, pitch-shifted per surface)
-    // rumble uses driving-loop.wav as stand-in (low-frequency loop at low volume on gravel)
+    const collisionAudioBuffer = useLoader(THREE.AudioLoader, '/collision.mp3');
+    const ignitionAudioBuffer = useLoader(THREE.AudioLoader, '/ignition.mp3');
+    const empFireAudioBuffer = useLoader(THREE.AudioLoader, '/emp_fire.mp3');
+    const empStunAudioBuffer = useLoader(THREE.AudioLoader, '/emp_stun.mp3');
+    const finishAudioBuffer = useLoader(THREE.AudioLoader, '/finish.mp3');
+    const flatAudioBuffer = useLoader(THREE.AudioLoader, '/flat.mp3');
+    const oilDeployAudioBuffer = useLoader(THREE.AudioLoader, '/oil_deploy.mp3');
+    const obstacleAudioBuffer = useLoader(THREE.AudioLoader, '/obstacle.mp3');
+    const oilTriggerAudioBuffer = useLoader(THREE.AudioLoader, '/oil_trigger.mp3');
+    const powerupAudioBuffer = useLoader(THREE.AudioLoader, '/powerup.mp3');
     const squealAudioBuffer = useLoader(THREE.AudioLoader, '/squeal.mp3');
-    const rumbleAudioBuffer = useLoader(THREE.AudioLoader, '/driving-loop.wav');
+    const rumbleAudioBuffer = useLoader(THREE.AudioLoader, '/gravel.mp3');
+    const trapAudioBuffer = useLoader(THREE.AudioLoader, '/trap.mp3');
 
     const modelVariantScenesRef = useRef<THREE.Group[]>([]);
     const modelVariantsRef = useRef<CarAssetsBundle['modelVariants']>([]);
     const assetDepsRef = useRef<{
         accelerate: AudioBuffer;
         brake: AudioBuffer;
+        boost: AudioBuffer;
+        collision: AudioBuffer;
         driving: AudioBuffer;
+        empFire: AudioBuffer;
+        empStun: AudioBuffer;
         engine: AudioBuffer;
+        finish: AudioBuffer;
+        flat: AudioBuffer;
+        ignition: AudioBuffer;
+        obstacle: AudioBuffer;
+        oilDeploy: AudioBuffer;
+        oilTrigger: AudioBuffer;
+        powerup: AudioBuffer;
         rumble: AudioBuffer;
         squeal: AudioBuffer;
+        trap: AudioBuffer;
     } | null>(null);
     const assetsRef = useRef<CarAssets>({});
     const bundleRef = useRef<CarAssetsBundle | null>(null);
@@ -55,27 +77,63 @@ export const useCarAssets = (): CarAssetsBundle => {
         !assetDepsRef.current ||
         assetDepsRef.current.accelerate !== accelerateAudioBuffer ||
         assetDepsRef.current.brake !== brakeAudioBuffer ||
+        assetDepsRef.current.boost !== boostAudioBuffer ||
+        assetDepsRef.current.collision !== collisionAudioBuffer ||
         assetDepsRef.current.driving !== drivingAudioBuffer ||
+        assetDepsRef.current.empFire !== empFireAudioBuffer ||
+        assetDepsRef.current.empStun !== empStunAudioBuffer ||
         assetDepsRef.current.engine !== engineAudioBuffer ||
+        assetDepsRef.current.finish !== finishAudioBuffer ||
+        assetDepsRef.current.flat !== flatAudioBuffer ||
+        assetDepsRef.current.ignition !== ignitionAudioBuffer ||
+        assetDepsRef.current.obstacle !== obstacleAudioBuffer ||
+        assetDepsRef.current.oilDeploy !== oilDeployAudioBuffer ||
+        assetDepsRef.current.oilTrigger !== oilTriggerAudioBuffer ||
+        assetDepsRef.current.powerup !== powerupAudioBuffer ||
         assetDepsRef.current.squeal !== squealAudioBuffer ||
-        assetDepsRef.current.rumble !== rumbleAudioBuffer;
+        assetDepsRef.current.rumble !== rumbleAudioBuffer ||
+        assetDepsRef.current.trap !== trapAudioBuffer;
 
     if (hasAssetBuffersChanged) {
         assetsRef.current = {
             accelerate: accelerateAudioBuffer,
             brake: brakeAudioBuffer,
+            boost: boostAudioBuffer,
+            collision: collisionAudioBuffer,
             driving: drivingAudioBuffer,
+            empFire: empFireAudioBuffer,
+            empStun: empStunAudioBuffer,
             engine: engineAudioBuffer,
+            finish: finishAudioBuffer,
+            flat: flatAudioBuffer,
+            ignition: ignitionAudioBuffer,
+            obstacle: obstacleAudioBuffer,
+            oilDeploy: oilDeployAudioBuffer,
+            oilTrigger: oilTriggerAudioBuffer,
+            powerup: powerupAudioBuffer,
             squeal: squealAudioBuffer,
             rumble: rumbleAudioBuffer,
+            trap: trapAudioBuffer,
         };
         assetDepsRef.current = {
             accelerate: accelerateAudioBuffer,
             brake: brakeAudioBuffer,
+            boost: boostAudioBuffer,
+            collision: collisionAudioBuffer,
             driving: drivingAudioBuffer,
+            empFire: empFireAudioBuffer,
+            empStun: empStunAudioBuffer,
             engine: engineAudioBuffer,
+            finish: finishAudioBuffer,
+            flat: flatAudioBuffer,
+            ignition: ignitionAudioBuffer,
+            obstacle: obstacleAudioBuffer,
+            oilDeploy: oilDeployAudioBuffer,
+            oilTrigger: oilTriggerAudioBuffer,
+            powerup: powerupAudioBuffer,
             squeal: squealAudioBuffer,
             rumble: rumbleAudioBuffer,
+            trap: trapAudioBuffer,
         };
     }
 

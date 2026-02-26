@@ -24,7 +24,7 @@ Deliver a V2-only multiplayer architecture where the server is authoritative for
 - Physics world: `src/server/sim/rapierWorld.ts`, `src/server/sim/trackColliderBuilder.ts`, `src/server/sim/collisionSystem.ts`
 - Gameplay effects: `src/server/sim/abilitySystem.ts`, `src/server/sim/effectSystem.ts`, `src/server/sim/hazardSystem.ts`, `src/server/sim/powerupSystem.ts`
 - Snapshot output: `src/server/sim/snapshotBuilder.ts`
-- Scene decoration: `src/client/game/systems/SceneryManager.ts` deterministically places buildings, street lights, and pillars around the track using seeded randomness so each theme feels consistent; `RaceWorld` updates scenery LOD visibility every frame from the active camera.
+- Scene decoration: `src/client/game/systems/SceneryManager.ts` deterministically places buildings, streetlights, and pillars around the track using seeded randomness so each theme feels consistent; `RaceWorld` updates scenery LOD visibility every frame from the active camera.
 
 ## Module Boundaries
 - `src/client/game`: render-time scene and entity orchestration only.

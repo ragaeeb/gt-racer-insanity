@@ -1,11 +1,18 @@
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { MeshoptDecoder } from 'meshoptimizer';
-import { Suspense, useEffect, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { HexColorPicker } from 'react-colorful';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CAR_MODEL_CATALOG } from '@/client/game/assets/carModelCatalog';
 import { applyCarPaint } from '@/client/game/paintSystem';
-import { colorIdToHSL, VEHICLE_CLASS_TO_CATALOG_ID } from '@/client/game/vehicleSelections';
+import {
+    colorIdToHexString,
+    colorIdToHSL,
+    isHexColorString,
+    VEHICLE_CLASS_TO_CATALOG_ID,
+} from '@/client/game/vehicleSelections';
+import { Input } from '@/components/ui/input';
 import { TRACK_MANIFESTS } from '@/shared/game/track/trackManifest';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 
@@ -133,6 +140,7 @@ const FullScene = ({ vehicleClassId, colorId }: SceneProps) => {
 };
 
 type LobbyCarPreviewProps = {
+    onSelectColor: (colorId: string) => void;
     selectedVehicleId: VehicleClassId;
     selectedColorId: string;
     selectedTrackId: string;
@@ -151,11 +159,20 @@ for (const path of PRELOAD_PATHS) {
 }
 
 export const LobbyCarPreview = ({
+    onSelectColor,
     selectedVehicleId,
     selectedColorId,
     selectedTrackId,
     onSelectTrack,
 }: LobbyCarPreviewProps) => {
+    const [isPaintModuleOpen, setIsPaintModuleOpen] = useState(false);
+    const [draftColor, setDraftColor] = useState(() => colorIdToHexString(selectedColorId));
+    const previewHexColor = useMemo(() => colorIdToHexString(selectedColorId), [selectedColorId]);
+
+    useEffect(() => {
+        setDraftColor(previewHexColor);
+    }, [previewHexColor]);
+
     return (
         <div className="flex flex-col gap-4">
             <fieldset className="space-y-2 border-none p-0 m-0">
@@ -211,21 +228,63 @@ export const LobbyCarPreview = ({
                 </div>
             </fieldset>
 
-            <div
-                className="aspect-video w-full overflow-hidden shrink-0 mt-4"
-                style={{
-                    background: '#020810',
-                    border: '1px solid rgba(0,229,255,0.18)',
-                    boxShadow: 'inset 0 0 20px rgba(0,229,255,0.04)',
-                }}
-            >
-                <Canvas
-                    camera={{ position: [0, 2.5, 6], fov: 42 }}
-                    gl={{ antialias: true, alpha: false }}
-                    style={{ width: '100%', height: '100%', display: 'block' }}
+            <div className="mt-4">
+                <button
+                    aria-expanded={isPaintModuleOpen}
+                    aria-label="Open paint module"
+                    className="aspect-video w-full overflow-hidden shrink-0 relative text-left cursor-pointer"
+                    onClick={() => setIsPaintModuleOpen((open) => !open)}
+                    style={{
+                        background: '#020810',
+                        border: '1px solid rgba(0,229,255,0.18)',
+                        boxShadow: 'inset 0 0 20px rgba(0,229,255,0.04)',
+                    }}
+                    type="button"
                 >
-                    <FullScene vehicleClassId={selectedVehicleId} colorId={selectedColorId} />
-                </Canvas>
+                    <Canvas
+                        camera={{ position: [0, 2.5, 6], fov: 42 }}
+                        gl={{ antialias: true, alpha: false }}
+                        style={{ width: '100%', height: '100%', display: 'block' }}
+                    >
+                        <FullScene vehicleClassId={selectedVehicleId} colorId={selectedColorId} />
+                    </Canvas>
+                    <div className="pointer-events-none absolute left-3 bottom-3 font-mono text-[10px] tracking-[0.2em] uppercase text-[#00E5FF]/65">
+                        Click Car To {isPaintModuleOpen ? 'Close' : 'Open'} Paint Module
+                    </div>
+                </button>
+                {isPaintModuleOpen ? (
+                    <div
+                        className="mt-2 p-3"
+                        style={{
+                            background: 'rgba(0,8,20,0.75)',
+                            border: '1px solid rgba(0,229,255,0.2)',
+                        }}
+                    >
+                        <div className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/50 uppercase mb-2">
+                            Paint Module
+                        </div>
+                        <HexColorPicker
+                            color={previewHexColor}
+                            onChange={(next) => {
+                                const normalized = next.toUpperCase();
+                                setDraftColor(normalized);
+                                onSelectColor(normalized);
+                            }}
+                        />
+                        <Input
+                            className="mt-3 font-mono uppercase"
+                            maxLength={7}
+                            onChange={(event) => {
+                                const next = event.currentTarget.value.toUpperCase();
+                                setDraftColor(next);
+                                if (isHexColorString(next)) {
+                                    onSelectColor(next);
+                                }
+                            }}
+                            value={draftColor}
+                        />
+                    </div>
+                ) : null}
             </div>
         </div>
     );

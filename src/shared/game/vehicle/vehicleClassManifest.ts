@@ -1,6 +1,6 @@
 import type { CarPhysicsConfig } from '@/shared/game/carPhysics';
 
-export type VehicleClassId = 'sport' | 'muscle' | 'patrol' | 'truck';
+export type VehicleClassId = 'sport' | 'muscle' | 'patrol' | 'truck' | 'bike';
 
 export type VehiclePhysicsManifest = {
     acceleration: number;
@@ -79,6 +79,21 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
             maxReverseSpeed: 16,
             minTurnSpeed: 0.1,
             turnSpeed: 2.1,
+        },
+    },
+    {
+        abilityId: 'turbo-boost',
+        colorPaletteIds: ['red', 'silver', 'black'],
+        id: 'bike',
+        label: 'Motorcycle',
+        physics: {
+            acceleration: 28, // fastest accel
+            collisionMass: 700, // lightest = most vulnerable to bumps
+            friction: 1, // lowest = slidiest in turns
+            maxForwardSpeed: 48, // fastest top speed
+            maxReverseSpeed: 18,
+            minTurnSpeed: 0.1,
+            turnSpeed: 2.1, // lower = less agile (trade-off for speed)
         },
     },
 ];

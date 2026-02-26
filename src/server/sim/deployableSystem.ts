@@ -72,6 +72,7 @@ export const checkDeployableCollisions = (
     players: Iterable<SimPlayerState>,
     tuning: CombatTuning,
 ): HazardTrigger[] => {
+    const playerList = Array.isArray(players) ? players : [...players];
     const triggers: HazardTrigger[] = [];
 
     for (const deployable of deployables) {
@@ -80,7 +81,7 @@ export const checkDeployableCollisions = (
         }
 
         const triggerRadiusSq = deployable.radius * deployable.radius;
-        for (const player of players) {
+        for (const player of playerList) {
             if (player.id === deployable.ownerId) {
                 continue;
             }

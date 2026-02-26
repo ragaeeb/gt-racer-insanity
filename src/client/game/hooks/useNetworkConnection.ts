@@ -1,5 +1,5 @@
 import { useThree } from '@react-three/fiber';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type * as THREE from 'three';
 import { MixStateManager } from '@/client/game/audio/mixStateManager';
 import { Car } from '@/client/game/entities/Car';
@@ -50,6 +50,7 @@ const COLLISION_SHAKE_FLIP_BONUS = 0.2;
 const COLLISION_SHAKE_STUN_BONUS = 0.15;
 const COLLISION_SHAKE_MAX_FORCE = 1_000;
 const COLLISION_SHAKE_MAX_RELATIVE_SPEED_MPS = 25;
+const COLLISION_SFX_COOLDOWN_MS = 120;
 const COLLISION_FORCE_METADATA_KEYS = [
     'contactForceMagnitude',
     'forceMagnitude',
@@ -202,8 +203,78 @@ export const useNetworkConnection = ({
     const [sceneEnvironmentId, setSceneEnvironmentId] =
         useState<SceneEnvironmentProfileId>(DEFAULT_SCENE_ENVIRONMENT_ID);
     const opponentFlipAppliedAtByPlayerIdRef = useRef(new Map<string, number>());
+    const seenLocalDeployableIdsRef = useRef(new Set<number>());
+    const lastCollisionSfxAtMsRef = useRef(0);
+    const raceStartSfxPlayedRef = useRef(false);
+    const raceStatusRef = useRef<RaceState['status'] | null>(null);
     const mixStateManagerRef = useRef<MixStateManager | null>(null);
     const session = sessionRef.current;
+    const playOneShotSfx = useCallback(
+        (soundId: string, buffer: AudioBuffer | undefined, volume = 1, playbackRate = 1) => {
+            const logSfx = (status: string, details?: Record<string, unknown>) => {
+                console.debug('[sfx]', soundId, status, {
+                    playbackRate,
+                    volume,
+                    ...(details ?? {}),
+                });
+            };
+
+            if (!buffer) {
+                logSfx('skipped:no-buffer');
+                return;
+            }
+            const listener = audioListenerRef.current;
+            if (!listener) {
+                logSfx('skipped:no-listener');
+                return;
+            }
+
+            const audioContext = listener.context;
+            if (!audioContext) {
+                logSfx('skipped:no-audio-context');
+                return;
+            }
+
+            const startPlayback = () => {
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.playbackRate.value = playbackRate;
+
+                const gain = audioContext.createGain();
+                gain.gain.value = Math.max(0, volume);
+
+                source.connect(gain);
+                gain.connect(audioContext.destination);
+                source.start();
+                logSfx('played', { contextState: audioContext.state });
+            };
+
+            if (audioContext.state === 'suspended') {
+                logSfx('resume-requested', { contextState: audioContext.state });
+                void audioContext
+                    .resume()
+                    .then(() => {
+                        if (audioContext.state === 'running') {
+                            startPlayback();
+                            return;
+                        }
+                        logSfx('skipped:resume-not-running', { contextState: audioContext.state });
+                    })
+                    .catch((error) => {
+                        logSfx('skipped:resume-failed', { error: String(error) });
+                    });
+                return;
+            }
+
+            if (audioContext.state !== 'running') {
+                logSfx('skipped:context-not-running', { contextState: audioContext.state });
+                return;
+            }
+
+            startPlayback();
+        },
+        [audioListenerRef],
+    );
 
     const applyTrackPresentation = (trackId: string) => {
         const trackManifest = getTrackManifestById(trackId);
@@ -294,6 +365,10 @@ export const useNetworkConnection = ({
         session.lastCorrection = null;
         session.networkUpdateTimer = 0;
         opponentFlipAppliedAtByPlayerIdRef.current.clear();
+        seenLocalDeployableIdsRef.current.clear();
+        raceStartSfxPlayedRef.current = false;
+        raceStatusRef.current = null;
+        lastCollisionSfxAtMsRef.current = 0;
     };
 
     useEffect(() => {
@@ -315,7 +390,6 @@ export const useNetworkConnection = ({
             const message = payload.message ?? `Join failed (${payload.reason})`;
             useHudStore.getState().showToast(message.toUpperCase(), 'error');
         });
-
         networkManager.onRoomJoined((seed, players, roomJoinedPayload) => {
             session.roomSeed = seed;
             session.shakeSpikeGraceUntilMs = Date.now() + SHAKE_SPIKE_GRACE_PERIOD_MS;
@@ -379,6 +453,13 @@ export const useNetworkConnection = ({
             onGameOverChange(false);
             session.isRunning = true;
             useHudStore.getState().setSpeedKph(0);
+            raceStartSfxPlayedRef.current = false;
+            seenLocalDeployableIdsRef.current.clear();
+            raceStatusRef.current = roomJoinedPayload.snapshot?.raceState.status ?? null;
+            if (roomJoinedPayload.snapshot?.raceState.status === 'running' && !raceStartSfxPlayedRef.current) {
+                raceStartSfxPlayedRef.current = true;
+                playOneShotSfx('ignition-room-joined', carAssetsBundle.assets.ignition, 0.75);
+            }
 
             // Mix state: entering lobby/pre-race phase
             const audioContext = audioListenerRef.current?.context;
@@ -405,9 +486,25 @@ export const useNetworkConnection = ({
             try {
                 const localPlayerId = useRuntimeStore.getState().localPlayerId;
 
+                if (event.kind === 'race_started') {
+                    mixStateManagerRef.current?.setPhase('racing');
+                    if (!raceStartSfxPlayedRef.current) {
+                        raceStartSfxPlayedRef.current = true;
+                        playOneShotSfx('ignition', carAssetsBundle.assets.ignition, 0.75);
+                    }
+                    return;
+                }
+
                 if (event.kind === 'ability_activated') {
                     const abilityId = event.metadata?.abilityId;
                     if (typeof abilityId === 'string') {
+                        if (event.playerId === localPlayerId && abilityId === 'spike-shot') {
+                            playOneShotSfx('emp-fire', carAssetsBundle.assets.empFire, 0.8);
+                        }
+                        if (event.playerId === localPlayerId && abilityId === 'turbo-boost') {
+                            playOneShotSfx('boost', carAssetsBundle.assets.boost, 0.65);
+                        }
+
                         if (event.playerId === localPlayerId) {
                             const ability = getAbilityManifestById(abilityId);
                             if (ability) {
@@ -473,6 +570,11 @@ export const useNetworkConnection = ({
 
                     const nowMs = Date.now();
                     if (isLocalInvolved) {
+                        if (nowMs - lastCollisionSfxAtMsRef.current >= COLLISION_SFX_COOLDOWN_MS) {
+                            lastCollisionSfxAtMsRef.current = nowMs;
+                            playOneShotSfx('collision', carAssetsBundle.assets.collision, 0.7);
+                        }
+
                         if (localPlayerId !== null) {
                             const shakeIntensity = computeCollisionShakeIntensity({
                                 event,
@@ -528,27 +630,44 @@ export const useNetworkConnection = ({
                     return;
                 }
 
+                if (event.kind === 'projectile_hit') {
+                    const targetPlayerId =
+                        typeof event.metadata?.targetPlayerId === 'string' ? event.metadata.targetPlayerId : null;
+                    if (localPlayerId !== null && targetPlayerId === localPlayerId) {
+                        playOneShotSfx('emp-stun', carAssetsBundle.assets.empStun, 0.8);
+                    }
+                }
+
                 if (event.playerId !== localPlayerId) {
                     return;
                 }
 
-                if (event.kind === 'race_started') {
-                    mixStateManagerRef.current?.setPhase('racing');
-                    return;
-                }
-
                 if (event.kind === 'powerup_collected') {
+                    playOneShotSfx('powerup', carAssetsBundle.assets.powerup, 0.2);
                     useHudStore.getState().showToast('SPEED BOOST!', 'success');
                 } else if (event.kind === 'hazard_triggered') {
                     const effectType = event.metadata?.effectType;
                     const flippedPlayerId =
                         typeof event.metadata?.flippedPlayerId === 'string' ? event.metadata.flippedPlayerId : null;
+                    const hazardId = typeof event.metadata?.hazardId === 'string' ? event.metadata.hazardId : null;
                     if (effectType === 'flat_tire') {
                         useHudStore.getState().showToast('FLAT TIRE!', 'error');
                     } else if (effectType === 'stunned') {
                         useHudStore.getState().showToast('STUNNED!', 'warning');
                     } else if (effectType === 'slowed') {
                         useHudStore.getState().showToast('SLOWED!', 'warning');
+                    }
+                    if (effectType === 'flat_tire') {
+                        playOneShotSfx('flat-tire', carAssetsBundle.assets.flat, 0.7);
+                    }
+                    if (hazardId === 'oil-slick') {
+                        playOneShotSfx('oil-trigger', carAssetsBundle.assets.oilTrigger, 0.75);
+                    }
+                    if (effectType === 'stunned' && hazardId === null) {
+                        playOneShotSfx('obstacle', carAssetsBundle.assets.obstacle, 0.72);
+                    }
+                    if (flippedPlayerId === localPlayerId) {
+                        playOneShotSfx('trap-flip', carAssetsBundle.assets.trap, 0.75);
                     }
 
                     if (flippedPlayerId) {
@@ -569,6 +688,16 @@ export const useNetworkConnection = ({
             try {
                 useRuntimeStore.getState().applySnapshot(snapshot);
                 onRaceStateChange(snapshot.raceState);
+                const previousRaceStatus = raceStatusRef.current;
+                raceStatusRef.current = snapshot.raceState.status;
+                if (
+                    snapshot.raceState.status === 'running' &&
+                    previousRaceStatus !== 'running' &&
+                    !raceStartSfxPlayedRef.current
+                ) {
+                    raceStartSfxPlayedRef.current = true;
+                    playOneShotSfx('ignition', carAssetsBundle.assets.ignition, 0.75);
+                }
 
                 if (snapshot.raceState.trackId !== session.activeTrackId) {
                     const nextTrackId = applyTrackPresentation(snapshot.raceState.trackId);
@@ -684,8 +813,22 @@ export const useNetworkConnection = ({
                         .setActiveEffectIds(localSnapshotPlayer.activeEffects.map((effect) => effect.effectType));
                 }
 
+                if (localPlayerId !== null && snapshot.deployables) {
+                    for (const deployable of snapshot.deployables) {
+                        if (deployable.ownerId !== localPlayerId) {
+                            continue;
+                        }
+                        if (seenLocalDeployableIdsRef.current.has(deployable.id)) {
+                            continue;
+                        }
+                        seenLocalDeployableIdsRef.current.add(deployable.id);
+                        playOneShotSfx('oil-deploy', carAssetsBundle.assets.oilDeploy, 0.75);
+                    }
+                }
+
                 if (snapshot.raceState.status === 'finished' && session.isRunning) {
                     session.isRunning = false;
+                    playOneShotSfx('finish', carAssetsBundle.assets.finish, 0.8);
                     onGameOverChange(true);
                     session.localCar?.fadeOutAudio();
                     for (const [, opponent] of session.opponents) {
@@ -732,6 +875,7 @@ export const useNetworkConnection = ({
         selectedTrackId,
         selectedVehicleId,
         session,
+        playOneShotSfx,
     ]);
 
     useEffect(() => {
@@ -755,9 +899,12 @@ export const useNetworkConnection = ({
         onRaceStateChange(null);
         onGameOverChange(false);
         session.isRunning = true;
+        raceStatusRef.current = 'running';
+        playOneShotSfx('ignition', carAssetsBundle.assets.ignition, 0.75);
+        raceStartSfxPlayedRef.current = true;
         useHudStore.getState().setSpeedKph(0);
         session.shakeSpikeGraceUntilMs = Date.now() + SHAKE_SPIKE_GRACE_PERIOD_MS;
-    }, [onGameOverChange, onRaceStateChange, resetNonce, session]);
+    }, [onGameOverChange, onRaceStateChange, resetNonce, session, playOneShotSfx, carAssetsBundle.assets.ignition]);
 
     return sceneEnvironmentId;
 };
