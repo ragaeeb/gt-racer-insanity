@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.16.0...v1.17.0) (2026-02-26)
+
+
+### Features
+
+* **m5:** Track Schema Extension ([#62](https://github.com/ragaeeb/gt-racer-insanity/issues/62)) ([52164e1](https://github.com/ragaeeb/gt-racer-insanity/commit/52164e1b1c39674ad745a78a3fae90a76fd8618d))
+
 # [1.16.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.15.0...v1.16.0) (2026-02-26)
 
 
