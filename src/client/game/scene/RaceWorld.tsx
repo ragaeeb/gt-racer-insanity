@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useControls } from 'leva';
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type * as THREE from 'three';
 import type { RaceSession } from '@/client/game/hooks/types';
 import { useAbilityEmitter } from '@/client/game/hooks/useAbilityEmitter';
@@ -94,9 +94,9 @@ export const RaceWorld = ({
         inputManager.setCruiseControlEnabled(cruiseControlEnabled);
     }, [cruiseControlEnabled, inputManager]);
     useEffect(() => () => inputManager.dispose(), [inputManager]);
-    const handleCollisionShake = useCallback((intensity: number) => {
+    const handleCollisionShake = (intensity: number) => {
         cameraShakeRef.current?.trigger(intensity);
-    }, []);
+    };
 
     useEffect(() => {
         const cameraShake = new CameraShake(camera);

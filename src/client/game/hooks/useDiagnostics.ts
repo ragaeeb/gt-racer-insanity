@@ -176,6 +176,19 @@ export const useDiagnostics = (
             getState: (): GTDebugState => {
                 const session = sessionRef.current;
                 const latestSnapshot = useRuntimeStore.getState().latestSnapshot;
+                let nearestOpponentDistanceMeters: number | null = null;
+                if (session.localCar) {
+                    let nearestDistance = Number.POSITIVE_INFINITY;
+                    for (const opponentCar of session.opponents.values()) {
+                        const dx = opponentCar.position.x - session.localCar.position.x;
+                        const dz = opponentCar.position.z - session.localCar.position.z;
+                        const distance = Math.hypot(dx, dz);
+                        if (distance < nearestDistance) {
+                            nearestDistance = distance;
+                        }
+                    }
+                    nearestOpponentDistanceMeters = Number.isFinite(nearestDistance) ? nearestDistance : null;
+                }
                 return {
                     connectionStatus: session.connectionStatus,
                     deployableCount: latestSnapshot?.deployables?.length ?? 0,
@@ -183,6 +196,7 @@ export const useDiagnostics = (
                     isRunning: session.isRunning,
                     localCarX: session.localCar?.position.x ?? null,
                     localCarZ: session.localCar?.position.z ?? null,
+                    nearestOpponentDistanceMeters,
                     opponentCount: session.opponents.size,
                     projectileCount: latestSnapshot?.projectiles?.length ?? 0,
                     roomId: session.networkManager?.roomId ?? null,

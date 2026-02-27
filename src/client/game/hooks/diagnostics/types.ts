@@ -79,6 +79,7 @@ export type GTDebugState = {
     isRunning: boolean;
     localCarX: number | null;
     localCarZ: number | null;
+    nearestOpponentDistanceMeters: number | null;
     opponentCount: number;
     projectileCount: number;
     roomId: string | null;
