@@ -50,7 +50,8 @@ test.describe('e2e multiplayer collision', () => {
 
             expect(movedA?.localCarZ ?? 0).toBeGreaterThan(stateA?.localCarZ ?? 0);
             expect(movedB?.localCarZ ?? 0).toBeGreaterThan(stateB?.localCarZ ?? 0);
-            expect(Math.abs((movedA?.localCarX ?? 0) - (movedB?.localCarX ?? 0))).toBeGreaterThan(0.25);
+            expect(movedA?.nearestOpponentDistanceMeters ?? 0).toBeGreaterThan(0.25);
+            expect(movedB?.nearestOpponentDistanceMeters ?? 0).toBeGreaterThan(0.25);
         } finally {
             await Promise.allSettled([pageA.close(), pageB.close()]);
         }
