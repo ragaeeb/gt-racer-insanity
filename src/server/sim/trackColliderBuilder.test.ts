@@ -315,3 +315,62 @@ describe('wall collider elevation', () => {
         expect(Math.sign(leftTransform.rotation.z)).not.toEqual(Math.sign(rightTransform.rotation.z));
     });
 });
+
+describe('buildTrackColliders — track variants', () => {
+    it('should build colliders for neon-city without error', async () => {
+        const { buildTrackColliders } = await import('./trackColliderBuilder');
+        const { createRapierWorld } = await import('./rapierWorld');
+        const { world, rapier } = createRapierWorld(1 / 60);
+
+        const result = buildTrackColliders(rapier, world, {
+            seed: 2,
+            totalLaps: 2,
+            trackId: 'neon-city',
+        });
+
+        expect(result.finishBarrierColliderHandle).toBeGreaterThanOrEqual(0);
+        expect(result.totalTrackLengthMeters).toBeGreaterThan(0);
+    });
+
+    it('should use default track width when not specified', async () => {
+        const { buildTrackColliders } = await import('./trackColliderBuilder');
+        const { createRapierWorld } = await import('./rapierWorld');
+        const { world, rapier } = createRapierWorld(1 / 60);
+
+        const result = buildTrackColliders(rapier, world, {
+            seed: 3,
+            totalLaps: 1,
+            trackId: 'sunset-loop',
+        });
+
+        expect(result.trackWidthMeters).toBeGreaterThan(0);
+    });
+
+    it('should fall back to default track and warn when requesting an unknown track id', async () => {
+        const { buildTrackColliders } = await import('./trackColliderBuilder');
+        const { createRapierWorld } = await import('./rapierWorld');
+        const { world, rapier } = createRapierWorld(1 / 60);
+
+        const warns: string[] = [];
+        const origWarn = console.warn.bind(console);
+        console.warn = (...args: unknown[]) => {
+            if (typeof args[0] === 'string') {
+                warns.push(args[0]);
+            }
+            origWarn(...args);
+        };
+
+        try {
+            const result = buildTrackColliders(rapier, world, {
+                seed: 1,
+                totalLaps: 1,
+                trackId: 'nonexistent-track-id',
+            });
+            // Should still succeed with a fallback track
+            expect(result.totalTrackLengthMeters).toBeGreaterThan(0);
+            expect(warns.some((w) => w.includes('[TrackColliderBuilder]'))).toBeTrue();
+        } finally {
+            console.warn = origWarn;
+        }
+    });
+});

@@ -67,4 +67,49 @@ describe('CameraShake', () => {
         expect(camera.position.y).toBe(basePosition.y);
         expect(camera.position.z).toBe(basePosition.z);
     });
+
+    it('should reset offset and velocity to zero', () => {
+        const camera = new THREE.PerspectiveCamera();
+        const shake = new CameraShake(camera, { random: () => 1 });
+        shake.trigger(1.0);
+        // Ensure there is some offset before reset
+        expect(shake.getOffset().length()).toBeGreaterThan(0);
+        shake.reset();
+        const offset = shake.getOffset();
+        expect(offset.x).toBe(0);
+        expect(offset.y).toBe(0);
+        expect(offset.z).toBe(0);
+    });
+
+    it('should not update when dt is zero', () => {
+        const camera = new THREE.PerspectiveCamera();
+        const shake = new CameraShake(camera, { random: () => 1 });
+        shake.trigger(1.0);
+        const offsetBefore = shake.getOffset().clone();
+        shake.update(0);
+        const offsetAfter = shake.getOffset();
+        expect(offsetAfter.x).toBe(offsetBefore.x);
+        expect(offsetAfter.y).toBe(offsetBefore.y);
+        expect(offsetAfter.z).toBe(offsetBefore.z);
+    });
+
+    it('should not update when dt is negative', () => {
+        const camera = new THREE.PerspectiveCamera();
+        const shake = new CameraShake(camera);
+        shake.trigger(0.5);
+        const before = shake.getOffset().clone();
+        shake.update(-0.1);
+        const after = shake.getOffset();
+        expect(after.x).toBe(before.x);
+    });
+
+    it('should ignore triggers with zero intensity', () => {
+        const camera = new THREE.PerspectiveCamera();
+        const shake = new CameraShake(camera);
+        shake.trigger(0);
+        const offset = shake.getOffset();
+        expect(offset.x).toBe(0);
+        expect(offset.y).toBe(0);
+        expect(offset.z).toBe(0);
+    });
 });
