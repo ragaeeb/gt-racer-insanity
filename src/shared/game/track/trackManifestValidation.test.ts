@@ -34,8 +34,8 @@ describe('validateTrackManifests', () => {
     });
 
     it('should detect duplicate track ids', () => {
-        const track = makeTrack({ id: 'dup' });
-        const result = validateTrackManifests([track, makeTrack({ id: 'dup' })]);
+        const track = makeTrack({ id: 'sunset-loop' });
+        const result = validateTrackManifests([track, makeTrack({ id: 'sunset-loop' })]);
         expect(result.isValid).toBeFalse();
         expect(result.issues.some((i) => i.includes('Duplicate track id'))).toBeTrue();
     });
@@ -167,8 +167,8 @@ describe('validateTrackManifests', () => {
 
     it('should validate multiple valid tracks in one call', () => {
         const tracks = [
-            makeTrack({ id: 'track-1' }),
-            makeTrack({ id: 'track-2', lengthMeters: 200, segments: [makeSeg('seg-a', 200)] }),
+            makeTrack({ id: 'sunset-loop' }),
+            makeTrack({ id: 'canyon-sprint', lengthMeters: 200, segments: [makeSeg('seg-a', 200)] }),
         ];
         const result = validateTrackManifests(tracks);
         expect(result.isValid).toBeTrue();

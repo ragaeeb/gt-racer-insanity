@@ -13,7 +13,7 @@ const makeSession = (overrides: Partial<Parameters<typeof computeCollisionTiming
     localCollisionDriveLockUntilMs: null,
     localCollisionHardSnapUntilMs: null,
     ...overrides,
-});
+}) as Parameters<typeof computeCollisionTimings>[0];
 
 const makeEpisode = (overrides: Partial<ContactEpisodeState> = {}): ContactEpisodeState => ({
     active: false,

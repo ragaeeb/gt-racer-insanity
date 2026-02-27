@@ -77,7 +77,7 @@ describe('validateVehicleClassManifests', () => {
     });
 
     it('should validate multiple valid manifests', () => {
-        const manifests = [makeManifest({ id: 'sport' }), makeManifest({ id: 'suv' })];
+        const manifests = [makeManifest({ id: 'sport' }), makeManifest({ id: 'truck' })];
         const result = validateVehicleClassManifests(manifests);
         expect(result.isValid).toBeTrue();
     });

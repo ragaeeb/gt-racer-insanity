@@ -187,9 +187,9 @@ describe('EngineLayerManager methods', () => {
         // Track connect calls on sound gains
         for (const sound of [idleSound, midSound, highSound]) {
             const origConnect = sound.gain.connect.bind(sound.gain);
-            sound.gain.connect = (...args: any[]) => {
+            sound.gain.connect = () => {
                 connectCalls++;
-                return origConnect(...args);
+                return origConnect();
             };
         }
 
