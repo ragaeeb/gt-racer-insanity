@@ -16,11 +16,11 @@ export const checkPowerupCollisions = (
 ): void => {
     for (const powerup of activePowerups) {
         if (powerup.collectedAtMs !== null) {
-            if (powerup.respawnAtMs !== null && nowMs >= powerup.respawnAtMs) {
-                powerup.collectedAtMs = null;
-                powerup.respawnAtMs = null;
+            if (powerup.respawnAtMs === null || nowMs < powerup.respawnAtMs) {
+                continue;
             }
-            continue;
+            powerup.collectedAtMs = null;
+            powerup.respawnAtMs = null;
         }
 
         const manifest = getPowerupManifestById(powerup.powerupId);

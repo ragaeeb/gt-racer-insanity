@@ -654,7 +654,7 @@ describe('RoomSimulation', () => {
             }
         }
 
-        expect(firstBumpMs).not.toEqual(null);
+        expect(firstBumpMs).not.toBeNull();
 
         setPositions(95, 65);
         nowMs += 16;
@@ -682,7 +682,7 @@ describe('RoomSimulation', () => {
             }
         }
 
-        expect(secondBumpMs).toEqual(null);
+        expect(secondBumpMs).toBeNull();
     });
 
     it('should keep the rammer at zero speed during the 350ms recovery window', () => {
@@ -736,7 +736,7 @@ describe('RoomSimulation', () => {
             }
         }
 
-        expect(bumpMs).not.toEqual(null);
+        expect(bumpMs).not.toBeNull();
 
         for (let i = 0; i < 20; i += 1) {
             nowMs += 16;
@@ -833,9 +833,9 @@ describe('RoomSimulation', () => {
         const restartedPlayer = restartedSnapshot.players.find((player) => player.id === 'player-1');
 
         expect(restartedSnapshot.raceState.status).toEqual('running');
-        expect(restartedSnapshot.raceState.winnerPlayerId).toEqual(null);
-        expect(restartedSnapshot.raceState.endedAtMs).toEqual(null);
-        expect(restartedSnapshot.raceState.startedAtMs).toEqual(7_000);
+        expect(restartedSnapshot.raceState.winnerPlayerId).toBeNull();
+        expect(restartedSnapshot.raceState.endedAtMs).toBeNull();
+        expect(restartedSnapshot.raceState.startedAtMs).toBeNull();
         expect(restartedPlayer).toBeDefined();
         expect(restartedPlayer?.x ?? 0).toBeCloseTo(-6, 1);
         expect(restartedPlayer?.z ?? 0).toBeCloseTo(0, 1);

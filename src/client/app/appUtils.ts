@@ -21,7 +21,11 @@ export const readStoredBooleanFlag = (key: string) => {
     if (typeof window === 'undefined') {
         return false;
     }
-    return isEnabledFromFlag(window.localStorage.getItem(key));
+    try {
+        return isEnabledFromFlag(window.localStorage.getItem(key));
+    } catch {
+        return false;
+    }
 };
 
 export const readDiagnosticsEnabledDefault = () => {
@@ -126,15 +130,23 @@ export const readLobbyMode = (): LobbyMode => {
     if (typeof window === 'undefined') {
         return 'join';
     }
-    const value = window.sessionStorage.getItem(LOBBY_MODE_KEY);
-    return value === 'create' ? 'create' : 'join';
+    try {
+        const value = window.sessionStorage.getItem(LOBBY_MODE_KEY);
+        return value === 'create' ? 'create' : 'join';
+    } catch {
+        return 'join';
+    }
 };
 
 export const writeLobbyMode = (mode: LobbyMode) => {
     if (typeof window === 'undefined') {
         return;
     }
-    window.sessionStorage.setItem(LOBBY_MODE_KEY, mode);
+    try {
+        window.sessionStorage.setItem(LOBBY_MODE_KEY, mode);
+    } catch {
+        // Ignore storage failures and continue with runtime defaults.
+    }
 };
 
 export const sanitizePlayerName = (value: string) => {

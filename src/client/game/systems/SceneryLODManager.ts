@@ -39,7 +39,16 @@ export class SceneryLODManager {
         points: Array<{ x: number; z: number }>,
         clusterLengthMeters = 200,
     ): void => {
+        if (!Number.isFinite(clusterLengthMeters) || clusterLengthMeters <= 0) {
+            throw new Error('clusterLengthMeters must be a finite number > 0');
+        }
+
         if (points.length === 0) {
+            return;
+        }
+
+        const pointCount = Math.min(points.length, mesh.count);
+        if (pointCount === 0) {
             return;
         }
 
@@ -57,7 +66,7 @@ export class SceneryLODManager {
         };
 
         const clusters = new Map<number, ClusterStats>();
-        for (let index = 0; index < points.length; index++) {
+        for (let index = 0; index < pointCount; index++) {
             const point = points[index];
             const key = Math.floor(point.z / clusterLengthMeters);
             const existing = clusters.get(key);
@@ -114,7 +123,9 @@ export class SceneryLODManager {
 
         for (const [mesh, state] of this.stateByMesh) {
             const visibleIndicesSet = visibleIndicesByMesh.get(mesh);
-            const visibleIndices = visibleIndicesSet ? [...visibleIndicesSet] : [];
+            const visibleIndices = visibleIndicesSet
+                ? [...visibleIndicesSet].filter((index) => index >= 0 && index < state.originalCount)
+                : [];
             if (visibleIndices.length === 0) {
                 mesh.count = 0;
                 mesh.visible = false;

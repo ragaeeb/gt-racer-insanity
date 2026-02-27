@@ -98,6 +98,9 @@ const isRefusedNavigationError = (error: unknown) =>
 
 export const gotoLobby = async (page: Page, roomId: string) => {
     const normalizedRoomId = sanitizeRoomIdForUrl(roomId);
+    if (!normalizedRoomId) {
+        throw new Error(`Invalid roomId: "${roomId}" becomes empty after sanitization`);
+    }
     let lastError: unknown = null;
 
     for (let attempt = 1; attempt <= LOBBY_GOTO_RETRIES; attempt += 1) {

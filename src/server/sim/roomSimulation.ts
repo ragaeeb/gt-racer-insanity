@@ -213,9 +213,12 @@ export class RoomSimulation {
             totalLaps: this.state.raceState.totalLaps,
             trackId: this.state.raceState.trackId,
         });
-        Object.assign(this.state.raceState, freshRaceState, { startedAtMs: nowMs });
+        const shouldStartRace = this.state.players.size >= 2;
+        Object.assign(this.state.raceState, freshRaceState, {
+            startedAtMs: shouldStartRace ? nowMs : null,
+        });
 
-        if (this.state.players.size >= 2) {
+        if (shouldStartRace) {
             this.pushRaceEvent({
                 kind: 'race_started',
                 metadata: undefined,

@@ -87,7 +87,7 @@ export const RaceScreen = ({
         : null;
 
     const raceDurationLabel =
-        raceState?.startedAtMs && raceState?.status === 'finished'
+        raceState && raceState.status === 'finished' && raceState.startedAtMs != null
             ? formatRaceDurationMs((raceState.endedAtMs ?? Date.now()) - raceState.startedAtMs)
             : null;
 
