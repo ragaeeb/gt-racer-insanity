@@ -65,12 +65,32 @@ Server health:
 ## Scripts
 - `bun run dev` -> start Vite dev client
 - `bun run server` -> start Bun Socket.IO server
+- `bun run play` -> build + run production server and LAN preview, then print shareable Wi-Fi URL(s) for other devices
 - `bun run test` -> run all deterministic/unit tests (browser suites run via `bun run e2e`)
 - `bun run test:watch` -> run tests in watch mode
 - `bun run test:e2e:install` -> `bun x playwright install chromium`
 - `bun run e2e` -> run all browser tests in `testing/` (smoke + multiplayer collision)
 - `bun run build` -> typecheck and production build
 - `bun run check` -> run tests then build
+
+## Play Over Wi-Fi (Production)
+For quick 2+ player LAN playtesting, run:
+
+```bash
+bun run play
+```
+
+This command:
+- builds the production client
+- starts the production game server
+- starts a preview host reachable on your local network
+- prints shareable URL(s) like `http://192.168.x.x:3000`
+
+Optional custom ports:
+
+```bash
+PLAY_CLIENT_PORT=4000 PLAY_SERVER_PORT=4001 bun run play
+```
 
 ## Architecture
 - `src/client/app`: app shell, routes, HUD overlays, lobby/startup flows.

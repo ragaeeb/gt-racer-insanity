@@ -1,4 +1,5 @@
 import { Server as Engine } from '@socket.io/bun-engine';
+import { networkInterfaces } from 'node:os';
 import { Server } from 'socket.io';
 import { serverConfig } from '@/server/config';
 import { RoomStore } from '@/server/roomStore';
@@ -73,6 +74,31 @@ const resolveCorsAllowOrigin = (requestOrigin: string | null) => {
     }
 
     return corsOrigin.includes(requestOrigin) ? requestOrigin : null;
+};
+
+const getLanIpv4Addresses = () => {
+    const nets = networkInterfaces() as Record<
+        string,
+        | Array<{
+              address: string;
+              family: number | string;
+              internal: boolean;
+          }>
+        | undefined
+    >;
+    const addresses = new Set<string>();
+
+    for (const entries of Object.values(nets)) {
+        for (const entry of entries ?? []) {
+            const family = typeof entry.family === 'string' ? entry.family : String(entry.family);
+            if (family !== 'IPv4' || entry.internal) {
+                continue;
+            }
+            addresses.add(entry.address);
+        }
+    }
+
+    return [...addresses].sort();
 };
 
 const io = new Server({
@@ -335,6 +361,17 @@ Bun.serve({
                     simulation: 'authoritative-v2',
                     simulationTickHz: serverConfig.simulationTickHz,
                     snapshotTickHz: serverConfig.snapshotTickHz,
+                },
+                {
+                    headers: new Headers(corsHeaders),
+                },
+            );
+        }
+
+        if (pathname === '/network-info') {
+            return Response.json(
+                {
+                    lanIpv4: getLanIpv4Addresses(),
                 },
                 {
                     headers: new Headers(corsHeaders),

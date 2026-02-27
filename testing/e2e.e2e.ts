@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { expectHidden, readDebugState, STARTUP_TIMEOUT_MS } from './e2e-helpers';
+import { expectHidden, gotoLobby, readDebugState, sanitizeRoomIdForUrl, STARTUP_TIMEOUT_MS } from './e2e-helpers';
 
 test.describe('e2e smoke', () => {
     test('should load the game, move the local car, and avoid runtime errors', async ({ page }) => {
@@ -19,17 +19,17 @@ test.describe('e2e smoke', () => {
             }
         });
 
-        const roomId = `E2E${Date.now()}`;
-        await page.goto(`/lobby?room=${roomId}`, {
-            timeout: STARTUP_TIMEOUT_MS,
-            waitUntil: 'domcontentloaded',
-        });
+        const roomId = sanitizeRoomIdForUrl(`E2E${Date.now()}`);
+        await gotoLobby(page, roomId);
         await page.bringToFront();
         await page.focus('body');
 
         await page.locator('#player-name-input').fill('E2E Driver');
         await page.locator('#player-name-confirm').click();
-        await page.waitForURL(new RegExp(`/race\\?room=${roomId}$`), { timeout: STARTUP_TIMEOUT_MS });
+        await page.waitForURL(
+            (url) => url.pathname === '/race' && sanitizeRoomIdForUrl(url.searchParams.get('room') ?? '') === roomId,
+            { timeout: STARTUP_TIMEOUT_MS },
+        );
 
         await page.locator('canvas').waitFor({ timeout: STARTUP_TIMEOUT_MS });
         await page.locator('#speed').waitFor({ timeout: STARTUP_TIMEOUT_MS });

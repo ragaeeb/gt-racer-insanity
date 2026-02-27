@@ -290,7 +290,8 @@ canvas {
 /* ============================================================
    HUD — DEBUG LOG BUTTON
    ============================================================ */
-#generate-debug-log-btn {
+#generate-debug-log-btn,
+#share-race-link-btn {
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(0, 229, 255, 0.13);
     border-radius: 3px;
@@ -305,7 +306,10 @@ canvas {
     transition: all 0.2s ease;
 }
 
-#generate-debug-log-btn:hover {
+#generate-debug-log-btn:hover,
+#share-race-link-btn:hover,
+#generate-debug-log-btn:focus-visible,
+#share-race-link-btn:focus-visible {
     border-color: rgba(0, 229, 255, 0.5);
     color: var(--gt-cyan);
     text-shadow: 0 0 8px rgba(0, 229, 255, 0.5);

@@ -140,6 +140,7 @@ const FullScene = ({ vehicleClassId, colorId }: SceneProps) => {
 };
 
 type LobbyCarPreviewProps = {
+    allowTrackSelection?: boolean;
     onSelectColor: (colorId: string) => void;
     selectedVehicleId: VehicleClassId;
     selectedColorId: string;
@@ -159,6 +160,7 @@ for (const path of PRELOAD_PATHS) {
 }
 
 export const LobbyCarPreview = ({
+    allowTrackSelection = true,
     onSelectColor,
     selectedVehicleId,
     selectedColorId,
@@ -175,58 +177,60 @@ export const LobbyCarPreview = ({
 
     return (
         <div className="flex flex-col gap-4">
-            <fieldset className="space-y-2 border-none p-0 m-0">
-                <legend className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/40 uppercase mb-2 block">
-                    DESTINATION
-                </legend>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    <button
-                        type="button"
-                        onClick={() => onSelectTrack('')}
-                        className="py-3 px-2 font-mono text-xs uppercase tracking-wider transition-all"
-                        style={{
-                            background: selectedTrackId === '' ? 'rgba(0,229,255,0.12)' : 'rgba(0,0,0,0.3)',
-                            border:
-                                selectedTrackId === ''
-                                    ? '1px solid rgba(0,229,255,0.6)'
-                                    : '1px solid rgba(0,229,255,0.12)',
-                            color: selectedTrackId === '' ? '#00E5FF' : 'rgba(0,229,255,0.4)',
-                            boxShadow: selectedTrackId === '' ? '0 0 12px rgba(0,229,255,0.15)' : 'none',
-                        }}
-                    >
-                        <div className="flex flex-col items-center gap-0.5">
-                            <span className="font-bold">RANDOM</span>
-                            <span className="text-[9px] tracking-wide opacity-70">ANY TRACK</span>
-                        </div>
-                    </button>
-                    {TRACK_MANIFESTS.map((track) => {
-                        const isSelected = selectedTrackId === track.id;
-                        return (
-                            <button
-                                key={track.id}
-                                type="button"
-                                onClick={() => onSelectTrack(track.id)}
-                                className="py-3 px-2 font-mono text-xs uppercase tracking-wider transition-all"
-                                style={{
-                                    background: isSelected ? 'rgba(0,229,255,0.12)' : 'rgba(0,0,0,0.3)',
-                                    border: isSelected
+            {allowTrackSelection ? (
+                <fieldset className="space-y-2 border-none p-0 m-0">
+                    <legend className="font-mono text-[9px] tracking-[0.2em] text-[#00E5FF]/40 uppercase mb-2 block">
+                        DESTINATION
+                    </legend>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <button
+                            type="button"
+                            onClick={() => onSelectTrack('')}
+                            className="py-3 px-2 font-mono text-xs uppercase tracking-wider transition-all"
+                            style={{
+                                background: selectedTrackId === '' ? 'rgba(0,229,255,0.12)' : 'rgba(0,0,0,0.3)',
+                                border:
+                                    selectedTrackId === ''
                                         ? '1px solid rgba(0,229,255,0.6)'
                                         : '1px solid rgba(0,229,255,0.12)',
-                                    color: isSelected ? '#00E5FF' : 'rgba(0,229,255,0.4)',
-                                    boxShadow: isSelected ? '0 0 12px rgba(0,229,255,0.15)' : 'none',
-                                }}
-                            >
-                                <div className="flex flex-col items-center gap-0.5">
-                                    <span className="font-bold leading-tight text-center">{track.label}</span>
-                                    <span className="text-[9px] tracking-wide opacity-70">
-                                        {(track.lengthMeters / 1000).toFixed(1)}KM
-                                    </span>
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-            </fieldset>
+                                color: selectedTrackId === '' ? '#00E5FF' : 'rgba(0,229,255,0.4)',
+                                boxShadow: selectedTrackId === '' ? '0 0 12px rgba(0,229,255,0.15)' : 'none',
+                            }}
+                        >
+                            <div className="flex flex-col items-center gap-0.5">
+                                <span className="font-bold">RANDOM</span>
+                                <span className="text-[9px] tracking-wide opacity-70">ANY TRACK</span>
+                            </div>
+                        </button>
+                        {TRACK_MANIFESTS.map((track) => {
+                            const isSelected = selectedTrackId === track.id;
+                            return (
+                                <button
+                                    key={track.id}
+                                    type="button"
+                                    onClick={() => onSelectTrack(track.id)}
+                                    className="py-3 px-2 font-mono text-xs uppercase tracking-wider transition-all"
+                                    style={{
+                                        background: isSelected ? 'rgba(0,229,255,0.12)' : 'rgba(0,0,0,0.3)',
+                                        border: isSelected
+                                            ? '1px solid rgba(0,229,255,0.6)'
+                                            : '1px solid rgba(0,229,255,0.12)',
+                                        color: isSelected ? '#00E5FF' : 'rgba(0,229,255,0.4)',
+                                        boxShadow: isSelected ? '0 0 12px rgba(0,229,255,0.15)' : 'none',
+                                    }}
+                                >
+                                    <div className="flex flex-col items-center gap-0.5">
+                                        <span className="font-bold leading-tight text-center">{track.label}</span>
+                                        <span className="text-[9px] tracking-wide opacity-70">
+                                            {(track.lengthMeters / 1000).toFixed(1)}KM
+                                        </span>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </fieldset>
+            ) : null}
 
             <div className="mt-4">
                 <button

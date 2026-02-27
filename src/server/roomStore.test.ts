@@ -3,13 +3,7 @@ import { RoomStore } from '@/server/roomStore';
 import { getTrackManifestIds } from '@/shared/game/track/trackManifest';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 
-const createInputFrame = (
-    roomId: string,
-    seq: number,
-    timestampMs: number,
-    throttle = 1,
-    steering = 0
-) => {
+const createInputFrame = (roomId: string, seq: number, timestampMs: number, throttle = 1, steering = 0) => {
     return {
         ackSnapshotSeq: null,
         controls: {
@@ -28,13 +22,7 @@ const createInputFrame = (
     };
 };
 
-const advanceSimulation = (
-    store: RoomStore,
-    roomId: string,
-    playerId: string,
-    stepCount: number,
-    startMs: number
-) => {
+const advanceSimulation = (store: RoomStore, roomId: string, playerId: string, stepCount: number, startMs: number) => {
     for (let step = 0; step < stepCount; step += 1) {
         const nowMs = startMs + (step + 1) * 16;
         store.queueInputFrame(roomId, playerId, createInputFrame(roomId, step + 1, nowMs));
@@ -119,11 +107,7 @@ describe('RoomStore', () => {
     it('should return false when queueing input for an unknown room', () => {
         const store = new RoomStore(() => 5);
 
-        const enqueued = store.queueInputFrame(
-            'ROOM1',
-            'player-1',
-            createInputFrame('ROOM1', 1, 1_000)
-        );
+        const enqueued = store.queueInputFrame('ROOM1', 'player-1', createInputFrame('ROOM1', 1, 1_000));
 
         expect(enqueued).toEqual(false);
     });
@@ -237,9 +221,9 @@ describe('RoomStore', () => {
         const afterRestartSnapshot = store.buildRoomSnapshot('ROOM1', 6_000);
         const afterRestartPlayer = afterRestartSnapshot?.players.find((player) => player.id === 'player-1');
         expect(afterRestartSnapshot?.raceState.status).toEqual('running');
-        expect(afterRestartSnapshot?.raceState.winnerPlayerId).toEqual(null);
-        expect(afterRestartSnapshot?.raceState.endedAtMs).toEqual(null);
-        expect(afterRestartSnapshot?.raceState.startedAtMs).toEqual(6_000);
+        expect(afterRestartSnapshot?.raceState.winnerPlayerId).toBeNull();
+        expect(afterRestartSnapshot?.raceState.endedAtMs).toBeNull();
+        expect(afterRestartSnapshot?.raceState.startedAtMs).toBeNull();
         expect(afterRestartPlayer).toBeDefined();
         expect(afterRestartPlayer?.x ?? 0).toBeCloseTo(-6, 1);
         expect(afterRestartPlayer?.z ?? 0).toBeCloseTo(0, 1);

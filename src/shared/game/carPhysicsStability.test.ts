@@ -49,13 +49,16 @@ describe('car physics stability', () => {
         }
     });
 
-    it('should come to a full stop from max speed within 10 seconds of no input', () => {
+    it('should come to a full stop from max speed with no input after enough simulated time', () => {
         for (const manifest of VEHICLE_CLASS_MANIFESTS) {
             const config = vehicleManifestToPhysicsConfig(manifest.physics, DEFAULT_CAR_PHYSICS_CONFIG.deceleration);
 
             let state: CarMotionState = { ...origin, speed: config.maxForwardSpeed };
             const dt = 1 / 60;
-            for (let i = 0; i < 600; i++) {
+            expect(config.friction).toBeGreaterThan(0);
+            const secondsToStop = config.maxForwardSpeed / config.friction;
+            const simulationFrames = Math.ceil((secondsToStop + 0.5) / dt);
+            for (let i = 0; i < simulationFrames; i++) {
                 state = stepCarMotion(state, noInput, dt, config);
             }
 

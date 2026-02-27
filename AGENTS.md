@@ -25,6 +25,7 @@ Build and maintain a full multiplayer racing game with a clean architecture, hig
 - Install deps: `bun install`
 - Client dev server: `bun run dev`
 - Multiplayer server: `bun run server`
+- Production LAN play helper: `bun run play` (builds + starts server/preview and prints shareable local URL)
 - Build: `bun run build`
 - Unit tests: `bun run test`
 - Watch tests: `bun run test:watch`

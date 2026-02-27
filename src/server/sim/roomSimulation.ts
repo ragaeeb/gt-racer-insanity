@@ -1,27 +1,31 @@
-import { getHazardManifestById } from '@/shared/game/hazard/hazardManifest';
-import { getPowerupManifestById } from '@/shared/game/powerup/powerupManifest';
 import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
 import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
 import type { ClientInputFrame } from '@/shared/network/inputFrame';
 import type { ServerSnapshotPayload } from '@/shared/network/snapshot';
 import type { AbilityActivatePayload, RaceEventPayload } from '@/shared/network/types';
 import { PLAYER_COLLIDER_HALF_WIDTH_METERS } from '@/shared/physics/constants';
-import { applyAbilityActivation, commitAbilityCooldown } from './abilitySystem';
 import { CollisionManager } from './collisionManager';
-import { applyDriveStep, drainStartedCollisions, syncPlayerMotionFromRigidBody } from './collisionSystem';
-import { checkDeployableCollisions, spawnDeployable, updateDeployables } from './deployableSystem';
-import { tickStatusEffects } from './effectSystem';
-import { snapPlayerToGround } from './groundSnapSystem';
-import { applyHazardTriggers, type HazardTrigger } from './hazardSystem';
+import type { HazardTrigger } from './hazardSystem';
 import { InputQueue } from './inputQueue';
 import { PlayerManager } from './playerManager';
-import { applyPowerupTriggers, type PowerupTrigger } from './powerupSystem';
-import { createProjectile, stepAllProjectiles } from './projectileSystem';
+import type { PowerupTrigger } from './powerupSystem';
+import { stepAllProjectiles } from './projectileSystem';
 import { RaceProgressTracker } from './raceProgressTracker';
 import { createRapierWorld } from './rapierWorld';
+import { checkHazardCollisions, checkPowerupCollisions } from './simProximityChecks';
+import {
+    type AbilityActivationEnvelope,
+    processAbilityQueue,
+    processDeployableInputs,
+    processDeployables,
+    processHazardQueue,
+    processPowerupQueue,
+} from './simQueueProcessors';
+import { buildActivePowerups, buildHazards, buildInitialRaceState } from './simStateBuilder';
+import { type SimTickContext, stepCollisionResponse, stepPhysicsAndProgress, stepPlayerDrive } from './simStepPhases';
 import { buildServerSnapshot } from './snapshotBuilder';
 import { buildTrackColliders } from './trackColliderBuilder';
-import type { ActiveHazard, ActivePowerup, SimRoomState } from './types';
+import type { SimRoomState } from './types';
 
 type RoomSimulationOptions = {
     roomId: string;
@@ -31,13 +35,6 @@ type RoomSimulationOptions = {
     trackId: string;
 };
 
-type AbilityActivationEnvelope = {
-    playerId: string;
-    payload: Omit<AbilityActivatePayload, 'roomId'>;
-};
-
-const POWERUP_PICKUP_RADIUS = 4;
-const HAZARD_CAR_HALF_LENGTH = 2;
 const TICK_OVERRUN_THRESHOLD_MS = 5;
 const BASELINE_SIMULATION_TICK_HZ = 60;
 
@@ -62,11 +59,7 @@ export class RoomSimulation {
     private readonly deployableLifetimeTicks: number;
     private readonly isTrackFlat: boolean;
     private obstacleColliderHandles = new Set<number>();
-    private tickMetrics = {
-        lastTickDurationMs: 0,
-        tickDurationMaxMs: 0,
-        tickOverrunCount: 0,
-    };
+    private tickMetrics = { lastTickDurationMs: 0, tickDurationMaxMs: 0, tickOverrunCount: 0 };
 
     constructor(options: RoomSimulationOptions) {
         const simulationTickHz = Math.max(options.tickHz, 1);
@@ -88,29 +81,19 @@ export class RoomSimulation {
         });
         this.totalTrackLengthMeters = trackColliders.totalTrackLengthMeters;
         this.obstacleColliderHandles = trackColliders.obstacleColliderHandles;
-
-        // Pre-compute: all segments have zero elevation and zero banking → skip per-tick raycasts
         this.isTrackFlat = this.trackManifest.segments.every(
             (seg) =>
                 (seg.elevationStartM ?? 0) === 0 && (seg.elevationEndM ?? 0) === 0 && (seg.bankAngleDeg ?? 0) === 0,
         );
 
         this.state = {
-            activePowerups: this.buildActivePowerups(options.totalLaps),
+            activePowerups: buildActivePowerups(options.totalLaps, this.trackManifest),
             activeProjectiles: [],
             activeDeployables: [],
-            hazards: this.buildHazards(options.totalLaps),
+            hazards: buildHazards(options.totalLaps, this.trackManifest),
             players: new Map(),
             raceEvents: [],
-            raceState: {
-                endedAtMs: null,
-                playerOrder: [],
-                startedAtMs: Date.now(),
-                status: 'running',
-                totalLaps: options.totalLaps,
-                trackId: options.trackId,
-                winnerPlayerId: null,
-            },
+            raceState: buildInitialRaceState(options),
             roomId: options.roomId,
             seed: options.seed,
             snapshotSeq: 0,
@@ -136,239 +119,25 @@ export class RoomSimulation {
         return this.playerManager.rigidBodyById;
     }
 
-    private buildActivePowerups = (totalLaps: number): ActivePowerup[] => {
-        const powerups: ActivePowerup[] = [];
-        const lapLength = this.trackManifest.lengthMeters;
-        for (let lap = 0; lap < totalLaps; lap++) {
-            const zOffset = lap * lapLength;
-            for (const spawn of this.trackManifest.powerupSpawns) {
-                powerups.push({
-                    collectedAtMs: null,
-                    id: `${spawn.id}-lap${lap}`,
-                    position: { x: spawn.x, z: spawn.z + zOffset },
-                    powerupId: spawn.powerupId,
-                    respawnAtMs: null,
-                });
-            }
-        }
-        return powerups;
-    };
-
-    private buildHazards = (totalLaps: number): ActiveHazard[] => {
-        const hazards: ActiveHazard[] = [];
-        const lapLength = this.trackManifest.lengthMeters;
-        for (let lap = 0; lap < totalLaps; lap++) {
-            const zOffset = lap * lapLength;
-            for (const spawn of this.trackManifest.hazardSpawns) {
-                hazards.push({
-                    hazardId: spawn.hazardId,
-                    id: `${spawn.id}-lap${lap}`,
-                    position: { x: spawn.x, z: spawn.z + zOffset },
-                });
-            }
-        }
-        return hazards;
-    };
-
-    private checkPowerupCollisions = (nowMs: number) => {
-        for (const powerup of this.state.activePowerups) {
-            if (powerup.collectedAtMs !== null) {
-                if (powerup.respawnAtMs !== null && nowMs >= powerup.respawnAtMs) {
-                    powerup.collectedAtMs = null;
-                    powerup.respawnAtMs = null;
-                }
-                continue;
-            }
-
-            const manifest = getPowerupManifestById(powerup.powerupId);
-            if (!manifest) {
-                continue;
-            }
-
-            for (const player of this.state.players.values()) {
-                const dx = player.motion.positionX - powerup.position.x;
-                const dz = player.motion.positionZ - powerup.position.z;
-                if (Math.sqrt(dx * dx + dz * dz) < POWERUP_PICKUP_RADIUS) {
-                    powerup.collectedAtMs = nowMs;
-                    powerup.respawnAtMs = nowMs + manifest.respawnMs;
-                    this.powerupTriggerQueue.push({ playerId: player.id, powerupType: manifest.type });
-                    break;
-                }
-            }
-        }
-    };
-
-    private checkHazardCollisions = (_nowMs: number) => {
-        for (const hazard of this.state.hazards) {
-            const manifest = getHazardManifestById(hazard.hazardId);
-            if (!manifest) {
-                continue;
-            }
-
-            for (const player of this.state.players.values()) {
-                if (player.activeEffects.some((e) => e.effectType === manifest.statusEffectId)) {
-                    continue;
-                }
-
-                const dx = player.motion.positionX - hazard.position.x;
-                const dz = player.motion.positionZ - hazard.position.z;
-                if (Math.sqrt(dx * dx + dz * dz) < manifest.collisionRadius + HAZARD_CAR_HALF_LENGTH) {
-                    this.hazardTriggerQueue.push({
-                        applyFlipOnHit: manifest.applyFlipOnHit,
-                        effectDurationMs: manifest.statusEffectDurationMs,
-                        effectType: manifest.statusEffectId,
-                        hazardId: manifest.id,
-                        playerId: player.id,
-                    });
-                }
-            }
-        }
-    };
-
     private pushRaceEvent = (event: RaceEventPayload) => {
         this.state.raceEvents.push(event);
     };
 
-    private processAbilityQueue = (nowMs: number) => {
-        if (this.abilityActivationQueue.length === 0) {
-            return;
-        }
-
-        const queuedActivations = this.abilityActivationQueue.splice(0);
-        for (const queuedActivation of queuedActivations) {
-            const resolved = applyAbilityActivation(
-                this.state.players,
-                queuedActivation.playerId,
-                queuedActivation.payload,
-                nowMs,
-                this.cooldownStore,
-            );
-
-            // Projectile-delivery abilities spawn a homing projectile
-            if (resolved.spawnProjectile) {
-                const sourcePlayer = this.state.players.get(resolved.sourcePlayerId);
-                if (sourcePlayer) {
-                    const projectile = createProjectile(
-                        sourcePlayer,
-                        this.state.players,
-                        this.state.activeProjectiles,
-                        this.combatTuning,
-                        nowMs,
-                        resolved.targetPlayerId || undefined,
-                    );
-                    if (projectile) {
-                        this.state.activeProjectiles.push(projectile);
-                        commitAbilityCooldown(this.cooldownStore, resolved.sourcePlayerId, resolved.abilityId, nowMs);
-                        this.pushRaceEvent({
-                            kind: 'ability_activated',
-                            metadata: {
-                                abilityId: resolved.abilityId,
-                                targetPlayerId: projectile.targetId,
-                            },
-                            playerId: resolved.sourcePlayerId,
-                            roomId: this.state.roomId,
-                            serverTimeMs: nowMs,
-                        });
-                    }
-                }
-                continue;
-            }
-
-            if (!resolved.applied) {
-                continue;
-            }
-
-            this.pushRaceEvent({
-                kind: 'ability_activated',
-                metadata: {
-                    abilityId: resolved.abilityId,
-                    targetPlayerId: resolved.targetPlayerId,
-                },
-                playerId: resolved.sourcePlayerId,
-                roomId: this.state.roomId,
-                serverTimeMs: nowMs,
-            });
-        }
-    };
-
-    private processHazardQueue = (nowMs: number) => {
-        if (this.hazardTriggerQueue.length === 0) {
-            return;
-        }
-
-        const triggers = this.hazardTriggerQueue.splice(0);
-        applyHazardTriggers(this.state.players, triggers, nowMs);
-
-        for (const trigger of triggers) {
-            this.pushRaceEvent({
-                kind: 'hazard_triggered',
-                metadata: {
-                    effectType: trigger.effectType,
-                    flippedPlayerId: trigger.applyFlipOnHit ? trigger.playerId : null,
-                    hazardId: trigger.hazardId ?? null,
-                },
-                playerId: trigger.playerId,
-                roomId: this.state.roomId,
-                serverTimeMs: nowMs,
-            });
-        }
-    };
-
-    private processPowerupQueue = (nowMs: number) => {
-        if (this.powerupTriggerQueue.length === 0) {
-            return;
-        }
-
-        const triggers = this.powerupTriggerQueue.splice(0);
-        applyPowerupTriggers(this.state.players, triggers, nowMs);
-
-        for (const trigger of triggers) {
-            this.pushRaceEvent({
-                kind: 'powerup_collected',
-                metadata: { powerupType: trigger.powerupType },
-                playerId: trigger.playerId,
-                roomId: this.state.roomId,
-                serverTimeMs: nowMs,
-            });
-        }
-    };
-
-    private processDeployableInputs = () => {
-        for (const player of this.state.players.values()) {
-            const isDeployPressed = player.inputState.boost;
-            const wasDeployPressed = this.deployInputPressedByPlayerId.get(player.id) ?? false;
-
-            if (isDeployPressed && !wasDeployPressed) {
-                const deployable = spawnDeployable(
-                    'oil-slick',
-                    player,
-                    this.state.activeDeployables,
-                    this.deployableLifetimeTicks,
-                    this.combatTuning,
-                    this.totalTrackLengthMeters,
-                );
-                if (deployable) {
-                    this.state.activeDeployables.push(deployable);
-                }
-            }
-
-            this.deployInputPressedByPlayerId.set(player.id, isDeployPressed);
-        }
-    };
-
-    private processDeployables = () => {
-        const deployableTriggers = checkDeployableCollisions(
-            this.state.activeDeployables,
-            this.state.players.values(),
-            this.combatTuning,
-        );
-
-        for (const trigger of deployableTriggers) {
-            this.hazardTriggerQueue.push(trigger);
-        }
-
-        updateDeployables(this.state.activeDeployables, 1);
-    };
+    private buildTickContext = (): SimTickContext => ({
+        collisionManager: this.collisionManager,
+        contactForcesByPair: this.contactForcesByPair,
+        dtSeconds: this.dtSeconds,
+        hazardTriggerQueue: this.hazardTriggerQueue,
+        inputQueue: this.inputQueue,
+        isTrackFlat: this.isTrackFlat,
+        obstacleColliderHandles: this.obstacleColliderHandles,
+        playerManager: this.playerManager,
+        progressTracker: this.progressTracker,
+        pushRaceEvent: this.pushRaceEvent,
+        rapierContext: this.rapierContext,
+        state: this.state,
+        trackBoundaryX: this.trackBoundaryX,
+    });
 
     public joinPlayer = (
         playerId: string,
@@ -432,19 +201,24 @@ export class RoomSimulation {
         this.powerupTriggerQueue.length = 0;
         this.cooldownStore.clear();
         this.state.raceEvents.length = 0;
-
-        this.state.activePowerups = this.buildActivePowerups(this.state.raceState.totalLaps);
-        this.state.hazards = this.buildHazards(this.state.raceState.totalLaps);
+        this.state.activePowerups = buildActivePowerups(this.state.raceState.totalLaps, this.trackManifest);
+        this.state.hazards = buildHazards(this.state.raceState.totalLaps, this.trackManifest);
         this.state.activeProjectiles.length = 0;
         this.state.activeDeployables.length = 0;
 
-        this.state.raceState.status = 'running';
-        this.state.raceState.winnerPlayerId = null;
-        this.state.raceState.endedAtMs = null;
-        this.state.raceState.startedAtMs = nowMs;
-        this.state.raceState.playerOrder = [];
+        const freshRaceState = buildInitialRaceState({
+            roomId: this.state.roomId,
+            seed: this.state.seed,
+            tickHz: 1 / this.dtSeconds,
+            totalLaps: this.state.raceState.totalLaps,
+            trackId: this.state.raceState.trackId,
+        });
+        const shouldStartRace = this.state.players.size >= 2;
+        Object.assign(this.state.raceState, freshRaceState, {
+            startedAtMs: shouldStartRace ? nowMs : null,
+        });
 
-        if (this.state.players.size >= 2) {
+        if (shouldStartRace) {
             this.pushRaceEvent({
                 kind: 'race_started',
                 metadata: undefined,
@@ -456,102 +230,45 @@ export class RoomSimulation {
     };
 
     public step = (nowMs: number) => {
-        const tickStart = performance.now();
-
         if (this.state.players.size === 0) {
             return;
         }
 
-        for (const player of this.state.players.values()) {
-            const frame = this.inputQueue.consumeLatestAfter(player.id, player.lastProcessedInputSeq);
-            if (frame) {
-                player.inputState = frame.controls;
-                player.lastProcessedInputSeq = frame.seq;
-            }
+        const tickStart = performance.now();
+        const ctx = this.buildTickContext();
 
-            tickStatusEffects(player, nowMs);
-
-            const rigidBody = this.playerManager.rigidBodyById.get(player.id);
-            if (!rigidBody) {
-                continue;
-            }
-
-            if (nowMs < this.collisionManager.getDriveRecoveryUntilMs(player.id)) {
-                continue;
-            }
-
-            applyDriveStep({ dtSeconds: this.dtSeconds, nowMs, player, rigidBody });
-        }
-
-        this.processDeployableInputs();
-
-        // Step projectiles (pure math — no Rapier bodies, AD-02)
+        stepPlayerDrive(ctx, nowMs);
+        processDeployableInputs(
+            this.state.players,
+            this.state.activeDeployables,
+            this.deployInputPressedByPlayerId,
+            this.deployableLifetimeTicks,
+            this.combatTuning,
+            this.totalTrackLengthMeters,
+        );
         stepAllProjectiles(this.state, this.dtSeconds, nowMs, this.combatTuning, this.pushRaceEvent);
-
-        this.rapierContext.world.step(this.rapierContext.eventQueue);
-
-        for (const player of this.state.players.values()) {
-            const rigidBody = this.playerManager.rigidBodyById.get(player.id);
-            if (!rigidBody) {
-                continue;
-            }
-
-            // Step 1: sync rigid body position → player.motion (includes positionY)
-            syncPlayerMotionFromRigidBody(player, rigidBody, this.trackBoundaryX);
-            // Step 2: ground-snap overwrites positionY with snapped value.
-            // This ordering is intentional — do not reorder steps 1 and 2.
-            snapPlayerToGround(
-                this.rapierContext.rapier,
-                player,
-                rigidBody,
-                this.rapierContext.world,
-                this.dtSeconds,
-                this.isTrackFlat,
-            );
-            this.progressTracker.updateProgress(player, this.state.raceState, nowMs, this.pushRaceEvent);
-        }
-
-        const collisionResult = drainStartedCollisions(
-            this.rapierContext.eventQueue,
-            this.playerManager.colliderHandleToPlayerId,
-            this.obstacleColliderHandles,
-        );
-
-        // Drain Rapier contact force events to extract impulse magnitudes for
-        // mass-scaled bump response. Keep the max magnitude per player pair.
-        const contactForces = this.contactForcesByPair;
-        contactForces.clear();
-        this.rapierContext.eventQueue.drainContactForceEvents((event) => {
-            const handle1 = event.collider1();
-            const handle2 = event.collider2();
-            const id1 = this.playerManager.colliderHandleToPlayerId.get(handle1);
-            const id2 = this.playerManager.colliderHandleToPlayerId.get(handle2);
-
-            if (id1 && id2) {
-                const key = id1 < id2 ? `${id1}:${id2}` : `${id2}:${id1}`;
-                const magnitude = event.totalForceMagnitude();
-                contactForces.set(key, Math.max(contactForces.get(key) ?? 0, magnitude));
-            }
-        });
-
-        this.collisionManager.processBumpCollisions(
-            collisionResult.startedPlayerPairs,
-            collisionResult.endedPlayerPairs,
+        stepPhysicsAndProgress(ctx, nowMs);
+        stepCollisionResponse(ctx, nowMs);
+        checkHazardCollisions(this.state.hazards, this.state.players, this.hazardTriggerQueue);
+        checkPowerupCollisions(this.state.activePowerups, this.state.players, this.powerupTriggerQueue, nowMs);
+        processAbilityQueue(
+            this.abilityActivationQueue,
+            this.state.players,
+            this.state.activeProjectiles,
+            this.cooldownStore,
+            this.combatTuning,
+            this.state.roomId,
+            this.pushRaceEvent,
             nowMs,
-            contactForces,
         );
-
-        const obstacleTriggers = this.collisionManager.processObstacleHits(collisionResult.obstacleHits, nowMs);
-        for (const trigger of obstacleTriggers) {
-            this.hazardTriggerQueue.push(trigger);
-        }
-
-        this.checkHazardCollisions(nowMs);
-        this.checkPowerupCollisions(nowMs);
-        this.processAbilityQueue(nowMs);
-        this.processDeployables();
-        this.processHazardQueue(nowMs);
-        this.processPowerupQueue(nowMs);
+        processDeployables(
+            this.state.activeDeployables,
+            this.state.players,
+            this.combatTuning,
+            this.hazardTriggerQueue,
+        );
+        processHazardQueue(this.hazardTriggerQueue, this.state.players, this.state.roomId, this.pushRaceEvent, nowMs);
+        processPowerupQueue(this.powerupTriggerQueue, this.state.players, this.state.roomId, this.pushRaceEvent, nowMs);
 
         const tickDuration = performance.now() - tickStart;
         this.tickMetrics.lastTickDurationMs = tickDuration;
@@ -561,9 +278,7 @@ export class RoomSimulation {
         }
     };
 
-    public buildSnapshot = (nowMs: number): ServerSnapshotPayload => {
-        return buildServerSnapshot(this.state, nowMs);
-    };
+    public buildSnapshot = (nowMs: number): ServerSnapshotPayload => buildServerSnapshot(this.state, nowMs);
 
     public drainRaceEvents = () => {
         if (this.state.raceEvents.length === 0) {
@@ -587,9 +302,7 @@ export class RoomSimulation {
         };
     };
 
-    public getPlayers = () => {
-        return this.state.players;
-    };
+    public getPlayers = () => new Map(this.state.players);
 
     public getTickMetrics = () => ({ ...this.tickMetrics });
 }

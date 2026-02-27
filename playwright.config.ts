@@ -18,6 +18,8 @@ export default defineConfig({
     use: {
         baseURL: `http://127.0.0.1:${CLIENT_PORT}`,
         headless: true,
+        actionTimeout: 12_000,
+        navigationTimeout: 30_000,
         trace: 'retain-on-failure',
         launchOptions: {
             args: [
@@ -47,7 +49,9 @@ export default defineConfig({
             command: `bun x vite preview --host 127.0.0.1 --port ${CLIENT_PORT} --strictPort`,
             url: `http://127.0.0.1:${CLIENT_PORT}`,
             timeout: 90_000,
-            reuseExistingServer: !isCI,
+            // Intentionally asymmetric with server's `reuseExistingServer: !isCI`: always start a fresh preview
+            // so E2E exercises current production build output and avoids stale/distatched preview on port 4173.
+            reuseExistingServer: false,
             stdout: 'pipe',
             stderr: 'pipe',
             gracefulShutdown: {
