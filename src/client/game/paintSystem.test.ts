@@ -151,4 +151,59 @@ describe('paintSystem', () => {
 
         expect(clonedMats.has(mat)).toBe(true);
     });
+
+    it('should inject dirt uniform without #include <common> at the top', () => {
+        const inputShader = 'void main() { gl_FragColor = vec4(1.0); }';
+        const result = injectDirtIntensityUniform(inputShader);
+        expect(result.startsWith('uniform float dirtIntensity;')).toBe(true);
+    });
+
+    it('should update dirtIntensity uniform after onBeforeCompile is called', () => {
+        const scene = new THREE.Group();
+        const sourceMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, name: 'Body' });
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), sourceMaterial);
+        scene.add(mesh);
+
+        const refs = applyCarPaint(scene, new THREE.Color(0xff0055));
+        expect(refs).toHaveLength(1);
+
+        const ref = refs[0];
+        // Trigger the onBeforeCompile to cache the shader
+        const fakeShader = {
+            fragmentShader: '#include <common>\nvoid main() {\n#include <dithering_fragment>\n}',
+            uniforms: {},
+        } as unknown as THREE.WebGLProgramParametersWithUniforms;
+        ref.material.onBeforeCompile(fakeShader, {} as THREE.WebGLRenderer);
+
+        // Now the setter should actually update the cached shader uniform
+        expect(() => ref.setDirtIntensity(0.8)).not.toThrow();
+        expect((fakeShader.uniforms['dirtIntensity'] as { value: number }).value).toBeCloseTo(0.8, 5);
+    });
+
+    it('should skip materials in SKIP_MATERIAL_NAMES set', () => {
+        const skipNames = ['Windows', 'Grey', 'Black', 'Headlights', 'TailLights', 'BrakeLight'];
+        for (const name of skipNames) {
+            const scene = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: 0x888888, name });
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+            scene.add(mesh);
+
+            const refs = applyCarPaint(scene, new THREE.Color(0xff0000));
+            // Should produce no paint refs (material is in skip list)
+            expect(refs).toHaveLength(0);
+        }
+    });
+
+    it('should handle array materials on a mesh and still paint body materials', () => {
+        const scene = new THREE.Group();
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, name: 'Body' });
+        const windowsMat = new THREE.MeshStandardMaterial({ color: 0xccccff, name: 'Windows' });
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), [bodyMat, windowsMat]);
+        scene.add(mesh);
+
+        const refs = applyCarPaint(scene, new THREE.Color(0xff0000));
+        // Only body should be painted
+        expect(refs).toHaveLength(1);
+        expect(Array.isArray(mesh.material)).toBeTrue();
+    });
 });

@@ -152,6 +152,169 @@ describe('TrackManager', () => {
         });
     });
 
+    describe('syncPowerups and syncHazards', () => {
+        it('should add powerup orbs to the scene when syncPowerups is called', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+
+            manager.syncPowerups([{ id: 'pu-1', powerupId: 'powerup-speed', isActive: true, x: 10, z: 20 }]);
+
+            const orb = scene.children.find((c) => c.name === 'powerup-orb');
+            expect(orb).toBeDefined();
+        });
+
+        it('should update powerup visibility based on isActive flag', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+
+            manager.syncPowerups([{ id: 'pu-1', powerupId: 'powerup-speed', isActive: false, x: 0, z: 0 }]);
+
+            const orb = scene.children.find((c) => c.name === 'powerup-orb');
+            expect(orb?.visible).toBeFalse();
+        });
+
+        it('should not duplicate powerup orbs when syncPowerups is called twice', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+            const powerup = { id: 'pu-1', powerupId: 'powerup-speed', isActive: true, x: 0, z: 0 };
+
+            manager.syncPowerups([powerup]);
+            manager.syncPowerups([powerup]);
+
+            const orbs = scene.children.filter((c) => c.name === 'powerup-orb');
+            expect(orbs).toHaveLength(1);
+        });
+
+        it('should add spike strip to the scene when syncHazards is called with spike-strip id', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+
+            manager.syncHazards([{ id: 'hz-1', hazardId: 'spike-strip', x: 5, z: 15 }]);
+
+            const strip = scene.children.find((c) => c.name === 'spike-strip');
+            expect(strip).toBeDefined();
+        });
+
+        it('should add puddle trap to the scene when syncHazards is called with puddle-trap id', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+
+            manager.syncHazards([{ id: 'hz-2', hazardId: 'puddle-trap', x: 0, z: 50 }]);
+
+            const puddle = scene.children.find((c) => c.name === 'puddle-trap');
+            expect(puddle).toBeDefined();
+        });
+
+        it('should not duplicate hazard visuals when syncHazards is called twice', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+            const hazard = { id: 'hz-1', hazardId: 'spike-strip', x: 0, z: 0 };
+
+            manager.syncHazards([hazard]);
+            manager.syncHazards([hazard]);
+
+            const strips = scene.children.filter((c) => c.name === 'spike-strip');
+            expect(strips).toHaveLength(1);
+        });
+    });
+
+    describe('dispose powerups and hazards during reset', () => {
+        it('should dispose powerup orbs when reset is called after syncPowerups', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+
+            manager.syncPowerups([{ id: 'pu-1', powerupId: 'powerup-speed', isActive: true, x: 5, z: 5 }]);
+            const orbBefore = scene.children.find((c) => c.name === 'powerup-orb');
+            expect(orbBefore).toBeDefined();
+
+            manager.reset();
+
+            const orbAfter = scene.children.find((c) => c.name === 'powerup-orb');
+            expect(orbAfter).toBeUndefined();
+        });
+
+        it('should dispose hazard visuals when reset is called after syncHazards', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+
+            manager.syncHazards([{ id: 'hz-1', hazardId: 'spike-strip', x: 0, z: 10 }]);
+            const stripBefore = scene.children.find((c) => c.name === 'spike-strip');
+            expect(stripBefore).toBeDefined();
+
+            manager.reset();
+
+            const stripAfter = scene.children.find((c) => c.name === 'spike-strip');
+            expect(stripAfter).toBeUndefined();
+        });
+
+        it('should dispose hazard visuals when dispose is called after syncHazards', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+
+            manager.syncHazards([{ id: 'hz-1', hazardId: 'puddle-trap', x: 0, z: 15 }]);
+            manager.dispose();
+
+            const puddleAfter = scene.children.find((c) => c.name === 'puddle-trap');
+            expect(puddleAfter).toBeUndefined();
+        });
+    });
+
+    describe('setTrack and setSeed', () => {
+        it('should change track and rebuild the finish line when setTrack is called', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+            const oldGroup = manager.finishLineGroup;
+
+            manager.setTrack('canyon-sprint');
+
+            expect(manager.finishLineGroup).not.toBe(oldGroup);
+            expect(manager.getTrackId()).toBe('canyon-sprint');
+        });
+
+        it('should rebuild the track when setSeed is called', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+            const oldGroup = manager.finishLineGroup;
+
+            manager.setSeed(99);
+
+            expect(manager.finishLineGroup).not.toBe(oldGroup);
+        });
+    });
+
+    describe('accessors', () => {
+        it('should return the track id via getTrackId', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'neon-city');
+            expect(manager.getTrackId()).toBe('neon-city');
+        });
+
+        it('should return the track length via getTrackLengthMeters', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+            expect(manager.getTrackLengthMeters()).toBeGreaterThan(0);
+        });
+
+        it('should return the total laps via getTotalLaps', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+            expect(manager.getTotalLaps()).toBeGreaterThan(0);
+        });
+
+        it('should return race distance as trackLength * totalLaps via getRaceDistanceMeters', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+            expect(manager.getRaceDistanceMeters()).toBe(manager.getTrackLengthMeters() * manager.getTotalLaps());
+        });
+
+        it('should return active obstacles array via getActiveObstacles', () => {
+            const scene = new THREE.Scene();
+            const manager = new TrackManager(scene, 42, 'sunset-loop');
+            const obstacles = manager.getActiveObstacles();
+            expect(Array.isArray(obstacles)).toBeTrue();
+        });
+    });
+
     describe('flag animation', () => {
         it('should have flags with modifiable vertex positions', () => {
             const scene = new THREE.Scene();

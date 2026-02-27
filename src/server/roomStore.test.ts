@@ -230,4 +230,73 @@ describe('RoomStore', () => {
         expect(afterRestartPlayer?.speed ?? 1).toBeCloseTo(0, 3);
         expect(afterRestartPlayer?.lastProcessedInputSeq).toEqual(-1);
     });
+
+    it('should return false from restartRoomRace for an unknown room', () => {
+        const store = new RoomStore(() => 1);
+        const result = store.restartRoomRace('NONEXISTENT', 1_000);
+        expect(result).toEqual(false);
+    });
+
+    it('should return false from queueAbilityActivation for an unknown room', () => {
+        const store = new RoomStore(() => 1);
+        const result = store.queueAbilityActivation('NONEXISTENT', 'player-1', {
+            abilityId: 'turbo-boost',
+            seq: 1,
+            targetPlayerId: null,
+        });
+        expect(result).toEqual(false);
+    });
+
+    it('should return true from queueAbilityActivation for a known room', () => {
+        const store = new RoomStore(() => 1);
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
+        const result = store.queueAbilityActivation('ROOM1', 'player-1', {
+            abilityId: 'turbo-boost',
+            seq: 1,
+            targetPlayerId: null,
+        });
+        expect(result).toEqual(true);
+    });
+
+    it('should return false from queueHazardTrigger for an unknown room', () => {
+        const store = new RoomStore(() => 1);
+        const result = store.queueHazardTrigger('NONEXISTENT', {
+            hazardId: 'spike-strip',
+            triggeredBy: 'player-1',
+            id: 'hz-1',
+        } as any);
+        expect(result).toEqual(false);
+    });
+
+    it('should return true from queueHazardTrigger for a known room', () => {
+        const store = new RoomStore(() => 1);
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
+        const result = store.queueHazardTrigger('ROOM1', {
+            hazardId: 'spike-strip',
+            triggeredBy: 'player-1',
+            id: 'hz-1',
+        } as any);
+        expect(result).toEqual(true);
+    });
+
+    it('should return false from queuePowerupTrigger for an unknown room', () => {
+        const store = new RoomStore(() => 1);
+        const result = store.queuePowerupTrigger('NONEXISTENT', {
+            powerupId: 'speed-boost',
+            playerId: 'player-1',
+            powerupInstanceId: 'pu-1',
+        } as any);
+        expect(result).toEqual(false);
+    });
+
+    it('should return true from queuePowerupTrigger for a known room', () => {
+        const store = new RoomStore(() => 1);
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
+        const result = store.queuePowerupTrigger('ROOM1', {
+            powerupId: 'speed-boost',
+            playerId: 'player-1',
+            powerupInstanceId: 'pu-1',
+        } as any);
+        expect(result).toEqual(true);
+    });
 });

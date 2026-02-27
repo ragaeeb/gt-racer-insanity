@@ -1084,3 +1084,64 @@ describe('drift system integration', () => {
         expect(maxBoostTier).toBe(3);
     });
 });
+
+describe('RoomSimulation — toLegacyPlayerState / getPlayers / getTickMetrics', () => {
+    it('should return null from toLegacyPlayerState for an unknown player', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+        expect(simulation.toLegacyPlayerState('nonexistent')).toBeNull();
+    });
+
+    it('should return the player legacy state from toLegacyPlayerState', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+        simulation.joinPlayer('p1', 'Alice', 'sport', 'red');
+        const state = simulation.toLegacyPlayerState('p1');
+        expect(state).not.toBeNull();
+        expect(state?.id).toBe('p1');
+        expect(state?.name).toBe('Alice');
+        expect(typeof state?.x).toBe('number');
+        expect(typeof state?.y).toBe('number');
+        expect(typeof state?.z).toBe('number');
+        expect(typeof state?.rotationY).toBe('number');
+    });
+
+    it('should return a copy of all players via getPlayers', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+        simulation.joinPlayer('p1', 'Alice', 'sport', 'red');
+        simulation.joinPlayer('p2', 'Bob', 'sport', 'blue');
+        const players = simulation.getPlayers();
+        expect(players.size).toBe(2);
+        expect(players.has('p1')).toBeTrue();
+        expect(players.has('p2')).toBeTrue();
+    });
+
+    it('should return tick metrics as a plain object via getTickMetrics', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+        const metrics = simulation.getTickMetrics();
+        expect(typeof metrics).toBe('object');
+        expect(metrics).not.toBeNull();
+    });
+});

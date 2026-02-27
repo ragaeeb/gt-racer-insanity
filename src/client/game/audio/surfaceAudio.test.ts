@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'bun:test';
+import { getTrackManifestById } from '@/shared/game/track/trackManifest';
 import {
-    calculateSquealVolume,
-    calculateSquealPitch,
     calculateRumbleVolume,
+    calculateSquealPitch,
+    calculateSquealVolume,
     DEFAULT_SURFACE_AUDIO_TUNING,
 } from './surfaceAudio';
-import { getTrackManifestById } from '@/shared/game/track/trackManifest';
 
 describe('Surface Audio — squeal volume', () => {
     it('should return 0 when not drifting', () => {
@@ -104,11 +104,176 @@ describe('Surface Audio — rumble volume', () => {
     });
 });
 
+describe('SurfaceAudioManager', () => {
+    class FakePositionalAudio extends require('three').Object3D {
+        public isPlaying = true;
+        public volume = 0;
+        public playbackRate = 1;
+        public playCalls = 0;
+        public stopCalls = 0;
+        public disconnectCalls = 0;
+        public gain = {
+            connect: () => undefined,
+            disconnect: () => undefined,
+        };
+        public setVolume = (v: number) => {
+            this.volume = v;
+        };
+        public setPlaybackRate = (v: number) => {
+            this.playbackRate = v;
+        };
+        public play = () => {
+            this.playCalls += 1;
+            this.isPlaying = true;
+        };
+        public stop = () => {
+            this.stopCalls += 1;
+            this.isPlaying = false;
+        };
+        public disconnect = () => {
+            this.disconnectCalls += 1;
+        };
+        public setBuffer = () => undefined;
+        public setRefDistance = () => undefined;
+        public setLoop = () => undefined;
+    }
+
+    const { SurfaceAudioManager } = require('./surfaceAudio');
+    const THREE = require('three');
+
+    const fakeListener = { context: { state: 'running' } } as unknown as import('three').AudioListener;
+
+    it('should construct without sounds when no buffers are provided', () => {
+        expect(() => new SurfaceAudioManager(fakeListener, {})).not.toThrow();
+    });
+
+    it('should attach sounds to a mesh when sounds are injected', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        const mesh = new THREE.Object3D();
+        // Replace internal sounds with fakes (bypasses AudioContext creation)
+        const squeal = new FakePositionalAudio();
+        const rumble = new FakePositionalAudio();
+        (manager as any).squealSound = squeal;
+        (manager as any).rumbleSound = rumble;
+
+        manager.attachTo(mesh);
+        expect(mesh.children.includes(squeal)).toBeTrue();
+        expect(mesh.children.includes(rumble)).toBeTrue();
+    });
+
+    it('should detach sounds from a mesh', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        const mesh = new THREE.Object3D();
+        const squeal = new FakePositionalAudio();
+        const rumble = new FakePositionalAudio();
+        (manager as any).squealSound = squeal;
+        (manager as any).rumbleSound = rumble;
+        mesh.add(squeal);
+        mesh.add(rumble);
+
+        manager.detachFrom(mesh);
+        expect(mesh.children.includes(squeal)).toBeFalse();
+        expect(mesh.children.includes(rumble)).toBeFalse();
+    });
+
+    it('should call update on the squeal and rumble sounds', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        const squeal = new FakePositionalAudio();
+        const rumble = new FakePositionalAudio();
+        (manager as any).squealSound = squeal;
+        (manager as any).rumbleSound = rumble;
+
+        // High friction, drifting, fast speed → squeal active
+        manager.update(40, 1.0, true);
+        expect(squeal.volume).toBeGreaterThan(0);
+        expect(squeal.playbackRate).toBeCloseTo(1.0, 3);
+    });
+
+    it('should stop playing sounds when stop is called', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        const squeal = new FakePositionalAudio();
+        squeal.isPlaying = true;
+        (manager as any).squealSound = squeal;
+
+        manager.stop();
+        expect(squeal.stopCalls).toBe(1);
+    });
+
+    it('should not stop sounds that are not playing', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        const squeal = new FakePositionalAudio();
+        squeal.isPlaying = false;
+        (manager as any).squealSound = squeal;
+
+        manager.stop();
+        expect(squeal.stopCalls).toBe(0);
+    });
+
+    it('should play sounds when restart is called and sound is not playing', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        const squeal = new FakePositionalAudio();
+        squeal.isPlaying = false;
+        (manager as any).squealSound = squeal;
+
+        manager.restart();
+        expect(squeal.playCalls).toBe(1);
+    });
+
+    it('should not play sounds when restart is called and sound is already playing', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        const squeal = new FakePositionalAudio();
+        squeal.isPlaying = true;
+        (manager as any).squealSound = squeal;
+
+        manager.restart();
+        expect(squeal.playCalls).toBe(0);
+    });
+
+    it('should disconnect sounds on dispose', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        const squeal = new FakePositionalAudio();
+        squeal.isPlaying = false;
+        const rumble = new FakePositionalAudio();
+        rumble.isPlaying = false;
+        (manager as any).squealSound = squeal;
+        (manager as any).rumbleSound = rumble;
+
+        manager.dispose();
+        expect(squeal.disconnectCalls).toBe(1);
+        expect(rumble.disconnectCalls).toBe(1);
+    });
+
+    it('should connect sounds through mix state effects gain node', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        const squeal = new FakePositionalAudio();
+        const rumble = new FakePositionalAudio();
+        let connectCalls = 0;
+        squeal.gain.connect = () => {
+            connectCalls++;
+        };
+        rumble.gain.connect = () => {
+            connectCalls++;
+        };
+        (manager as any).squealSound = squeal;
+        (manager as any).rumbleSound = rumble;
+
+        const fakeMixManager = {
+            getChannels: () => ({ effects: {} }),
+        };
+        manager.connectToMixState(fakeMixManager as any);
+        expect(connectCalls).toBe(2);
+    });
+
+    it('should be a no-op when connectToMixState is called without a manager', () => {
+        const manager = new SurfaceAudioManager(fakeListener, {});
+        expect(() => manager.connectToMixState(undefined)).not.toThrow();
+    });
+});
+
 describe('Surface Audio — real track friction integration checks', () => {
     const canyonTrack = getTrackManifestById('canyon-sprint');
     const canyonLowGrip = canyonTrack.segments.find((segment) => segment.id === 'seg-b')?.frictionMultiplier ?? 0.92;
-    const canyonHighGrip =
-        canyonTrack.segments.find((segment) => segment.id === 'seg-c')?.frictionMultiplier ?? 1.08;
+    const canyonHighGrip = canyonTrack.segments.find((segment) => segment.id === 'seg-c')?.frictionMultiplier ?? 1.08;
 
     it('should produce squeal on canyon low-grip asphalt section while drifting at speed', () => {
         const squeal = calculateSquealVolume(40, canyonLowGrip, true);
