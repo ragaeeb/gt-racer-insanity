@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.19.0...v1.20.0) (2026-02-27)
+
+
+### Features
+
+* **share:** Add race share support for multiplayer ([#72](https://github.com/ragaeeb/gt-racer-insanity/issues/72)) ([5601b08](https://github.com/ragaeeb/gt-racer-insanity/commit/5601b08169dbf9707c08202e3a3a14a2b435a95f))
+
 # [1.17.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.16.0...v1.17.0) (2026-02-26)
 
 
