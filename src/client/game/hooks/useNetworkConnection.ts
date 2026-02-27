@@ -1,5 +1,5 @@
 import { useThree } from '@react-three/fiber';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type * as THREE from 'three';
 import { MixStateManager } from '@/client/game/audio/mixStateManager';
 import { Car } from '@/client/game/entities/Car';
@@ -209,72 +209,69 @@ export const useNetworkConnection = ({
     const raceStatusRef = useRef<RaceState['status'] | null>(null);
     const mixStateManagerRef = useRef<MixStateManager | null>(null);
     const session = sessionRef.current;
-    const playOneShotSfx = useCallback(
-        (soundId: string, buffer: AudioBuffer | undefined, volume = 1, playbackRate = 1) => {
-            const logSfx = (status: string, details?: Record<string, unknown>) => {
-                console.debug('[sfx]', soundId, status, {
-                    playbackRate,
-                    volume,
-                    ...(details ?? {}),
+    const playOneShotSfx = (soundId: string, buffer: AudioBuffer | undefined, volume = 1, playbackRate = 1) => {
+        const logSfx = (status: string, details?: Record<string, unknown>) => {
+            console.debug('[sfx]', soundId, status, {
+                playbackRate,
+                volume,
+                ...(details ?? {}),
+            });
+        };
+
+        if (!buffer) {
+            logSfx('skipped:no-buffer');
+            return;
+        }
+        const listener = audioListenerRef.current;
+        if (!listener) {
+            logSfx('skipped:no-listener');
+            return;
+        }
+
+        const audioContext = listener.context;
+        if (!audioContext) {
+            logSfx('skipped:no-audio-context');
+            return;
+        }
+
+        const startPlayback = () => {
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.playbackRate.value = playbackRate;
+
+            const gain = audioContext.createGain();
+            gain.gain.value = Math.max(0, volume);
+
+            source.connect(gain);
+            gain.connect(audioContext.destination);
+            source.start();
+            logSfx('played', { contextState: audioContext.state });
+        };
+
+        if (audioContext.state === 'suspended') {
+            logSfx('resume-requested', { contextState: audioContext.state });
+            void audioContext
+                .resume()
+                .then(() => {
+                    if (audioContext.state === 'running') {
+                        startPlayback();
+                        return;
+                    }
+                    logSfx('skipped:resume-not-running', { contextState: audioContext.state });
+                })
+                .catch((error) => {
+                    logSfx('skipped:resume-failed', { error: String(error) });
                 });
-            };
+            return;
+        }
 
-            if (!buffer) {
-                logSfx('skipped:no-buffer');
-                return;
-            }
-            const listener = audioListenerRef.current;
-            if (!listener) {
-                logSfx('skipped:no-listener');
-                return;
-            }
+        if (audioContext.state !== 'running') {
+            logSfx('skipped:context-not-running', { contextState: audioContext.state });
+            return;
+        }
 
-            const audioContext = listener.context;
-            if (!audioContext) {
-                logSfx('skipped:no-audio-context');
-                return;
-            }
-
-            const startPlayback = () => {
-                const source = audioContext.createBufferSource();
-                source.buffer = buffer;
-                source.playbackRate.value = playbackRate;
-
-                const gain = audioContext.createGain();
-                gain.gain.value = Math.max(0, volume);
-
-                source.connect(gain);
-                gain.connect(audioContext.destination);
-                source.start();
-                logSfx('played', { contextState: audioContext.state });
-            };
-
-            if (audioContext.state === 'suspended') {
-                logSfx('resume-requested', { contextState: audioContext.state });
-                void audioContext
-                    .resume()
-                    .then(() => {
-                        if (audioContext.state === 'running') {
-                            startPlayback();
-                            return;
-                        }
-                        logSfx('skipped:resume-not-running', { contextState: audioContext.state });
-                    })
-                    .catch((error) => {
-                        logSfx('skipped:resume-failed', { error: String(error) });
-                    });
-                return;
-            }
-
-            if (audioContext.state !== 'running') {
-                logSfx('skipped:context-not-running', { contextState: audioContext.state });
-                return;
-            }
-
-            startPlayback();
-        },
-        [audioListenerRef],
-    );
+        startPlayback();
+    };
 
     const applyTrackPresentation = (trackId: string) => {
         const trackManifest = getTrackManifestById(trackId);
@@ -875,7 +872,6 @@ export const useNetworkConnection = ({
         selectedTrackId,
         selectedVehicleId,
         session,
-        playOneShotSfx,
     ]);
 
     useEffect(() => {
@@ -904,7 +900,7 @@ export const useNetworkConnection = ({
         raceStartSfxPlayedRef.current = true;
         useHudStore.getState().setSpeedKph(0);
         session.shakeSpikeGraceUntilMs = Date.now() + SHAKE_SPIKE_GRACE_PERIOD_MS;
-    }, [onGameOverChange, onRaceStateChange, resetNonce, session, playOneShotSfx, carAssetsBundle.assets.ignition]);
+    }, [onGameOverChange, onRaceStateChange, resetNonce, session, carAssetsBundle.assets.ignition]);
 
     return sceneEnvironmentId;
 };

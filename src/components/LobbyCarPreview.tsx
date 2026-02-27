@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { MeshoptDecoder } from 'meshoptimizer';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { HexColorPicker } from 'react-colorful';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -169,7 +169,7 @@ export const LobbyCarPreview = ({
 }: LobbyCarPreviewProps) => {
     const [isPaintModuleOpen, setIsPaintModuleOpen] = useState(false);
     const [draftColor, setDraftColor] = useState(() => colorIdToHexString(selectedColorId));
-    const previewHexColor = useMemo(() => colorIdToHexString(selectedColorId), [selectedColorId]);
+    const previewHexColor = colorIdToHexString(selectedColorId);
 
     useEffect(() => {
         setDraftColor(previewHexColor);
