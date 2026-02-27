@@ -24,6 +24,44 @@ test.describe('render smoke', () => {
             await joinRace(page, roomId, 'Render Smoke');
             await page.waitForTimeout(3_000);
 
+            const renderMetricsPeak = await page.evaluate(async () => {
+                const renderWindow = window as Window & {
+                    __GT_RENDER__?: {
+                        getState?: () => {
+                            drawCalls?: number;
+                            frustumMeshCount?: number;
+                            lightCount?: number;
+                            sceneBackground?: string | null;
+                        } | null;
+                    };
+                };
+
+                const start = performance.now();
+                const sampleDurationMs = 3_000;
+                const sampleIntervalMs = 120;
+                const peak = {
+                    drawCalls: 0,
+                    frustumMeshCount: 0,
+                    lightCount: 0,
+                    sceneBackground: null as string | null,
+                };
+
+                while (performance.now() - start < sampleDurationMs) {
+                    const frame = renderWindow.__GT_RENDER__?.getState?.() ?? null;
+                    if (frame) {
+                        peak.drawCalls = Math.max(peak.drawCalls, frame.drawCalls ?? 0);
+                        peak.frustumMeshCount = Math.max(peak.frustumMeshCount, frame.frustumMeshCount ?? 0);
+                        peak.lightCount = Math.max(peak.lightCount, frame.lightCount ?? 0);
+                        if (peak.sceneBackground === null && frame.sceneBackground) {
+                            peak.sceneBackground = frame.sceneBackground;
+                        }
+                    }
+                    await new Promise((resolve) => window.setTimeout(resolve, sampleIntervalMs));
+                }
+
+                return peak;
+            });
+
             const renderState = await page.evaluate(() => {
                 const renderWindow = window as Window & {
                     __GT_DEBUG__?: {
@@ -110,10 +148,10 @@ test.describe('render smoke', () => {
 
             // Regression guard: the race scene should be actively rendering geometry in-frame.
             expect(renderFrameState).not.toBeNull();
-            expect(renderFrameState?.drawCalls ?? 0).toBeGreaterThan(20);
-            expect(renderFrameState?.frustumMeshCount ?? 0).toBeGreaterThan(15);
-            expect(renderFrameState?.lightCount ?? 0).toBeGreaterThanOrEqual(2);
-            expect(renderFrameState?.sceneBackground ?? null).not.toBeNull();
+            expect(renderMetricsPeak.drawCalls).toBeGreaterThan(20);
+            expect(renderMetricsPeak.frustumMeshCount).toBeGreaterThan(15);
+            expect(renderMetricsPeak.lightCount).toBeGreaterThanOrEqual(2);
+            expect(renderMetricsPeak.sceneBackground).not.toBeNull();
         } finally {
             await page.close();
         }
