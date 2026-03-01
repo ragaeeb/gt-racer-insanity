@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.20.0...v1.21.0) (2026-03-01)
+
+
+### Features
+
+* **limit:** Add limits to powerups and abilities ([#76](https://github.com/ragaeeb/gt-racer-insanity/issues/76)) ([30822e2](https://github.com/ragaeeb/gt-racer-insanity/commit/30822e2b3780df7f0ff62d1b81cd5a38d5d187b6))
+
 # [1.20.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.19.0...v1.20.0) (2026-02-27)
 
 
