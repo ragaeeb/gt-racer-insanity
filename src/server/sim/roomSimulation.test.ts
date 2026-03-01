@@ -806,6 +806,92 @@ describe('RoomSimulation', () => {
         expect(driver?.activeEffects.some((e) => e.effectType === 'stunned')).toEqual(true);
     });
 
+    it('should initialize abilityUsesThisRace as empty on join', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'bike', 'red');
+        const player = simulation.getPlayers().get('player-1');
+        expect(player?.abilityUsesThisRace).toEqual({});
+    });
+
+    it('should reset abilityUsesThisRace on race restart', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'bike', 'red');
+
+        // Activate ability to populate the counter
+        simulation.queueAbilityActivation('player-1', {
+            abilityId: 'turbo-boost',
+            seq: 1,
+            targetPlayerId: null,
+        });
+        simulation.step(1_016);
+        simulation.drainRaceEvents();
+
+        const playerBeforeRestart = simulation.getPlayers().get('player-1');
+        expect(playerBeforeRestart?.abilityUsesThisRace['turbo-boost']).toBe(1);
+
+        simulation.restartRace(2_000);
+
+        const playerAfterRestart = simulation.getPlayers().get('player-1');
+        expect(playerAfterRestart?.abilityUsesThisRace).toEqual({});
+    });
+
+    it('should enforce bike turbo-boost limit of 3 uses per race', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 60,
+            totalLaps: 3,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Biker', 'bike', 'red');
+
+        let nowMs = 1_000;
+        for (let use = 0; use < 3; use++) {
+            nowMs += 20_000;
+            simulation.queueAbilityActivation('player-1', {
+                abilityId: 'turbo-boost',
+                seq: use + 1,
+                targetPlayerId: null,
+            });
+            simulation.step(nowMs);
+            simulation.drainRaceEvents();
+        }
+
+        const player = simulation.getPlayers().get('player-1');
+        expect(player?.abilityUsesThisRace['turbo-boost']).toBe(3);
+
+        // 4th attempt should be rejected
+        nowMs += 20_000;
+        simulation.queueAbilityActivation('player-1', {
+            abilityId: 'turbo-boost',
+            seq: 4,
+            targetPlayerId: null,
+        });
+        simulation.step(nowMs);
+        const events = simulation.drainRaceEvents();
+        const boostEvents = events.filter(
+            (e) => e.kind === 'ability_activated' && e.metadata?.abilityId === 'turbo-boost',
+        );
+
+        expect(boostEvents).toHaveLength(0);
+        expect(player?.abilityUsesThisRace['turbo-boost']).toBe(3);
+    });
+
     it('should reset player state to spawn when restarting the race', () => {
         const simulation = new RoomSimulation({
             roomId: 'ROOM1',

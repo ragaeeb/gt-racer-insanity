@@ -37,10 +37,18 @@ test.describe('e2e elevation regression', () => {
         await joinRace(page, roomId, 'Elevation Driver');
         const initialState = await waitForCarSpawn(page);
         const initialCarZ = initialState.localCarZ ?? 0;
+        let peakSpeedKph = initialState.speedKph ?? 0;
+        let furthestCarZ = initialCarZ;
 
-        // Drive forward for 3 seconds
+        // Drive forward for 3 seconds and track observed movement/speed.
         await setDrivingKeyState(page, 'KeyW', true);
-        await page.waitForTimeout(3_000);
+        const driveDeadline = Date.now() + 3_000;
+        while (Date.now() < driveDeadline) {
+            const driveState = await readDebugState(page);
+            peakSpeedKph = Math.max(peakSpeedKph, driveState?.speedKph ?? 0);
+            furthestCarZ = Math.max(furthestCarZ, driveState?.localCarZ ?? initialCarZ);
+            await page.waitForTimeout(100);
+        }
         await setDrivingKeyState(page, 'KeyW', false);
 
         // Wait for physics to propagate
@@ -49,10 +57,10 @@ test.describe('e2e elevation regression', () => {
         const finalState = await readDebugState(page);
 
         // Car should have moved forward (ground snap shouldn't prevent XZ movement)
-        expect(finalState?.localCarZ ?? 0).toBeGreaterThan(initialCarZ);
+        expect(Math.max(finalState?.localCarZ ?? initialCarZ, furthestCarZ)).toBeGreaterThan(initialCarZ);
 
-        // Speed should be positive
-        expect(finalState?.speedKph ?? 0).toBeGreaterThan(0);
+        // Speed should have become positive while driving (final speed may decay to 0 after throttle release).
+        expect(peakSpeedKph).toBeGreaterThan(0);
 
         // No runtime errors — ground snap should not produce NaN or crash
         expect(pageErrors).toHaveLength(0);

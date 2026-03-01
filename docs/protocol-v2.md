@@ -41,7 +41,8 @@
     - `race_finished`: `metadata` omitted
     - `collision_bump`: `metadata.againstPlayerId` (string), `metadata.flippedPlayerId` (string | null), `metadata.stunnedPlayerId` (string | null), `metadata.rammerPlayerId` (string), `metadata.rammerDriveLockMs` (number), `metadata.contactForceMagnitude` (number | null)
     - `ability_activated`: `metadata.abilityId` (string), `metadata.targetPlayerId` (string | null)
-    - `hazard_triggered`: `metadata.effectType` (string)
+    - `ability_rejected`: `metadata.abilityId` (string), `metadata.reason` (`cooldown` | `invalid_ability` | `invalid_player` | `target_not_found` | `usage_limit`), `metadata.vehicleId` (`sport` | `muscle` | `patrol` | `truck` | `bike` | null)
+    - `hazard_triggered`: `metadata.effectType` (string), `metadata.flippedPlayerId` (string | null), `metadata.hazardId` (string | null)
     - `powerup_collected`: `metadata.powerupType` (string)
     - `projectile_hit`: `metadata.effectType` (`stunned`), `metadata.projectileId` (number), `metadata.targetPlayerId` (string)
 

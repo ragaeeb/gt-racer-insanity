@@ -1,6 +1,6 @@
 import type { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
 import type { AbilityActivatePayload, RaceEventPayload } from '@/shared/network/types';
-import { applyAbilityActivation, commitAbilityCooldown } from './abilitySystem';
+import { applyAbilityActivation, commitAbilityCooldown, incrementAbilityUseCount } from './abilitySystem';
 import { checkDeployableCollisions, spawnDeployable, updateDeployables } from './deployableSystem';
 import { applyHazardTriggers, type HazardTrigger } from './hazardSystem';
 import { applyPowerupTriggers, type PowerupTrigger } from './powerupSystem';
@@ -45,6 +45,7 @@ export const processAbilityQueue = (
                 if (projectile) {
                     activeProjectiles.push(projectile);
                     commitAbilityCooldown(cooldownStore, resolved.sourcePlayerId, resolved.abilityId, nowMs);
+                    incrementAbilityUseCount(sourcePlayer, resolved.abilityId);
                     pushRaceEvent({
                         kind: 'ability_activated',
                         metadata: { abilityId: resolved.abilityId, targetPlayerId: projectile.targetId },
@@ -58,6 +59,18 @@ export const processAbilityQueue = (
         }
 
         if (!resolved.applied) {
+            const sourcePlayer = players.get(resolved.sourcePlayerId);
+            pushRaceEvent({
+                kind: 'ability_rejected',
+                metadata: {
+                    abilityId: resolved.abilityId,
+                    reason: resolved.reason,
+                    vehicleId: sourcePlayer?.vehicleId ?? null,
+                },
+                playerId: resolved.sourcePlayerId,
+                roomId,
+                serverTimeMs: nowMs,
+            });
             continue;
         }
 

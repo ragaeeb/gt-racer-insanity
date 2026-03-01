@@ -1,7 +1,7 @@
 {
     "name": "gt-racer-insanity",
     "private": true,
-    "version": "1.20.0",
+    "version": "1.21.0",
     "description": "Multiplayer arcade racing game powered by Bun, React Three Fiber, and Socket.IO.",
     "author": {
         "name": "Ragaeeb Haq",
@@ -86,7 +86,7 @@
         "socket.io-client": "^4.8.3",
         "sonner": "^2.0.7",
         "tailwind-merge": "^3.5.0",
-        "three": "^0.183.1",
+        "three": "^0.183.2",
         "three-mesh-bvh": "^0.9.8",
         "zustand": "^5.0.11"
     }

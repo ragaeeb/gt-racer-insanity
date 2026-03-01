@@ -6,6 +6,8 @@ import type { PlayerRaceProgress, RaceState, StatusEffectInstance } from '@/shar
 import type { RaceEventPayload } from '@/shared/network/types';
 
 export type SimPlayerState = {
+    /** Counts how many times each ability has been activated this race. */
+    abilityUsesThisRace: Record<string, number>;
     activeEffects: StatusEffectInstance[];
     colorId: string;
     driftContext: DriftContext;

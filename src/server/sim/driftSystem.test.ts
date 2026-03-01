@@ -21,6 +21,7 @@ const mockPlayer = (overrides: {
 }): SimPlayerState => {
     const base = createInitialDriftContext();
     return {
+        abilityUsesThisRace: {},
         activeEffects: [],
         colorId: 'red',
         driftContext: {

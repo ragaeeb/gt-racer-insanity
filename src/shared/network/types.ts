@@ -56,6 +56,7 @@ export type RaceEventKind =
     | 'player_finished'
     | 'race_finished'
     | 'ability_activated'
+    | 'ability_rejected'
     | 'hazard_triggered'
     | 'powerup_collected'
     | 'collision_bump'

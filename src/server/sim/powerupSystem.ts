@@ -1,5 +1,6 @@
 import type { SimPlayerState } from '@/server/sim/types';
 import { applyStatusEffectToPlayer } from '@/server/sim/effectSystem';
+import { getVehicleModifiers } from '@/shared/game/vehicle/vehicleClassManifest';
 
 export type PowerupTrigger = {
     playerId: string;
@@ -13,10 +14,13 @@ export const applyPowerupTriggers = (
 ) => {
     for (const trigger of triggers) {
         const player = players.get(trigger.playerId);
-        if (!player) continue;
+        if (!player) {
+            continue;
+        }
 
         if (trigger.powerupType === 'speed-boost') {
-            applyStatusEffectToPlayer(player, 'speed_burst', nowMs, 1);
+            const { powerupSpeedMultiplier } = getVehicleModifiers(player.vehicleId);
+            applyStatusEffectToPlayer(player, 'speed_burst', nowMs, powerupSpeedMultiplier);
         }
     }
 };

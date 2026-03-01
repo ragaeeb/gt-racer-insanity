@@ -209,6 +209,7 @@ describe('Y-axis safety constraints', () => {
 
 describe('snapPlayerToGround', () => {
     const createMockPlayer = (): SimPlayerState => ({
+        abilityUsesThisRace: {},
         activeEffects: [],
         colorId: 'red',
         driftContext: createInitialDriftContext(),

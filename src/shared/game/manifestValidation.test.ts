@@ -9,6 +9,8 @@ import { POWERUP_MANIFESTS } from '@/shared/game/powerup/powerupManifest';
 import { validatePowerupManifests } from '@/shared/game/powerup/powerupManifestValidation';
 import { TRACK_MANIFESTS } from '@/shared/game/track/trackManifest';
 import { validateTrackManifests } from '@/shared/game/track/trackManifestValidation';
+import { VEHICLE_CLASS_MANIFESTS } from '@/shared/game/vehicle/vehicleClassManifest';
+import { validateVehicleClassManifests } from '@/shared/game/vehicle/vehicleClassManifestValidation';
 
 describe('game manifest validation', () => {
     it('should validate ability manifests', () => {
@@ -33,6 +35,11 @@ describe('game manifest validation', () => {
 
     it('should validate powerup manifests', () => {
         const result = validatePowerupManifests(POWERUP_MANIFESTS);
+        expect(result.isValid).toEqual(true);
+    });
+
+    it('should validate vehicle manifests', () => {
+        const result = validateVehicleClassManifests(VEHICLE_CLASS_MANIFESTS);
         expect(result.isValid).toEqual(true);
     });
 });

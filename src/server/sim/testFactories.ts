@@ -26,6 +26,7 @@ export type MockPlayerOverrides = {
 export const mockPlayer = (overrides: MockPlayerOverrides = {}): SimPlayerState => {
     const base = createInitialDriftContext();
     return {
+        abilityUsesThisRace: {},
         activeEffects: [],
         colorId: 'red',
         driftContext: {

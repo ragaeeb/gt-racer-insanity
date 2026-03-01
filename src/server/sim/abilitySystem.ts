@@ -1,6 +1,7 @@
 import { applyStatusEffectToPlayer } from '@/server/sim/effectSystem';
 import type { SimPlayerState } from '@/server/sim/types';
 import { type AbilityTargeting, getAbilityManifestById } from '@/shared/game/ability/abilityManifest';
+import { getVehicleModifiers } from '@/shared/game/vehicle/vehicleClassManifest';
 
 type AbilityActivationRequest = {
     abilityId: string;
@@ -11,7 +12,7 @@ type AbilityActivationRequest = {
 type AbilityResolutionResult = {
     abilityId: string;
     applied: boolean;
-    reason: 'cooldown' | 'invalid_ability' | 'invalid_player' | 'ok' | 'target_not_found';
+    reason: 'cooldown' | 'invalid_ability' | 'invalid_player' | 'ok' | 'target_not_found' | 'usage_limit';
     sourcePlayerId: string;
     /** Whether the caller should spawn a projectile (delivery: 'projectile'). */
     spawnProjectile: boolean;
@@ -30,6 +31,10 @@ export const commitAbilityCooldown = (
     }
     cooldownStore.set(`${sourcePlayerId}:${ability.id}`, nowMs + ability.baseCooldownMs);
     return true;
+};
+
+export const incrementAbilityUseCount = (player: SimPlayerState, abilityId: string) => {
+    player.abilityUsesThisRace[abilityId] = (player.abilityUsesThisRace[abilityId] ?? 0) + 1;
 };
 
 const findNearestOpponent = (
@@ -162,6 +167,19 @@ export const applyAbilityActivation = (
         };
     }
 
+    const modifiers = getVehicleModifiers(sourcePlayer.vehicleId);
+    const currentUses = sourcePlayer.abilityUsesThisRace[ability.id] ?? 0;
+    if (currentUses >= modifiers.abilityUseLimitPerRace) {
+        return {
+            abilityId: ability.id,
+            applied: false,
+            reason: 'usage_limit',
+            sourcePlayerId,
+            spawnProjectile: false,
+            targetPlayerId: null,
+        };
+    }
+
     const cooldownKey = `${sourcePlayer.id}:${ability.id}`;
     const nextReadyAt = cooldownStore.get(cooldownKey) ?? 0;
     if (nextReadyAt > nowMs) {
@@ -209,6 +227,7 @@ export const applyAbilityActivation = (
 
     applyStatusEffectToPlayer(targetPlayer, ability.effectId, nowMs, 1);
     cooldownStore.set(cooldownKey, nowMs + ability.baseCooldownMs);
+    incrementAbilityUseCount(sourcePlayer, ability.id);
 
     return {
         abilityId: ability.id,

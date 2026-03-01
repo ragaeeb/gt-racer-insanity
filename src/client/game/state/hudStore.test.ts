@@ -3,6 +3,7 @@ import { useHudStore } from './hudStore';
 
 const reset = () => {
     useHudStore.setState({
+        abilityUsesByAbilityId: {},
         activeEffectIds: [],
         cooldownMsByAbilityId: {},
         driftBoostTier: 0,
@@ -165,6 +166,36 @@ describe('useHudStore', () => {
             const cooldowns = useHudStore.getState().cooldownMsByAbilityId;
             expect(cooldowns['turbo-boost']).toBe(1000);
             expect(cooldowns['spike-shot']).toBe(2000);
+        });
+    });
+
+    describe('ability usage tracking', () => {
+        it('should increment ability uses by ability id', () => {
+            reset();
+            useHudStore.getState().incrementAbilityUse('turbo-boost');
+            useHudStore.getState().incrementAbilityUse('turbo-boost');
+            expect(useHudStore.getState().abilityUsesByAbilityId['turbo-boost']).toBe(2);
+        });
+
+        it('should set an explicit ability use count', () => {
+            reset();
+            useHudStore.getState().setAbilityUseCount('turbo-boost', 3);
+            expect(useHudStore.getState().abilityUsesByAbilityId['turbo-boost']).toBe(3);
+        });
+
+        it('should clamp and truncate explicit ability use counts', () => {
+            reset();
+            useHudStore.getState().setAbilityUseCount('turbo-boost', -1);
+            expect(useHudStore.getState().abilityUsesByAbilityId['turbo-boost']).toBe(0);
+            useHudStore.getState().setAbilityUseCount('turbo-boost', 2.9);
+            expect(useHudStore.getState().abilityUsesByAbilityId['turbo-boost']).toBe(2);
+        });
+
+        it('should reset ability usage map', () => {
+            reset();
+            useHudStore.getState().incrementAbilityUse('turbo-boost');
+            useHudStore.getState().resetAbilityUsage();
+            expect(useHudStore.getState().abilityUsesByAbilityId).toEqual({});
         });
     });
 
