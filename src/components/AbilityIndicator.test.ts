@@ -52,16 +52,6 @@ describe('buildAbilityIndicatorPresentation', () => {
         expect(result.isExhausted).toBeFalse();
         expect(result.isReady).toBeTrue();
         expect(result.label).toBe('Turbo Boost: READY');
-    });
-
-    it('should include remaining-use count for finite abilities', () => {
-        const result = buildAbilityIndicatorPresentation({
-            abilityLabel: 'Turbo Boost',
-            nowMs: 2_500,
-            readyAtMs: 2_500,
-            remainingUses: 2,
-        });
-
         expect(result.suffix).toBe('2 LEFT');
     });
 });

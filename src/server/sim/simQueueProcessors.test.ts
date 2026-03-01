@@ -227,4 +227,17 @@ describe('processPowerupQueue', () => {
         processPowerupQueue([], new Map(), 'room1', (e) => events.push(e), 1000);
         expect(events).toHaveLength(0);
     });
+
+    it('should apply speed_burst with intensity from vehicle modifier for truck', () => {
+        const player = createPlayer('p1', 'truck');
+        const players = new Map([['p1', player]]);
+        const queue = [{ playerId: 'p1', powerupType: 'speed-boost' as const }];
+        const events: RaceEventPayload[] = [];
+
+        processPowerupQueue(queue, players, 'room1', (e) => events.push(e), 1000);
+
+        const effect = player.activeEffects.find((e) => e.effectType === 'speed_burst');
+        expect(effect).toBeDefined();
+        expect(effect?.intensity).toBe(2); // truck's powerupSpeedMultiplier
+    });
 });
