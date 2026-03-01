@@ -3,9 +3,27 @@ import { useRef } from 'react';
 import type { RaceSession } from '@/client/game/hooks/types';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { getAbilityManifestById } from '@/shared/game/ability/abilityManifest';
-import { getVehicleClassManifestById } from '@/shared/game/vehicle/vehicleClassManifest';
+import { getVehicleClassManifestById, getVehicleModifiers } from '@/shared/game/vehicle/vehicleClassManifest';
 
 const ABILITY_KEY = 'KeyE';
+
+type CanEmitAbilityActivationArgs = {
+    abilityOffCooldown: boolean;
+    abilityUseLimitPerRace: number;
+    abilityUsesThisRace: number;
+    justPressed: boolean;
+};
+
+export const canEmitAbilityActivation = ({
+    abilityOffCooldown,
+    abilityUseLimitPerRace,
+    abilityUsesThisRace,
+    justPressed,
+}: CanEmitAbilityActivationArgs) => {
+    const hasAbilityUsesRemaining =
+        !Number.isFinite(abilityUseLimitPerRace) || abilityUsesThisRace < abilityUseLimitPerRace;
+    return justPressed && abilityOffCooldown && hasAbilityUsesRemaining;
+};
 
 export const useAbilityEmitter = (sessionRef: React.RefObject<RaceSession>) => {
     const keyERef = useRef(false);
@@ -26,22 +44,32 @@ export const useAbilityEmitter = (sessionRef: React.RefObject<RaceSession>) => {
             return;
         }
 
+        const hudState = useHudStore.getState();
         const nowMs = Date.now();
-        const readyAtMs = useHudStore.getState().cooldownMsByAbilityId[abilityId] ?? 0;
+        const readyAtMs = hudState.cooldownMsByAbilityId[abilityId] ?? 0;
         const abilityOffCooldown = nowMs >= readyAtMs;
+        const abilityUsesThisRace = hudState.abilityUsesByAbilityId[abilityId] ?? 0;
+        const abilityUseLimitPerRace = getVehicleModifiers(vehicleId).abilityUseLimitPerRace;
 
         const keyEDown = session.inputManager.isKeyPressed(ABILITY_KEY);
         const justPressed = keyEDown && !keyERef.current;
         keyERef.current = keyEDown;
 
-        if (justPressed && abilityOffCooldown) {
+        if (
+            canEmitAbilityActivation({
+                abilityOffCooldown,
+                abilityUseLimitPerRace,
+                abilityUsesThisRace,
+                justPressed,
+            })
+        ) {
             abilitySeqRef.current += 1;
             session.networkManager.emitAbilityActivate({
                 abilityId,
                 seq: abilitySeqRef.current,
                 targetPlayerId: null,
             });
-            useHudStore.getState().setAbilityReadyAtMs(abilityId, nowMs + ability.baseCooldownMs);
+            hudState.setAbilityReadyAtMs(abilityId, nowMs + ability.baseCooldownMs);
         }
     });
 };

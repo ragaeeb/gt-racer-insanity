@@ -31,6 +31,7 @@ import { playerIdToVehicleIndex } from '@/shared/game/playerVehicle';
 import { DEFAULT_TRACK_WIDTH_METERS, getTrackManifestById } from '@/shared/game/track/trackManifest';
 import {
     getVehicleClassManifestById,
+    getVehicleModifiers,
     vehicleManifestToPhysicsConfig,
 } from '@/shared/game/vehicle/vehicleClassManifest';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
@@ -366,6 +367,8 @@ export const useNetworkConnection = ({
         raceStartSfxPlayedRef.current = false;
         raceStatusRef.current = null;
         lastCollisionSfxAtMsRef.current = 0;
+        useHudStore.getState().setCooldownMsByAbilityId({});
+        useHudStore.getState().resetAbilityUsage();
     };
 
     useEffect(() => {
@@ -509,6 +512,7 @@ export const useNetworkConnection = ({
                                     .getState()
                                     .setAbilityReadyAtMs(abilityId, Date.now() + ability.baseCooldownMs);
                             }
+                            useHudStore.getState().incrementAbilityUse(abilityId);
                         }
 
                         if (abilityId === 'spike-shot') {
@@ -530,6 +534,35 @@ export const useNetworkConnection = ({
                             }
                         }
                     }
+                    return;
+                }
+
+                if (event.kind === 'ability_rejected') {
+                    if (event.playerId !== localPlayerId) {
+                        return;
+                    }
+
+                    const abilityId = event.metadata?.abilityId;
+                    const reason = event.metadata?.reason;
+                    if (typeof abilityId !== 'string') {
+                        return;
+                    }
+
+                    if (reason === 'usage_limit') {
+                        const localVehicleId =
+                            typeof event.metadata?.vehicleId === 'string'
+                                ? event.metadata.vehicleId
+                                : (session.latestLocalSnapshot?.vehicleId ?? selectedVehicleId);
+                        const abilityUseLimitPerRace = getVehicleModifiers(localVehicleId).abilityUseLimitPerRace;
+                        if (Number.isFinite(abilityUseLimitPerRace)) {
+                            useHudStore.getState().setAbilityUseCount(abilityId, abilityUseLimitPerRace);
+                        }
+                        useHudStore.getState().setAbilityReadyAtMs(abilityId, 0);
+
+                        const abilityLabel = getAbilityManifestById(abilityId)?.label.toUpperCase() ?? 'ABILITY';
+                        useHudStore.getState().showToast(`NO ${abilityLabel} USES LEFT`, 'warning');
+                    }
+
                     return;
                 }
 

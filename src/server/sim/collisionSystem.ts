@@ -46,8 +46,10 @@ const getMotionMultipliers = (player: SimPlayerState): MotionMultipliers => {
         if (!manifest) {
             continue;
         }
-        movementMultiplier *= manifest.movementMultiplier;
-        steeringMultiplier *= manifest.steeringMultiplier;
+        // Intensity scales only the bonus delta away from 1.0, not the full multiplier.
+        // Example: 1.3 base at intensity=2 => 1 + (1.3 - 1) * 2 = 1.6.
+        movementMultiplier *= 1 + (manifest.movementMultiplier - 1) * effect.intensity;
+        steeringMultiplier *= 1 + (manifest.steeringMultiplier - 1) * effect.intensity;
     }
 
     return {

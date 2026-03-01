@@ -105,6 +105,7 @@ export class PlayerManager {
         const rigidBody = this.rigidBodyById.get(playerId);
 
         const player: SimPlayerState = {
+            abilityUsesThisRace: {},
             activeEffects: [],
             colorId: colorId || 'red',
             driftContext: createInitialDriftContext(),
@@ -144,6 +145,7 @@ export class PlayerManager {
     resetPlayerForRestart(player: SimPlayerState, playerIndex: number): void {
         const spawnZ = getSpawnPositionZ(playerIndex);
         const spawnY = this.getSpawnPositionY(spawnZ);
+        player.abilityUsesThisRace = {};
         player.activeEffects = [];
         player.driftContext = createInitialDriftContext();
         player.inputState = { boost: false, brake: false, handbrake: false, steering: 0, throttle: 0 };

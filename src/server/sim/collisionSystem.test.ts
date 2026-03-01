@@ -48,6 +48,7 @@ const createMockRigidBody = ({
 };
 
 const createPlayer = (id: string, vehicleId: VehicleClassId, speed: number): SimPlayerState => ({
+    abilityUsesThisRace: {},
     activeEffects: [],
     colorId: 'red',
     driftContext: createInitialDriftContext(),

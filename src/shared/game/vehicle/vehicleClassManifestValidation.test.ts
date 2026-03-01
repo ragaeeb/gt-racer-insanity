@@ -81,4 +81,47 @@ describe('validateVehicleClassManifests', () => {
         const result = validateVehicleClassManifests(manifests);
         expect(result.isValid).toBeTrue();
     });
+
+    it('should reject invalid abilityUseLimitPerRace modifiers', () => {
+        const m = makeManifest({
+            modifiers: {
+                abilityUseLimitPerRace: 0,
+            },
+        });
+        const result = validateVehicleClassManifests([m]);
+        expect(result.isValid).toBeFalse();
+        expect(result.issues.some((i) => i.includes('abilityUseLimitPerRace'))).toBeTrue();
+    });
+
+    it('should allow Infinity for abilityUseLimitPerRace modifiers', () => {
+        const m = makeManifest({
+            modifiers: {
+                abilityUseLimitPerRace: Infinity,
+            },
+        });
+        const result = validateVehicleClassManifests([m]);
+        expect(result.isValid).toBeTrue();
+    });
+
+    it('should reject negative powerupSpeedMultiplier modifiers', () => {
+        const m = makeManifest({
+            modifiers: {
+                powerupSpeedMultiplier: -1,
+            },
+        });
+        const result = validateVehicleClassManifests([m]);
+        expect(result.isValid).toBeFalse();
+        expect(result.issues.some((i) => i.includes('powerupSpeedMultiplier'))).toBeTrue();
+    });
+
+    it('should reject negative stunDurationMultiplier modifiers', () => {
+        const m = makeManifest({
+            modifiers: {
+                stunDurationMultiplier: -0.1,
+            },
+        });
+        const result = validateVehicleClassManifests([m]);
+        expect(result.isValid).toBeFalse();
+        expect(result.issues.some((i) => i.includes('stunDurationMultiplier'))).toBeTrue();
+    });
 });

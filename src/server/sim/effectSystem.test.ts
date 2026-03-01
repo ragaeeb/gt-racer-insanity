@@ -4,6 +4,7 @@ import { applyStatusEffectToPlayer, tickStatusEffects } from './effectSystem';
 import type { SimPlayerState } from './types';
 
 const createPlayer = (id = 'player-1'): SimPlayerState => ({
+    abilityUsesThisRace: {},
     activeEffects: [],
     colorId: 'red',
     driftContext: createInitialDriftContext(),
@@ -96,6 +97,30 @@ describe('applyStatusEffectToPlayer', () => {
         applyStatusEffectToPlayer(player, 'slowed', 1000);
         applyStatusEffectToPlayer(player, 'stunned', 1000);
         expect(player.activeEffects).toHaveLength(2);
+    });
+
+    it('should halve stun duration for patrol vehicle (stunDurationMultiplier: 0.5)', () => {
+        const player = createPlayer();
+        player.vehicleId = 'patrol';
+        applyStatusEffectToPlayer(player, 'stunned', 1000, 1, 2000);
+        const stun = player.activeEffects.find((e) => e.effectType === 'stunned');
+        expect(stun?.expiresAtMs).toBe(1000 + 1000); // 2000 * 0.5 = 1000
+    });
+
+    it('should apply full stun duration for sport vehicle (no modifier)', () => {
+        const player = createPlayer();
+        player.vehicleId = 'sport';
+        applyStatusEffectToPlayer(player, 'stunned', 1000, 1, 2000);
+        const stun = player.activeEffects.find((e) => e.effectType === 'stunned');
+        expect(stun?.expiresAtMs).toBe(1000 + 2000);
+    });
+
+    it('should not apply stun modifier to non-stun effects', () => {
+        const player = createPlayer();
+        player.vehicleId = 'patrol';
+        applyStatusEffectToPlayer(player, 'slowed', 1000, 1, 2000);
+        const slow = player.activeEffects.find((e) => e.effectType === 'slowed');
+        expect(slow?.expiresAtMs).toBe(1000 + 2000);
     });
 });
 

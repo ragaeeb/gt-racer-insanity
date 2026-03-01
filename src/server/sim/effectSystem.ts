@@ -1,6 +1,7 @@
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
 import type { StatusEffectType } from '@/shared/network/snapshot';
 import type { SimPlayerState } from '@/server/sim/types';
+import { getVehicleModifiers } from '@/shared/game/vehicle/vehicleClassManifest';
 
 export const applyStatusEffectToPlayer = (
     player: SimPlayerState,
@@ -14,7 +15,12 @@ export const applyStatusEffectToPlayer = (
         return;
     }
 
-    const durationMs = durationMsOverride ?? manifest.defaultDurationMs;
+    let durationMs = durationMsOverride ?? manifest.defaultDurationMs;
+
+    if (effectType === 'stunned') {
+        const { stunDurationMultiplier } = getVehicleModifiers(player.vehicleId);
+        durationMs = Math.round(durationMs * stunDurationMultiplier);
+    }
 
     const existingEffectIndexes: number[] = [];
     for (let index = 0; index < player.activeEffects.length; index += 1) {

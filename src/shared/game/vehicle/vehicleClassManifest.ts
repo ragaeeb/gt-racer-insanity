@@ -12,11 +12,27 @@ export type VehiclePhysicsManifest = {
     turnSpeed: number;
 };
 
+export type VehicleModifiers = {
+    /** Max ability activations per race. `Infinity` = unlimited. */
+    abilityUseLimitPerRace: number;
+    /** Scales the bonus portion of speed-boost powerup effects. 1 = normal. */
+    powerupSpeedMultiplier: number;
+    /** Scales stun duration from all sources. 1 = normal, 0.5 = half. */
+    stunDurationMultiplier: number;
+};
+
+export const DEFAULT_VEHICLE_MODIFIERS: VehicleModifiers = {
+    abilityUseLimitPerRace: Infinity,
+    powerupSpeedMultiplier: 1,
+    stunDurationMultiplier: 1,
+};
+
 export type VehicleClassManifest = {
     abilityId: string;
     colorPaletteIds: string[];
     id: VehicleClassId;
     label: string;
+    modifiers?: Partial<VehicleModifiers>;
     physics: VehiclePhysicsManifest;
 };
 
@@ -56,6 +72,7 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
         colorPaletteIds: ['white', 'black', 'blue', 'silver'],
         id: 'patrol',
         label: 'Patrol',
+        modifiers: { stunDurationMultiplier: 0.5 },
         physics: {
             acceleration: 22,
             collisionMass: 1150,
@@ -71,6 +88,7 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
         colorPaletteIds: ['green', 'yellow', 'gray', 'white'],
         id: 'truck',
         label: 'Truck',
+        modifiers: { powerupSpeedMultiplier: 2 },
         physics: {
             acceleration: 18,
             collisionMass: 1800,
@@ -86,6 +104,7 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
         colorPaletteIds: ['red', 'silver', 'blue'],
         id: 'bike',
         label: 'Motorcycle',
+        modifiers: { abilityUseLimitPerRace: 3 },
         physics: {
             acceleration: 28, // fastest accel
             collisionMass: 700, // lightest = most vulnerable to bumps
@@ -100,6 +119,11 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
 
 export const getVehicleClassManifestById = (vehicleClassId: string): VehicleClassManifest => {
     return VEHICLE_CLASS_MANIFESTS.find((manifest) => manifest.id === vehicleClassId) ?? VEHICLE_CLASS_MANIFESTS[0];
+};
+
+export const getVehicleModifiers = (vehicleClassId: string): VehicleModifiers => {
+    const manifest = getVehicleClassManifestById(vehicleClassId);
+    return { ...DEFAULT_VEHICLE_MODIFIERS, ...manifest.modifiers };
 };
 
 /**

@@ -5,6 +5,7 @@ import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 
 const createPlayer = (id: string): SimPlayerState => {
     return {
+        abilityUsesThisRace: {},
         activeEffects: [],
         colorId: 'red',
         driftContext: createInitialDriftContext(),
@@ -308,6 +309,70 @@ describe('ability system', () => {
         // Falls through to findNearestOpponent → finds player-2
         expect(result.applied).toEqual(true);
         expect(result.targetPlayerId).toEqual('player-2');
+    });
+
+    it('should enforce ability use limit per race for bike turbo-boost', () => {
+        const p1 = createPlayer('player-1');
+        p1.vehicleId = 'bike'; // bike has abilityUseLimitPerRace: 3
+        const players = new Map<string, SimPlayerState>([['player-1', p1]]);
+        const cooldownStore = new Map<string, number>();
+
+        for (let i = 0; i < 3; i++) {
+            const result = applyAbilityActivation(
+                players,
+                'player-1',
+                { abilityId: 'turbo-boost', seq: i + 1, targetPlayerId: null },
+                1_000 + i * 20_000,
+                cooldownStore,
+            );
+            expect(result.applied).toEqual(true);
+        }
+
+        const rejected = applyAbilityActivation(
+            players,
+            'player-1',
+            { abilityId: 'turbo-boost', seq: 4, targetPlayerId: null },
+            1_000 + 3 * 20_000,
+            cooldownStore,
+        );
+        expect(rejected.applied).toEqual(false);
+        expect(rejected.reason).toEqual('usage_limit');
+    });
+
+    it('should not enforce usage limit for vehicles with Infinity limit', () => {
+        const p1 = createPlayer('player-1');
+        p1.vehicleId = 'sport'; // sport has no limit (Infinity)
+        const players = new Map<string, SimPlayerState>([['player-1', p1]]);
+        const cooldownStore = new Map<string, number>();
+
+        for (let i = 0; i < 10; i++) {
+            const result = applyAbilityActivation(
+                players,
+                'player-1',
+                { abilityId: 'turbo-boost', seq: i + 1, targetPlayerId: null },
+                1_000 + i * 20_000,
+                cooldownStore,
+            );
+            expect(result.applied).toEqual(true);
+        }
+    });
+
+    it('should track ability uses in abilityUsesThisRace', () => {
+        const p1 = createPlayer('player-1');
+        const players = new Map<string, SimPlayerState>([['player-1', p1]]);
+        const cooldownStore = new Map<string, number>();
+
+        expect(p1.abilityUsesThisRace['turbo-boost']).toBeUndefined();
+
+        applyAbilityActivation(
+            players,
+            'player-1',
+            { abilityId: 'turbo-boost', seq: 1, targetPlayerId: null },
+            1_000,
+            cooldownStore,
+        );
+
+        expect(p1.abilityUsesThisRace['turbo-boost']).toBe(1);
     });
 
     it('should skip opponents farther than maxDistanceAhead in forward-cone mode', () => {
