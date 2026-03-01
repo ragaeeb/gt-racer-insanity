@@ -19,6 +19,11 @@
 Multiplayer racing game with a server-authoritative V2 simulation stack, finite race flow, and data-driven gameplay manifests.
 
 ## Latest Features
+- Landing -> Lobby -> Race app flow:
+  - `/` landing screen with `Create New Game` and `Join Existing Game`
+  - server health check before create flow continues
+  - `/lobby?room=...` pre-race configuration for callsign, vehicle, color, and track (track selection for host/create flow)
+  - `/race?room=...` guarded so direct race links without a name are redirected to lobby first
 - V2-only realtime transport (`join_room`, `join_error`, `input_frame`, `ability_activate`, `restart_race`, `server_snapshot`, `race_event`) with sequenced input acknowledgements.
 - Authoritative server simulation with Rapier rigid bodies for collision bumping, track boundary enforcement, and non-overlap guarantees.
 - Late join now receives a fresh authoritative snapshot so active player positions are correct on entry.
@@ -31,12 +36,18 @@ Multiplayer racing game with a server-authoritative V2 simulation stack, finite 
 - Player name prompt on join, with in-world name tags above every car.
 - Multi-car catalog rotation by player ID (not only color differences).
 - Sunny day and canyon-dusk environment profiles (`sceneEnvironmentProfiles`) for level/theme swaps; scenery rebuilds on track change.
+- Per-vehicle gameplay modifiers:
+  - Bike: `turbo-boost` limited to 3 uses per race
+  - Truck: 2x speed-burst bonus from speed-boost powerups
+  - Patrol: 0.5x stun duration from all stun sources
+  - client/server sync path for rejections via `ability_rejected` race events
 - HUD includes speed, lap, position, effect badges (boosted/flat tire/stunned/slowed), and a queued toast pipeline.
 - Layered car audio: RPM-crossfaded idle/mid/high loops with built-in pitch dip on gear shifts plus brake impact cue; audio fades during race-end transitions.
 - Better car graphics: wheels rotate with speed, brake-light emissives pulse while braking, and suspension subtly bounces as speed changes.
 - Deterministic scenery builds alongside tracks via `SceneryManager`, with instanced buildings, street lights, and hazards that depend on track themes.
 - Diagnostic instrumentation (`useDiagnostics`) exposes `__GT_DEBUG__`/`__GT_DIAG__`, toggleable via `?diag=1` or localStorage `gt-diag`, so we can capture long-task/frame-gap data during freeze investigations.
-- E2E coverage includes smoke plus multiplayer non-overlap scenarios (run via `bun run e2e` after `bun x playwright install chromium`).
+- E2E coverage now includes smoke/render, multiplayer collision, combat, drift boost, elevation, full-race, and performance regression suites (run via `bun run e2e` after `bun x playwright install chromium`).
+- CI runs unit/coverage/build first, then a dedicated Playwright E2E job.
 
 ## Tech Stack
 - `bun` runtime and package manager
@@ -69,7 +80,7 @@ Server health:
 - `bun run test` -> run all deterministic/unit tests (browser suites run via `bun run e2e`)
 - `bun run test:watch` -> run tests in watch mode
 - `bun run test:e2e:install` -> `bun x playwright install chromium`
-- `bun run e2e` -> run all browser tests in `testing/` (smoke + multiplayer collision)
+- `bun run e2e` -> run full Playwright suite in `testing/*.e2e.ts` (includes build)
 - `bun run build` -> typecheck and production build
 - `bun run check` -> run tests then build
 
@@ -93,7 +104,7 @@ PLAY_CLIENT_PORT=4000 PLAY_SERVER_PORT=4001 bun run play
 ```
 
 ## Architecture
-- `src/client/app`: app shell, routes, HUD overlays, lobby/startup flows.
+- `src/client/app`: app shell, route guards, landing/lobby/race flows, HUD overlays.
 - `src/client/game`: R3F runtime, entity controllers, finite track renderer, scene systems, camera loop.
 - `src/client/game/state`: Zustand stores for runtime and HUD state.
 - `src/client/game/systems`: interpolation/reconciliation/prediction helpers and gameplay adapters.
@@ -137,11 +148,13 @@ Logic that can be deterministic is extracted into shared/server modules and cove
 
 E2E tests:
 - live in `testing/*.e2e.ts` and run via Playwright (`bun run e2e` after `bun x playwright install chromium`)
-- Exercise load/connect/spawn/move/no-runtime-errors and multiplayer separation/diagnostics behavior
+- cover smoke/render stability, multiplayer non-overlap/collision behavior, combat interactions, drift boost, elevation handling, full-race completion, and performance regressions
 
 ## Current Status
 - V2-only netcode cutover is active; legacy `update_state`/`player_moved` runtime paths are removed.
 - Server-authoritative collision bumping and finite race completion are enabled in the default multiplayer flow.
+- Landing/lobby flow is now the default entry path, including guarded direct-link behavior for room joins.
+- Vehicle modifier system is active and validated through shared manifest validation plus simulation/client coverage.
 - Remaining roadmap work is focused on content depth, polish, and long-horizon scaling hardening.
 
 ## Lessons Learned

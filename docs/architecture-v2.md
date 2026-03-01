@@ -4,18 +4,19 @@
 Deliver a V2-only multiplayer architecture where the server is authoritative for race state, collision outcomes, and gameplay effects.
 
 ## Runtime Topology
-- Client (`src/client/*`): captures player input, predicts local movement, interpolates remote cars, reconciles to authoritative snapshots, renders HUD/scene.
+- Client (`src/client/*`): route-guarded landing/lobby/race flow, captures player input, predicts local movement, interpolates remote cars, reconciles to authoritative snapshots, renders HUD/scene.
 - Server (`src/server/*`): owns room lifecycle, simulation stepping, authoritative snapshot/race-event broadcast.
 - Shared (`src/shared/*`): protocol payload contracts, deterministic race progress helpers, and gameplay manifests.
 
 ## Authoritative Data Flow
-1. Client joins via `join_room`.
-2. Server creates/joins room simulation and responds with `room_joined` plus a fresh authoritative snapshot (or `join_error` when validation fails).
-3. Client emits sequenced `input_frame` packets (`seq`, controls, `ackSnapshotSeq`).
-4. Server consumes latest queued input per player each simulation tick and steps Rapier rigid bodies.
-5. Server resolves race progress and gameplay systems (abilities/effects/hazards/powerups).
-6. Server emits `server_snapshot` at snapshot rate and `race_event` for discrete race events.
-7. Client reconciles local car against authoritative snapshot and interpolates remote players using buffered snapshots.
+1. Client navigates `landing (/)` -> `lobby (/lobby?room=...)` -> `race (/race?room=...)`.
+2. Client joins via `join_room`.
+3. Server creates/joins room simulation and responds with `room_joined` plus a fresh authoritative snapshot (or `join_error` when validation fails).
+4. Client emits sequenced `input_frame` packets (`seq`, controls, `ackSnapshotSeq`).
+5. Server consumes latest queued input per player each simulation tick and steps Rapier rigid bodies.
+6. Server resolves race progress and gameplay systems (abilities/effects/hazards/powerups).
+7. Server emits `server_snapshot` at snapshot rate and `race_event` for discrete race events.
+8. Client reconciles local car against authoritative snapshot and interpolates remote players using buffered snapshots.
 
 ## Simulation Layers
 - Transport: `src/server/index.ts`, `src/client/network/NetworkManager.ts`
@@ -24,9 +25,11 @@ Deliver a V2-only multiplayer architecture where the server is authoritative for
 - Physics world: `src/server/sim/rapierWorld.ts`, `src/server/sim/trackColliderBuilder.ts`, `src/server/sim/collisionSystem.ts`
 - Gameplay effects: `src/server/sim/abilitySystem.ts`, `src/server/sim/effectSystem.ts`, `src/server/sim/hazardSystem.ts`, `src/server/sim/powerupSystem.ts`
 - Snapshot output: `src/server/sim/snapshotBuilder.ts`
+- Vehicle modifiers: shared in `src/shared/game/vehicle/vehicleClassManifest.ts`, consumed by ability/powerup/effect systems for per-vehicle behavior.
 - Scene decoration: `src/client/game/systems/SceneryManager.ts` deterministically places buildings, streetlights, and pillars around the track using seeded randomness so each theme feels consistent; `RaceWorld` updates scenery LOD visibility every frame from the active camera.
 
 ## Module Boundaries
+- `src/client/app`: route flow, pre-race setup, and lobby UX.
 - `src/client/game`: render-time scene and entity orchestration only.
 - `src/client/game/state`: transient runtime/HUD state through Zustand.
 - `src/shared/game/*`: deterministic rules/manifests reusable by both runtimes.
@@ -52,3 +55,4 @@ Deliver a V2-only multiplayer architecture where the server is authoritative for
 - `src/server/sim/roomSimulation.test.ts`: movement, ordering, collision bump event emission, deterministic finish outcomes.
 - `src/server/roomStore.test.ts`: join/leave lifecycle, late-join authoritative snapshot correctness.
 - `src/client/network/NetworkManager.test.ts`: sequenced input framing and send throttling.
+- `testing/*.e2e.ts`: Playwright coverage for render smoke, combat, drift, elevation, multiplayer collision, full race, and performance regression paths.
