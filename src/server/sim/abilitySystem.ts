@@ -33,10 +33,7 @@ export const commitAbilityCooldown = (
     return true;
 };
 
-export const incrementAbilityUseCount = (
-    player: SimPlayerState,
-    abilityId: string,
-) => {
+export const incrementAbilityUseCount = (player: SimPlayerState, abilityId: string) => {
     player.abilityUsesThisRace[abilityId] = (player.abilityUsesThisRace[abilityId] ?? 0) + 1;
 };
 
@@ -170,19 +167,6 @@ export const applyAbilityActivation = (
         };
     }
 
-    const cooldownKey = `${sourcePlayer.id}:${ability.id}`;
-    const nextReadyAt = cooldownStore.get(cooldownKey) ?? 0;
-    if (nextReadyAt > nowMs) {
-        return {
-            abilityId: ability.id,
-            applied: false,
-            reason: 'cooldown',
-            sourcePlayerId,
-            spawnProjectile: false,
-            targetPlayerId: null,
-        };
-    }
-
     const modifiers = getVehicleModifiers(sourcePlayer.vehicleId);
     const currentUses = sourcePlayer.abilityUsesThisRace[ability.id] ?? 0;
     if (currentUses >= modifiers.abilityUseLimitPerRace) {
@@ -190,6 +174,19 @@ export const applyAbilityActivation = (
             abilityId: ability.id,
             applied: false,
             reason: 'usage_limit',
+            sourcePlayerId,
+            spawnProjectile: false,
+            targetPlayerId: null,
+        };
+    }
+
+    const cooldownKey = `${sourcePlayer.id}:${ability.id}`;
+    const nextReadyAt = cooldownStore.get(cooldownKey) ?? 0;
+    if (nextReadyAt > nowMs) {
+        return {
+            abilityId: ability.id,
+            applied: false,
+            reason: 'cooldown',
             sourcePlayerId,
             spawnProjectile: false,
             targetPlayerId: null,

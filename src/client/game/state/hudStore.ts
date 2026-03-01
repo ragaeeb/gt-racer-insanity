@@ -61,7 +61,8 @@ export const useHudStore = create<HudStoreState>((set) => ({
     setAbilityUseCount: (abilityId, useCount) =>
         set((state) => {
             const nextUseCount = Math.max(0, Math.trunc(useCount));
-            if ((state.abilityUsesByAbilityId[abilityId] ?? 0) === nextUseCount) {
+            const existingUseCount = state.abilityUsesByAbilityId[abilityId];
+            if (existingUseCount !== undefined && existingUseCount === nextUseCount) {
                 return state;
             }
             return {

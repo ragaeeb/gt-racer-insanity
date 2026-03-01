@@ -44,7 +44,7 @@ Multiplayer racing game with a server-authoritative V2 simulation stack, finite 
 - HUD includes speed, lap, position, effect badges (boosted/flat tire/stunned/slowed), and a queued toast pipeline.
 - Layered car audio: RPM-crossfaded idle/mid/high loops with built-in pitch dip on gear shifts plus brake impact cue; audio fades during race-end transitions.
 - Better car graphics: wheels rotate with speed, brake-light emissives pulse while braking, and suspension subtly bounces as speed changes.
-- Deterministic scenery builds alongside tracks via `SceneryManager`, with instanced buildings, street lights, and hazards that depend on track themes.
+- Deterministic scenery builds alongside tracks via `SceneryManager`, with instanced buildings, streetlights, and hazards that depend on track themes.
 - Diagnostic instrumentation (`useDiagnostics`) exposes `__GT_DEBUG__`/`__GT_DIAG__`, toggleable via `?diag=1` or localStorage `gt-diag`, so we can capture long-task/frame-gap data during freeze investigations.
 - E2E coverage now includes smoke/render, multiplayer collision, combat, drift boost, elevation, full-race, and performance regression suites (run via `bun run e2e` after `bun x playwright install chromium`).
 - CI runs unit/coverage/build first, then a dedicated Playwright E2E job.

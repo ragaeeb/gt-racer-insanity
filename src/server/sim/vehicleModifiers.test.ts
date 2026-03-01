@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { applyPowerupTriggers } from '@/server/sim/powerupSystem';
 import { applyStatusEffectToPlayer } from '@/server/sim/effectSystem';
+import { applyPowerupTriggers } from '@/server/sim/powerupSystem';
 import type { SimPlayerState } from '@/server/sim/types';
-import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 import { SPEED_BURST_MOVEMENT_MULTIPLIER } from '@/shared/game/effects/statusEffectManifest';
+import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
+import { getVehicleModifiers } from '@/shared/game/vehicle/vehicleClassManifest';
 
 const createPlayer = (id: string, vehicleId: SimPlayerState['vehicleId'] = 'sport'): SimPlayerState => ({
     abilityUsesThisRace: {},
@@ -100,8 +101,16 @@ describe('vehicle modifier — stun duration multiplier', () => {
 });
 
 describe('vehicle modifier — ability use limit', () => {
-    it('should reset abilityUsesThisRace on new player creation', () => {
+    it('should initialize abilityUsesThisRace on new player creation', () => {
         const player = createPlayer('p1', 'bike');
         expect(player.abilityUsesThisRace).toEqual({});
+    });
+
+    it('should set bike abilityUseLimitPerRace to 3', () => {
+        expect(getVehicleModifiers('bike').abilityUseLimitPerRace).toBe(3);
+    });
+
+    it('should keep default abilityUseLimitPerRace as Infinity for sport', () => {
+        expect(getVehicleModifiers('sport').abilityUseLimitPerRace).toBe(Infinity);
     });
 });

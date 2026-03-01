@@ -183,6 +183,14 @@ describe('useHudStore', () => {
             expect(useHudStore.getState().abilityUsesByAbilityId['turbo-boost']).toBe(3);
         });
 
+        it('should clamp and truncate explicit ability use counts', () => {
+            reset();
+            useHudStore.getState().setAbilityUseCount('turbo-boost', -1);
+            expect(useHudStore.getState().abilityUsesByAbilityId['turbo-boost']).toBe(0);
+            useHudStore.getState().setAbilityUseCount('turbo-boost', 2.9);
+            expect(useHudStore.getState().abilityUsesByAbilityId['turbo-boost']).toBe(2);
+        });
+
         it('should reset ability usage map', () => {
             reset();
             useHudStore.getState().incrementAbilityUse('turbo-boost');

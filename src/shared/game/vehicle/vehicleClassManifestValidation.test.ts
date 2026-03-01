@@ -23,6 +23,30 @@ describe('validateVehicleClassManifests', () => {
         expect(result.issues).toHaveLength(0);
     });
 
+    it('should reject non-integer abilityUseLimitPerRace', () => {
+        const m = makeManifest({
+            modifiers: { abilityUseLimitPerRace: 2.5 },
+        });
+        const result = validateVehicleClassManifests([m]);
+        expect(result.isValid).toBeFalse();
+    });
+
+    it('should reject NaN for powerupSpeedMultiplier', () => {
+        const m = makeManifest({
+            modifiers: { powerupSpeedMultiplier: NaN },
+        });
+        const result = validateVehicleClassManifests([m]);
+        expect(result.isValid).toBeFalse();
+    });
+
+    it('should reject Infinity for stunDurationMultiplier', () => {
+        const m = makeManifest({
+            modifiers: { stunDurationMultiplier: Infinity },
+        });
+        const result = validateVehicleClassManifests([m]);
+        expect(result.isValid).toBeFalse();
+    });
+
     it('should return isValid=true for an empty array', () => {
         const result = validateVehicleClassManifests([]);
         expect(result.isValid).toBeTrue();

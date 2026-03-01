@@ -720,6 +720,14 @@ export const useNetworkConnection = ({
                 onRaceStateChange(snapshot.raceState);
                 const previousRaceStatus = raceStatusRef.current;
                 raceStatusRef.current = snapshot.raceState.status;
+                const restartedFromFinished =
+                    previousRaceStatus === 'finished' &&
+                    (snapshot.raceState.status === 'countdown' || snapshot.raceState.status === 'running');
+                if (restartedFromFinished) {
+                    useHudStore.getState().resetAbilityUsage();
+                    useHudStore.getState().setCooldownMsByAbilityId({});
+                    raceStartSfxPlayedRef.current = false;
+                }
                 if (
                     snapshot.raceState.status === 'running' &&
                     previousRaceStatus !== 'running' &&

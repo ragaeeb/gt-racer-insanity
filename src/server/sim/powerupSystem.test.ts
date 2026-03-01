@@ -31,31 +31,19 @@ describe('applyPowerupTriggers', () => {
         expect(player.activeEffects[0]?.effectType).toBe('speed_burst');
     });
 
-    it('should set intensity=1 for sport (default powerupSpeedMultiplier)', () => {
-        const player = createPlayer('p1', 'sport');
-        const players = new Map([['p1', player]]);
+    it('should set speed-boost intensity from vehicle modifiers', () => {
+        const cases: Array<{ expected: number; vehicleId: VehicleClassId }> = [
+            { expected: 1, vehicleId: 'sport' },
+            { expected: 2, vehicleId: 'truck' },
+            { expected: 1, vehicleId: 'bike' },
+        ];
 
-        applyPowerupTriggers(players, [{ playerId: 'p1', powerupType: 'speed-boost' }], 1000);
-
-        expect(player.activeEffects[0]?.intensity).toBe(1);
-    });
-
-    it('should set intensity=2 for truck (powerupSpeedMultiplier: 2)', () => {
-        const player = createPlayer('p1', 'truck');
-        const players = new Map([['p1', player]]);
-
-        applyPowerupTriggers(players, [{ playerId: 'p1', powerupType: 'speed-boost' }], 1000);
-
-        expect(player.activeEffects[0]?.intensity).toBe(2);
-    });
-
-    it('should set intensity=1 for bike (no powerup modifier)', () => {
-        const player = createPlayer('p1', 'bike');
-        const players = new Map([['p1', player]]);
-
-        applyPowerupTriggers(players, [{ playerId: 'p1', powerupType: 'speed-boost' }], 1000);
-
-        expect(player.activeEffects[0]?.intensity).toBe(1);
+        for (const { expected, vehicleId } of cases) {
+            const player = createPlayer(`p-${vehicleId}`, vehicleId);
+            const players = new Map([[player.id, player]]);
+            applyPowerupTriggers(players, [{ playerId: player.id, powerupType: 'speed-boost' }], 1000);
+            expect(player.activeEffects[0]?.intensity).toBe(expected);
+        }
     });
 
     it('should skip unknown player ids without crashing', () => {

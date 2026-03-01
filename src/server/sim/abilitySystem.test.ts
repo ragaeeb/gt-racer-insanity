@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { applyAbilityActivation, commitAbilityCooldown } from '@/server/sim/abilitySystem';
 import type { SimPlayerState } from '@/server/sim/types';
+import { getAbilityManifestById } from '@/shared/game/ability/abilityManifest';
 import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 
 const createPlayer = (id: string): SimPlayerState => {
@@ -316,13 +317,15 @@ describe('ability system', () => {
         p1.vehicleId = 'bike'; // bike has abilityUseLimitPerRace: 3
         const players = new Map<string, SimPlayerState>([['player-1', p1]]);
         const cooldownStore = new Map<string, number>();
+        const turboBoostAbility = getAbilityManifestById('turbo-boost');
+        const spacingMs = (turboBoostAbility?.baseCooldownMs ?? 0) + 1;
 
         for (let i = 0; i < 3; i++) {
             const result = applyAbilityActivation(
                 players,
                 'player-1',
                 { abilityId: 'turbo-boost', seq: i + 1, targetPlayerId: null },
-                1_000 + i * 20_000,
+                1_000 + i * spacingMs,
                 cooldownStore,
             );
             expect(result.applied).toEqual(true);
@@ -332,7 +335,7 @@ describe('ability system', () => {
             players,
             'player-1',
             { abilityId: 'turbo-boost', seq: 4, targetPlayerId: null },
-            1_000 + 3 * 20_000,
+            1_000 + 3 * spacingMs,
             cooldownStore,
         );
         expect(rejected.applied).toEqual(false);
@@ -344,13 +347,15 @@ describe('ability system', () => {
         p1.vehicleId = 'sport'; // sport has no limit (Infinity)
         const players = new Map<string, SimPlayerState>([['player-1', p1]]);
         const cooldownStore = new Map<string, number>();
+        const turboBoostAbility = getAbilityManifestById('turbo-boost');
+        const spacingMs = (turboBoostAbility?.baseCooldownMs ?? 0) + 1;
 
         for (let i = 0; i < 10; i++) {
             const result = applyAbilityActivation(
                 players,
                 'player-1',
                 { abilityId: 'turbo-boost', seq: i + 1, targetPlayerId: null },
-                1_000 + i * 20_000,
+                1_000 + i * spacingMs,
                 cooldownStore,
             );
             expect(result.applied).toEqual(true);

@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'bun:test';
 import {
+    type AbilityActivationEnvelope,
     processAbilityQueue,
     processHazardQueue,
     processPowerupQueue,
-    type AbilityActivationEnvelope,
 } from '@/server/sim/simQueueProcessors';
-import type { SimPlayerState } from '@/server/sim/types';
-import type { ActiveProjectile } from '@/server/sim/types';
-import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
+import type { ActiveProjectile, SimPlayerState } from '@/server/sim/types';
 import { DEFAULT_GAMEPLAY_TUNING } from '@/shared/game/tuning/gameplayTuning';
-import type { RaceEventPayload } from '@/shared/network/types';
+import { createInitialDriftContext } from '@/shared/game/vehicle/driftConfig';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
+import type { RaceEventPayload } from '@/shared/network/types';
 
 const combatTuning = DEFAULT_GAMEPLAY_TUNING.combat;
 
@@ -46,6 +45,35 @@ describe('processAbilityQueue', () => {
         expect(events[0]?.kind).toBe('ability_activated');
     });
 
+    it('should emit ability_rejected with usage_limit for bike after 3 uses', () => {
+        const player = createPlayer('p1', 'bike');
+        const players = new Map([['p1', player]]);
+        const cooldownStore = new Map<string, number>();
+        const events: RaceEventPayload[] = [];
+
+        // Use large time gaps to avoid cooldown being the rejection reason.
+        for (let seq = 1; seq <= 4; seq += 1) {
+            const queue: AbilityActivationEnvelope[] = [
+                { playerId: 'p1', payload: { abilityId: 'turbo-boost', seq, targetPlayerId: null } },
+            ];
+            processAbilityQueue(
+                queue,
+                players,
+                [],
+                cooldownStore,
+                combatTuning,
+                'room1',
+                (e) => events.push(e),
+                10_000 * seq,
+            );
+        }
+
+        const lastEvent = events[events.length - 1];
+        expect(lastEvent?.kind).toBe('ability_rejected');
+        expect(lastEvent?.metadata?.reason).toBe('usage_limit');
+        expect(lastEvent?.metadata?.vehicleId).toBe('bike');
+    });
+
     it('should increment abilityUsesThisRace for instant abilities', () => {
         const player = createPlayer('p1');
         const players = new Map([['p1', player]]);
@@ -74,16 +102,7 @@ describe('processAbilityQueue', () => {
 
         // nowMs must exceed projectileHitImmunityMs (1500) so the target isn't
         // considered immune (lastHitByProjectileAtMs defaults to undefined → 0).
-        processAbilityQueue(
-            queue,
-            players,
-            projectiles,
-            new Map(),
-            combatTuning,
-            'room1',
-            (e) => events.push(e),
-            5000,
-        );
+        processAbilityQueue(queue, players, projectiles, new Map(), combatTuning, 'room1', (e) => events.push(e), 5000);
 
         expect(projectiles).toHaveLength(1);
         expect(source.abilityUsesThisRace['spike-shot']).toBe(1);
