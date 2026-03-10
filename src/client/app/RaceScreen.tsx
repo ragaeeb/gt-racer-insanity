@@ -54,6 +54,18 @@ export type RaceScreenProps = {
     selectedVehicleId: VehicleClassId;
 };
 
+export const canAdvanceRaceLevel = (raceState: RaceState | null) => {
+    return raceState?.status === 'finished' && raceState.winnerPlayerId != null;
+};
+
+export const getNextTrackLabelForRaceState = (raceState: RaceState | null) => {
+    if (!canAdvanceRaceLevel(raceState) || !raceState) {
+        return null;
+    }
+
+    return getTrackManifestById(getNextTrackId(raceState.trackId)).label;
+};
+
 export const RaceScreen = ({
     playerName,
     roomId,
@@ -93,8 +105,8 @@ export const RaceScreen = ({
         raceState && raceState.status === 'finished' && raceState.startedAtMs != null
             ? formatRaceDurationMs((raceState.endedAtMs ?? Date.now()) - raceState.startedAtMs)
             : null;
-    const canAdvanceLevel = raceState?.status === 'finished';
-    const nextTrackLabel = raceState ? getTrackManifestById(getNextTrackId(raceState.trackId)).label : null;
+    const canAdvanceLevel = canAdvanceRaceLevel(raceState);
+    const nextTrackLabel = getNextTrackLabelForRaceState(raceState);
 
     useEffect(() => {
         if (pendingToasts.length === 0) {

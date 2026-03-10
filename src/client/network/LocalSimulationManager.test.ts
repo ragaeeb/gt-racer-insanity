@@ -181,10 +181,7 @@ describe('LocalSimulationManager', () => {
         const initialTrackId = initialSnapshot.raceState.trackId;
         const expectedTrackId = getNextTrackId(initialTrackId);
 
-        const simulation = (manager as unknown as { simulation: { forceFinishRaceForTesting: (nowMs: number, winnerPlayerId?: string) => boolean } | null })
-            .simulation;
-        expect(simulation).not.toBeNull();
-        expect(simulation?.forceFinishRaceForTesting(Date.now(), 'local-player')).toBeTrue();
+        expect(manager.forceFinishRaceForTesting(Date.now(), 'local-player')).toBeTrue();
 
         manager.emitRestartRace(true);
 

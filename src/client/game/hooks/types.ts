@@ -49,6 +49,7 @@ export type RaceSession = {
     localCollisionHardSnapUntilMs: number | null;
     lastCorrection: CorrectionSnapshot | null;
     lastReconciledSnapshotSeq: number | null;
+    lastAcceptedSnapshotSeq: number | null;
     lastSnapshotReceivedAtMs: number | null;
     lastAcceptedSnapshotServerTimeMs: number | null;
     latestLocalSnapshot: SnapshotPlayerState | null;

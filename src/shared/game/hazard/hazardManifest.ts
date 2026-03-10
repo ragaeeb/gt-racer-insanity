@@ -18,11 +18,12 @@ export type HazardManifest = {
 };
 
 export const PUDDLE_TRAP_ID = 'puddle-trap';
+export const SPIKE_STRIP_ID = 'spike-strip';
 
 export const HAZARD_MANIFESTS: HazardManifest[] = [
     {
         collisionRadius: 1.4,
-        id: 'spike-strip',
+        id: SPIKE_STRIP_ID,
         label: 'Spike Strip',
         movementAmplitude: 0,
         movementSpeed: 0,

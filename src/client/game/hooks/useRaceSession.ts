@@ -25,6 +25,7 @@ export const useRaceSession = (inputManager: InputManager) => {
             localCollisionHardSnapUntilMs: null,
             lastCorrection: null,
             lastReconciledSnapshotSeq: null,
+            lastAcceptedSnapshotSeq: null,
             lastSnapshotReceivedAtMs: null,
             lastAcceptedSnapshotServerTimeMs: null,
             latestLocalSnapshot: null,

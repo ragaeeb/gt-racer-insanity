@@ -270,7 +270,7 @@ describe('collision with elevation enabled', () => {
         }
     });
 
-    it('should clamp both post-collision speeds within the configured low-speed recovery range with Y-axis enabled', () => {
+    it('should keep both post-collision forward speeds within the configured recovery range with Y-axis enabled', () => {
         const sim = createSimulation();
         sim.joinPlayer('p1', 'Alice', 'sport', 'red');
         sim.joinPlayer('p2', 'Bob', 'sport', 'blue');

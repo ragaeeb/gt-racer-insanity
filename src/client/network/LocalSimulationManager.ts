@@ -318,13 +318,12 @@ export class LocalSimulationManager implements RealtimeTransport {
         this.emitSnapshot(this.simulation.buildSnapshot(nowMs));
     };
 
-    public forceFinishRaceForTesting = () => {
+    public forceFinishRaceForTesting = (nowMs = Date.now(), winnerPlayerId = LOCAL_PLAYER_ID) => {
         if (!this.simulation) {
             return false;
         }
 
-        const nowMs = Date.now();
-        const forced = this.simulation.forceFinishRaceForTesting(nowMs, LOCAL_PLAYER_ID);
+        const forced = this.simulation.forceFinishRaceForTesting(nowMs, winnerPlayerId);
         if (!forced) {
             return false;
         }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { isAllowedOrigin, serverConfig } from './config';
+import { isAllowedOrigin, serverConfig, shouldAcceptClientDebugSpeedMultiplier } from './config';
 
 describe('serverConfig', () => {
     it('should have a valid simulationTickHz', () => {
@@ -99,5 +99,21 @@ describe('isAllowedOrigin', () => {
         expect(isAllowedOrigin('http://other.com')).toBeFalse();
 
         (serverConfig as any).allowedOrigins = origAllowed;
+    });
+});
+
+describe('shouldAcceptClientDebugSpeedMultiplier', () => {
+    it('should allow client debug multipliers in non-production environments', () => {
+        expect(shouldAcceptClientDebugSpeedMultiplier('development', undefined)).toBeTrue();
+        expect(shouldAcceptClientDebugSpeedMultiplier('test', undefined)).toBeTrue();
+    });
+
+    it('should allow client debug multipliers during e2e in production mode', () => {
+        expect(shouldAcceptClientDebugSpeedMultiplier('production', 'true')).toBeTrue();
+    });
+
+    it('should reject client debug multipliers in production when e2e mode is disabled', () => {
+        expect(shouldAcceptClientDebugSpeedMultiplier('production', undefined)).toBeFalse();
+        expect(shouldAcceptClientDebugSpeedMultiplier('production', 'false')).toBeFalse();
     });
 });

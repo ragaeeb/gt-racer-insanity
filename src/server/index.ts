@@ -173,7 +173,9 @@ io.on('connection', (socket) => {
             selectedVehicleId = rawJoinRoom.selectedVehicleId;
             selectedColorId = rawJoinRoom.selectedColorId;
             selectedTrackId = rawJoinRoom.selectedTrackId;
-            debugSpeedMultiplier = rawJoinRoom.debugSpeedMultiplier;
+            if (serverConfig.allowClientDebugSpeedMultiplier) {
+                debugSpeedMultiplier = rawJoinRoom.debugSpeedMultiplier;
+            }
 
             if (selectedTrackId !== undefined && !isTrackId(selectedTrackId)) {
                 selectedTrackId = undefined;
@@ -277,6 +279,7 @@ io.on('connection', (socket) => {
         }
 
         const roomId = payload.roomId;
+        const advanceLevel = payload.advanceLevel === true;
         if (!socket.rooms.has(roomId)) {
             return;
         }
@@ -292,7 +295,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const restarted = roomStore.restartFinishedRoomRace(roomId, nowMs);
+        const restarted = roomStore.restartFinishedRoomRace(roomId, nowMs, advanceLevel);
         if (!restarted) {
             if (Bun.env.RUN_E2E === 'true') {
                 console.log(`[E2E restart_race] restartFinishedRoomRace returned false for room=${roomId}`);
@@ -304,7 +307,7 @@ io.on('connection', (socket) => {
         if (snapshot) {
             if (Bun.env.RUN_E2E === 'true') {
                 console.log(
-                    `[E2E restart_race] advanced room=${roomId} to track=${snapshot.raceState.trackId} status=${snapshot.raceState.status}`,
+                    `[E2E restart_race] restarted room=${roomId} advanceLevel=${advanceLevel} track=${snapshot.raceState.trackId} status=${snapshot.raceState.status}`,
                 );
             }
             io.to(roomId).emit('server_snapshot', {

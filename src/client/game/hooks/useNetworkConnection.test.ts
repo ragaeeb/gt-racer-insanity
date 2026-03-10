@@ -114,18 +114,23 @@ describe('isSnapshotRaceActive', () => {
 
 describe('isSnapshotFreshByServerTime', () => {
     it('should accept a snapshot when no prior snapshot was accepted', () => {
-        expect(isSnapshotFreshByServerTime(null, 1000)).toBeTrue();
-    });
-
-    it('should accept snapshots with equal serverTimeMs', () => {
-        expect(isSnapshotFreshByServerTime(2000, 2000)).toBeTrue();
+        expect(isSnapshotFreshByServerTime(null, null, 1000, 1)).toBeTrue();
     });
 
     it('should accept snapshots with newer serverTimeMs', () => {
-        expect(isSnapshotFreshByServerTime(2000, 2001)).toBeTrue();
+        expect(isSnapshotFreshByServerTime(2000, 5, 2001, 1)).toBeTrue();
     });
 
     it('should reject snapshots with older serverTimeMs', () => {
-        expect(isSnapshotFreshByServerTime(2000, 1999)).toBeFalse();
+        expect(isSnapshotFreshByServerTime(2000, 5, 1999, 99)).toBeFalse();
+    });
+
+    it('should reject snapshots with equal serverTimeMs and a stale sequence number', () => {
+        expect(isSnapshotFreshByServerTime(2000, 5, 2000, 5)).toBeFalse();
+        expect(isSnapshotFreshByServerTime(2000, 5, 2000, 4)).toBeFalse();
+    });
+
+    it('should accept snapshots with equal serverTimeMs and a newer sequence number', () => {
+        expect(isSnapshotFreshByServerTime(2000, 5, 2000, 6)).toBeTrue();
     });
 });

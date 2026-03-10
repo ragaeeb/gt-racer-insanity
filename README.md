@@ -183,7 +183,7 @@ Each vehicle class is equipped with a distinct combat ability triggered by the `
 - **Sport**: **Turbo Boost** — INSTANT speed surge for a short burst window.
 - **Muscle**: **Ram Wave** — INSTANT impulse wave that slows nearby opponents.
 - **Patrol**: **Homing EMP** — Fires a HOMING PROJECTILE that curves and tracks the nearest opponent. On hit, the opponent is stunned (cannot steer) for 1.5s.
-- **Truck**: **Spike Burst** — INSTANT launch of spikes in a forward cone to flatten tires.
+- **Truck**: **Turbo Boost** — INSTANT speed surge with the truck-specific boost intensity modifier.
 
 Additionally, players can deploy **Oil Slicks** behind them using the `boost` input, which applies a slippery/slowed effect to opponents driving through them.
 

@@ -1,4 +1,5 @@
 import type { EventQueue, RigidBody } from '@dimforge/rapier3d-compat';
+import { sanitizeDebugSpeedMultiplier } from '@/server/debugSpeed';
 import { updateDriftState } from '@/server/sim/driftSystem';
 import type { SimPlayerState } from '@/server/sim/types';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
@@ -22,8 +23,6 @@ type DriveStepArgs = {
     player: SimPlayerState;
     rigidBody: RigidBody;
 };
-
-const MAX_DEBUG_SPEED_MULTIPLIER = 9;
 
 const clamp = (value: number, min: number, max: number) => {
     return Math.max(min, Math.min(value, max));
@@ -61,12 +60,7 @@ const getMotionMultipliers = (player: SimPlayerState): MotionMultipliers => {
 };
 
 const getDebugSpeedMultiplier = (player: SimPlayerState) => {
-    const multiplier = player.debugSpeedMultiplier;
-    if (!Number.isFinite(multiplier)) {
-        return 1;
-    }
-
-    return clamp(multiplier ?? 1, 1, MAX_DEBUG_SPEED_MULTIPLIER);
+    return sanitizeDebugSpeedMultiplier(player.debugSpeedMultiplier);
 };
 
 const applyScalarSpeed = (player: SimPlayerState, dtSeconds: number, movementMultiplier: number) => {

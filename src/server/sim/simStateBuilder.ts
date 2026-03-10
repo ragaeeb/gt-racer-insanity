@@ -1,4 +1,4 @@
-import { PUDDLE_TRAP_ID } from '@/shared/game/hazard/hazardManifest';
+import { PUDDLE_TRAP_ID, SPIKE_STRIP_ID } from '@/shared/game/hazard/hazardManifest';
 import {
     DEFAULT_TRACK_WIDTH_METERS,
     getTrackManifestById,
@@ -19,7 +19,7 @@ type RoomOptions = {
 const EXTRA_HAZARDS_PER_LEVEL = 3;
 const EXTRA_HAZARD_SAFE_START_BUFFER_METERS = 140;
 const EXTRA_HAZARD_EDGE_MARGIN_METERS = 8;
-const EXTRA_HAZARD_PATTERN = [PUDDLE_TRAP_ID, 'spike-strip'] as const;
+const EXTRA_HAZARD_PATTERN = [PUDDLE_TRAP_ID, SPIKE_STRIP_ID] as const;
 
 const buildProgressiveHazardsForLap = (trackManifest: TrackManifest, lap: number): ActiveHazard[] => {
     const trackSequenceIndex = getTrackSequenceIndex(trackManifest.id);

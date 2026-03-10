@@ -112,11 +112,29 @@ const readDebugSpeedMultiplier = () => {
 };
 
 export const isSnapshotRaceActive = (status: RaceState['status']) => status !== 'finished';
-export const isSnapshotFreshByServerTime = (lastAcceptedServerTimeMs: number | null, incomingServerTimeMs: number) => {
+export const isSnapshotFreshByServerTime = (
+    lastAcceptedServerTimeMs: number | null,
+    lastAcceptedSeq: number | null,
+    incomingServerTimeMs: number,
+    incomingSeq: number,
+) => {
     if (lastAcceptedServerTimeMs === null) {
         return true;
     }
-    return incomingServerTimeMs >= lastAcceptedServerTimeMs;
+
+    if (incomingServerTimeMs > lastAcceptedServerTimeMs) {
+        return true;
+    }
+
+    if (incomingServerTimeMs < lastAcceptedServerTimeMs) {
+        return false;
+    }
+
+    if (lastAcceptedSeq === null) {
+        return true;
+    }
+
+    return incomingSeq > lastAcceptedSeq;
 };
 
 export const computeDirtIntensityFromDistance = (distanceMeters: number, totalRaceDistanceMeters: number): number => {
@@ -390,6 +408,7 @@ export const useNetworkConnection = ({
         session.latestLocalSnapshot = null;
         session.latestLocalSnapshotSeq = null;
         session.lastReconciledSnapshotSeq = null;
+        session.lastAcceptedSnapshotSeq = null;
         session.hasLocalAuthoritativeTarget = false;
         session.lastCorrection = null;
         session.networkUpdateTimer = 0;
@@ -487,6 +506,7 @@ export const useNetworkConnection = ({
 
             resetSessionState();
             session.lastAcceptedSnapshotServerTimeMs = roomJoinedPayload.snapshot?.serverTimeMs ?? null;
+            session.lastAcceptedSnapshotSeq = roomJoinedPayload.snapshot?.seq ?? null;
             onRaceStateChange(null);
             onGameOverChange(false);
             session.isRunning = isSnapshotRaceActive(roomJoinedPayload.snapshot?.raceState.status ?? 'running');
@@ -759,10 +779,18 @@ export const useNetworkConnection = ({
         networkManager.onServerSnapshot((snapshot) => {
             const startedAtMs = performance.now();
             try {
-                if (!isSnapshotFreshByServerTime(session.lastAcceptedSnapshotServerTimeMs, snapshot.serverTimeMs)) {
+                if (
+                    !isSnapshotFreshByServerTime(
+                        session.lastAcceptedSnapshotServerTimeMs,
+                        session.lastAcceptedSnapshotSeq,
+                        snapshot.serverTimeMs,
+                        snapshot.seq,
+                    )
+                ) {
                     return;
                 }
                 session.lastAcceptedSnapshotServerTimeMs = snapshot.serverTimeMs;
+                session.lastAcceptedSnapshotSeq = snapshot.seq;
                 session.isRunning = isSnapshotRaceActive(snapshot.raceState.status);
                 useRuntimeStore.getState().applySnapshot(snapshot);
                 onRaceStateChange(snapshot.raceState);

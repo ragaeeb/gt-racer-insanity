@@ -150,6 +150,33 @@ export const forceFinishRaceViaDebug = async (page: Page) => {
     expect(forced).toBeTruthy();
 };
 
+export const waitForTrackLabel = async (page: Page, expectedTrackLabel: string) => {
+    await expect(page.locator('#track-name')).toHaveText(expectedTrackLabel, { timeout: 15_000 });
+};
+
+export const driveForwardAndAssertMovement = async (page: Page) => {
+    const before = await readDebugState(page);
+    expect(before?.isRunning).toBe(true);
+    const startX = before?.localCarX ?? 0;
+    const startZ = before?.localCarZ ?? 0;
+
+    await page.bringToFront();
+    await page.focus('body');
+    await page.keyboard.down('w');
+    await expect.poll(async () => (await readDebugState(page))?.isRunning ?? false).toBe(true);
+    await expect
+        .poll(async () => (await readDebugState(page))?.speedKph ?? 0, { timeout: 8_000 })
+        .toBeGreaterThan(1);
+    await page.keyboard.up('w');
+    await page.waitForTimeout(300);
+
+    const after = await readDebugState(page);
+    const endX = after?.localCarX ?? startX;
+    const endZ = after?.localCarZ ?? startZ;
+    const displacement = Math.hypot(endX - startX, endZ - startZ);
+    expect(displacement).toBeGreaterThan(0.2);
+};
+
 export const setDrivingKeyState = async (page: Page, code: string, pressed: boolean) => {
     const keyByCode: Record<string, string> = {
         ArrowDown: 'ArrowDown',

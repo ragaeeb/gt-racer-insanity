@@ -1,4 +1,5 @@
 import { serverConfig } from '@/server/config';
+import { sanitizeDebugSpeedMultiplier } from '@/server/debugSpeed';
 import type { HazardTrigger } from '@/server/sim/hazardSystem';
 import type { PowerupTrigger } from '@/server/sim/powerupSystem';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
@@ -44,16 +45,6 @@ type JoinRoomOptions = Pick<
     JoinRoomPayload,
     'debugSpeedMultiplier' | 'selectedColorId' | 'selectedTrackId' | 'selectedVehicleId'
 >;
-
-const MAX_DEBUG_SPEED_MULTIPLIER = 9;
-
-const sanitizeDebugSpeedMultiplier = (value: number | undefined) => {
-    if (!Number.isFinite(value)) {
-        return 1;
-    }
-
-    return Math.max(1, Math.min(MAX_DEBUG_SPEED_MULTIPLIER, value ?? 1));
-};
 
 export type RoomSnapshotEnvelope = {
     roomId: string;
@@ -340,7 +331,7 @@ export class RoomStore {
         return true;
     };
 
-    public restartFinishedRoomRace = (roomId: string, nowMs = Date.now()) => {
+    public restartFinishedRoomRace = (roomId: string, nowMs = Date.now(), advanceLevel = true) => {
         const room = this.rooms.get(roomId);
         if (!room) {
             return false;
@@ -353,7 +344,18 @@ export class RoomStore {
             return false;
         }
 
-        this.rebuildRoomSimulation(room, getNextTrackId(snapshot.raceState.trackId), nowMs);
+        if (!snapshot.raceState.winnerPlayerId) {
+            return false;
+        }
+
+        if (advanceLevel) {
+            this.rebuildRoomSimulation(room, getNextTrackId(snapshot.raceState.trackId), nowMs);
+            return true;
+        }
+
+        room.simulation.restartRace(nowMs);
+        const restartedSnapshot = room.simulation.buildSnapshot(nowMs);
+        this.syncRoomPlayersFromSnapshot(room, restartedSnapshot);
         return true;
     };
 

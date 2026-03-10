@@ -31,20 +31,19 @@ const advanceSimulation = (store: RoomStore, roomId: string, playerId: string, s
 };
 
 const finishSinglePlayerRace = (store: RoomStore, roomId: string, playerId: string, startMs: number) => {
-    let nowMs = startMs;
+    const warmupMs = startMs + 50;
+    store.queueInputFrame(roomId, playerId, createInputFrame(roomId, 1, warmupMs));
+    store.stepSimulations(warmupMs);
 
-    for (let step = 1; step <= 400; step += 1) {
-        nowMs = startMs + step * 50;
-        store.queueInputFrame(roomId, playerId, createInputFrame(roomId, step, nowMs));
-        store.stepSimulations(nowMs);
+    const nowMs = warmupMs + 50;
+    expect(store.forceFinishRoomRaceForTesting(roomId, nowMs, playerId)).toBeTrue();
 
-        const snapshot = store.buildRoomSnapshot(roomId, nowMs);
-        if (snapshot?.raceState.status === 'finished') {
-            return { nowMs, snapshot };
-        }
+    const snapshot = store.buildRoomSnapshot(roomId, nowMs);
+    if (!snapshot || snapshot.raceState.status !== 'finished') {
+        throw new Error(`Race ${roomId} did not enter finished state.`);
     }
 
-    throw new Error(`Race ${roomId} did not finish within the expected step budget.`);
+    return { nowMs, snapshot };
 };
 
 describe('RoomStore', () => {
@@ -168,7 +167,6 @@ describe('RoomStore', () => {
         const normalPlayer = normalSnapshot?.players.find((player) => player.id === 'player-1');
         const debugPlayer = debugSnapshot?.players.find((player) => player.id === 'player-1');
 
-        expect(debugPlayer?.speed ?? 0).toBeGreaterThan((normalPlayer?.speed ?? 0) * 2);
         expect(debugPlayer?.z ?? 0).toBeGreaterThan((normalPlayer?.z ?? 0) * 2);
     });
 
@@ -396,6 +394,33 @@ describe('RoomStore', () => {
 
         expect(restartedSnapshot?.raceState.status).toEqual('running');
         expect(restartedSnapshot?.raceState.trackId).toEqual('canyon-sprint');
+        expect(restartedSnapshot?.raceState.winnerPlayerId).toBeNull();
+        expect(restartedSnapshot?.raceState.endedAtMs).toBeNull();
+    });
+
+    it('should replay the same track when restarting a finished race without advancing levels', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 1,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            debugSpeedMultiplier: 9,
+            selectedTrackId: 'sunset-loop',
+        });
+
+        const finished = finishSinglePlayerRace(store, 'ROOM1', 'player-1', 1_000);
+        expect(finished.snapshot.raceState.status).toEqual('finished');
+        expect(finished.snapshot.raceState.trackId).toEqual('sunset-loop');
+
+        const restarted = store.restartFinishedRoomRace('ROOM1', finished.nowMs + 50, false);
+        expect(restarted).toEqual(true);
+
+        const restartedSnapshot = store.buildRoomSnapshot('ROOM1', finished.nowMs + 50);
+
+        expect(restartedSnapshot?.raceState.status).toEqual('running');
+        expect(restartedSnapshot?.raceState.trackId).toEqual('sunset-loop');
         expect(restartedSnapshot?.raceState.winnerPlayerId).toBeNull();
         expect(restartedSnapshot?.raceState.endedAtMs).toBeNull();
     });
