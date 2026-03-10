@@ -3,8 +3,10 @@ import { Toaster, toast } from 'sonner';
 import { useHudStore } from '@/client/game/state/hudStore';
 import { useRuntimeStore } from '@/client/game/state/runtimeStore';
 import { AbilityIndicator } from '@/components/AbilityIndicator';
+import { getNextTrackId, getTrackManifestById } from '@/shared/game/track/trackManifest';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import type { ConnectionStatus, RaceState } from '@/shared/network/types';
+import { clientConfig } from './config';
 import {
     buildShareRaceUrl,
     type DiagnosticsVerbosity,
@@ -52,6 +54,18 @@ export type RaceScreenProps = {
     selectedVehicleId: VehicleClassId;
 };
 
+export const canAdvanceRaceLevel = (raceState: RaceState | null) => {
+    return raceState?.status === 'finished' && raceState.winnerPlayerId != null;
+};
+
+export const getNextTrackLabelForRaceState = (raceState: RaceState | null) => {
+    if (!canAdvanceRaceLevel(raceState) || !raceState) {
+        return null;
+    }
+
+    return getTrackManifestById(getNextTrackId(raceState.trackId)).label;
+};
+
 export const RaceScreen = ({
     playerName,
     roomId,
@@ -67,7 +81,7 @@ export const RaceScreen = ({
     );
     const [gameOver, setGameOver] = useState(false);
     const [raceState, setRaceState] = useState<RaceState | null>(null);
-    const [resetNonce, setResetNonce] = useState(0);
+    const [resetState, setResetState] = useState({ advanceLevel: false, nonce: 0 });
 
     const speedKph = useHudStore((state) => state.speedKph);
     const lap = useHudStore((state) => state.lap);
@@ -78,6 +92,7 @@ export const RaceScreen = ({
     const pendingToasts = useHudStore((state) => state.pendingToasts);
     const clearPendingToast = useHudStore((state) => state.clearPendingToast);
     const latestSnapshot = useRuntimeStore((state) => state.latestSnapshot);
+    const isSingleplayerMode = clientConfig.gameMode === 'singleplayer';
 
     const appVersion = __APP_VERSION__;
 
@@ -90,6 +105,8 @@ export const RaceScreen = ({
         raceState && raceState.status === 'finished' && raceState.startedAtMs != null
             ? formatRaceDurationMs((raceState.endedAtMs ?? Date.now()) - raceState.startedAtMs)
             : null;
+    const canAdvanceLevel = canAdvanceRaceLevel(raceState);
+    const nextTrackLabel = getNextTrackLabelForRaceState(raceState);
 
     useEffect(() => {
         if (pendingToasts.length === 0) {
@@ -109,7 +126,7 @@ export const RaceScreen = ({
     const handleRestart = () => {
         setGameOver(false);
         setRaceState(null);
-        setResetNonce((current) => current + 1);
+        setResetState((current) => ({ advanceLevel: canAdvanceLevel, nonce: current.nonce + 1 }));
     };
 
     const handleGenerateDebugLog = () => {
@@ -117,6 +134,11 @@ export const RaceScreen = ({
     };
 
     const handleShareRaceLink = async () => {
+        if (isSingleplayerMode) {
+            toast.warning('SINGLE-PLAYER MODE: SHARING DISABLED');
+            return;
+        }
+
         try {
             const shareUrl = await buildShareRaceUrl(roomId);
             if (!shareUrl) {
@@ -261,20 +283,22 @@ export const RaceScreen = ({
                         LAPS: {lap}/{raceState?.totalLaps ?? lap}
                     </p>
                     <p id="race-result-track">TRACK: {trackLabel}</p>
+                    {canAdvanceLevel && <p id="race-result-next-track">NEXT: {nextTrackLabel ?? 'NEXT LEVEL'}</p>}
                     <p id="race-result-duration">TIME: {raceDurationLabel ?? '--:--.--'}</p>
                     <button id="restart-btn" onClick={handleRestart} type="button">
-                        REINITIALIZE
+                        {canAdvanceLevel ? 'NEXT LEVEL' : 'REINITIALIZE'}
                     </button>
                 </div>
             </div>
 
             <RaceSceneCanvas
+                advanceLevelOnReset={resetState.advanceLevel}
                 cruiseControlEnabled={cruiseControlEnabled}
                 onConnectionStatusChange={setConnectionStatus}
                 onGameOverChange={setGameOver}
                 onRaceStateChange={setRaceState}
                 playerName={playerName}
-                resetNonce={resetNonce}
+                resetNonce={resetState.nonce}
                 roomId={roomId}
                 selectedColorId={selectedColorId}
                 selectedTrackId={selectedTrackId}

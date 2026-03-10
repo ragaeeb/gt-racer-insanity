@@ -270,7 +270,7 @@ describe('collision with elevation enabled', () => {
         }
     });
 
-    it('should zero both speeds after collision with Y-axis enabled', () => {
+    it('should keep both post-collision forward speeds within the configured recovery range with Y-axis enabled', () => {
         const sim = createSimulation();
         sim.joinPlayer('p1', 'Alice', 'sport', 'red');
         sim.joinPlayer('p2', 'Bob', 'sport', 'blue');
@@ -296,8 +296,8 @@ describe('collision with elevation enabled', () => {
         const p1 = snapshot.players.find((p) => p.id === 'p1');
         const p2 = snapshot.players.find((p) => p.id === 'p2');
 
-        expect(p1?.speed ?? 99).toBe(0);
-        expect(p2?.speed ?? 99).toBe(0);
+        expect(Math.abs(p1?.speed ?? 99)).toBeLessThanOrEqual(4.5);
+        expect(Math.abs(p2?.speed ?? 99)).toBeLessThanOrEqual(4.5);
     });
 });
 

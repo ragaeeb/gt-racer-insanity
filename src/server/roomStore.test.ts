@@ -30,6 +30,22 @@ const advanceSimulation = (store: RoomStore, roomId: string, playerId: string, s
     }
 };
 
+const finishSinglePlayerRace = (store: RoomStore, roomId: string, playerId: string, startMs: number) => {
+    const warmupMs = startMs + 50;
+    store.queueInputFrame(roomId, playerId, createInputFrame(roomId, 1, warmupMs));
+    store.stepSimulations(warmupMs);
+
+    const nowMs = warmupMs + 50;
+    expect(store.forceFinishRoomRaceForTesting(roomId, nowMs, playerId)).toBeTrue();
+
+    const snapshot = store.buildRoomSnapshot(roomId, nowMs);
+    if (!snapshot || snapshot.raceState.status !== 'finished') {
+        throw new Error(`Race ${roomId} did not enter finished state.`);
+    }
+
+    return { nowMs, snapshot };
+};
+
 describe('RoomStore', () => {
     it('should create a room and join the first player', () => {
         const store = new RoomStore(() => 101);
@@ -40,6 +56,15 @@ describe('RoomStore', () => {
         expect(result.room.players.size).toEqual(1);
         expect(result.player.x).toEqual(-6);
         expect(result.player.z).toBeCloseTo(0, 6);
+    });
+
+    it('should default new rooms to sunset-loop when no track is selected', () => {
+        const store = new RoomStore(() => 101);
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice');
+        const snapshot = store.buildRoomSnapshot('ROOM1', 1_000);
+
+        expect(snapshot?.raceState.trackId).toEqual('sunset-loop');
     });
 
     it('should keep the same room seed when other players join', () => {
@@ -102,6 +127,47 @@ describe('RoomStore', () => {
         const snapshot = store.buildRoomSnapshot('ROOM1', 1_000);
 
         expect(snapshot?.raceState.trackId).toEqual('neon-city');
+    });
+
+    it('should honor selectedTrackId rotation from join options when creating a room', () => {
+        const store = new RoomStore(() => 2, {
+            defaultTrackId: 'sunset-loop',
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            selectedTrackId: 'rotation',
+        });
+        const snapshot = store.buildRoomSnapshot('ROOM1', 1_000);
+
+        expect(snapshot?.raceState.trackId).toEqual(getTrackManifestIds()[2]);
+    });
+
+    it('should apply debug speed multiplier from join options', () => {
+        const normalStore = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 3,
+        });
+        const debugStore = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 3,
+        });
+
+        normalStore.joinRoom('ROOM1', 'player-1', 'Alice');
+        debugStore.joinRoom('ROOM1', 'player-1', 'Alice', {
+            debugSpeedMultiplier: 9,
+        });
+
+        advanceSimulation(normalStore, 'ROOM1', 'player-1', 30, 1_000);
+        advanceSimulation(debugStore, 'ROOM1', 'player-1', 30, 1_000);
+
+        const normalSnapshot = normalStore.buildRoomSnapshot('ROOM1', 1_600);
+        const debugSnapshot = debugStore.buildRoomSnapshot('ROOM1', 1_600);
+        const normalPlayer = normalSnapshot?.players.find((player) => player.id === 'player-1');
+        const debugPlayer = debugSnapshot?.players.find((player) => player.id === 'player-1');
+
+        expect(debugPlayer?.z ?? 0).toBeGreaterThan((normalPlayer?.z ?? 0) * 2);
     });
 
     it('should return false when queueing input for an unknown room', () => {
@@ -235,6 +301,214 @@ describe('RoomStore', () => {
         const store = new RoomStore(() => 1);
         const result = store.restartRoomRace('NONEXISTENT', 1_000);
         expect(result).toEqual(false);
+    });
+
+    it('should return false from restartFinishedRoomRace when race is not finished', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 1,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            selectedTrackId: 'sunset-loop',
+        });
+
+        const restarted = store.restartFinishedRoomRace('ROOM1', 1_100);
+        expect(restarted).toEqual(false);
+
+        const snapshot = store.buildRoomSnapshot('ROOM1', 1_100);
+        expect(snapshot?.raceState.trackId).toEqual('sunset-loop');
+        expect(snapshot?.raceState.status).toEqual('running');
+    });
+
+    it('should force-finish a room race for e2e hooks', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 1,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            selectedTrackId: 'sunset-loop',
+        });
+
+        const forced = store.forceFinishRoomRaceForTesting('ROOM1', 2_000);
+        expect(forced).toEqual(true);
+
+        const snapshot = store.buildRoomSnapshot('ROOM1', 2_000);
+        expect(snapshot?.raceState.status).toEqual('finished');
+        expect(snapshot?.raceState.winnerPlayerId).toEqual('player-1');
+        expect(snapshot?.raceState.trackId).toEqual('sunset-loop');
+    });
+
+    it('should advance the room to the next track after finishing a level', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 1,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            selectedColorId: 'blue',
+            selectedTrackId: 'sunset-loop',
+            selectedVehicleId: 'sport',
+        });
+
+        const advanced = store.advanceRoomToNextTrack('ROOM1', 6_000);
+        expect(advanced).toEqual(true);
+
+        const snapshot = store.buildRoomSnapshot('ROOM1', 6_000);
+        const player = snapshot?.players.find((candidate) => candidate.id === 'player-1');
+
+        expect(snapshot?.raceState.trackId).toEqual('canyon-sprint');
+        expect(snapshot?.raceState.winnerPlayerId).toBeNull();
+        expect(snapshot?.raceState.endedAtMs).toBeNull();
+        expect(snapshot?.players).toHaveLength(1);
+        expect(player?.vehicleId).toEqual('sport');
+        expect(player?.colorId).toEqual('blue');
+        expect(player?.x).toEqual(-6);
+        expect(player?.z ?? 1).toBeCloseTo(0, 6);
+    });
+
+    it('should advance to the next track when restarting a finished race', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 1,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            debugSpeedMultiplier: 9,
+            selectedTrackId: 'sunset-loop',
+        });
+
+        const finished = finishSinglePlayerRace(store, 'ROOM1', 'player-1', 1_000);
+        expect(finished.snapshot.raceState.status).toEqual('finished');
+        expect(finished.snapshot.raceState.trackId).toEqual('sunset-loop');
+
+        const restarted = store.restartFinishedRoomRace('ROOM1', finished.nowMs + 50);
+        expect(restarted).toEqual(true);
+
+        const restartedSnapshot = store.buildRoomSnapshot('ROOM1', finished.nowMs + 50);
+
+        expect(restartedSnapshot?.raceState.status).toEqual('running');
+        expect(restartedSnapshot?.raceState.trackId).toEqual('canyon-sprint');
+        expect(restartedSnapshot?.raceState.winnerPlayerId).toBeNull();
+        expect(restartedSnapshot?.raceState.endedAtMs).toBeNull();
+    });
+
+    it('should replay the same track when restarting a finished race without advancing levels', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 1,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            debugSpeedMultiplier: 9,
+            selectedTrackId: 'sunset-loop',
+        });
+
+        const finished = finishSinglePlayerRace(store, 'ROOM1', 'player-1', 1_000);
+        expect(finished.snapshot.raceState.status).toEqual('finished');
+        expect(finished.snapshot.raceState.trackId).toEqual('sunset-loop');
+
+        const restarted = store.restartFinishedRoomRace('ROOM1', finished.nowMs + 50, false);
+        expect(restarted).toEqual(true);
+
+        const restartedSnapshot = store.buildRoomSnapshot('ROOM1', finished.nowMs + 50);
+
+        expect(restartedSnapshot?.raceState.status).toEqual('running');
+        expect(restartedSnapshot?.raceState.trackId).toEqual('sunset-loop');
+        expect(restartedSnapshot?.raceState.winnerPlayerId).toBeNull();
+        expect(restartedSnapshot?.raceState.endedAtMs).toBeNull();
+    });
+
+    it('should keep advancing tracks across repeated finished-race restarts', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 1,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            debugSpeedMultiplier: 9,
+            selectedTrackId: 'sunset-loop',
+        });
+
+        const expectedTrackOrder = ['sunset-loop', 'canyon-sprint', 'neon-city', 'desert-oasis'];
+        let baseMs = 1_000;
+
+        for (let index = 0; index < expectedTrackOrder.length - 1; index += 1) {
+            const finished = finishSinglePlayerRace(store, 'ROOM1', 'player-1', baseMs);
+            expect(finished.snapshot.raceState.trackId).toEqual(expectedTrackOrder[index]);
+            expect(finished.snapshot.raceState.status).toEqual('finished');
+
+            const restartMs = finished.nowMs + 50;
+            const restarted = store.restartFinishedRoomRace('ROOM1', restartMs);
+            expect(restarted).toEqual(true);
+
+            const restartedSnapshot = store.buildRoomSnapshot('ROOM1', restartMs);
+            expect(restartedSnapshot?.raceState.status).toEqual('running');
+            expect(restartedSnapshot?.raceState.trackId).toEqual(expectedTrackOrder[index + 1]);
+
+            baseMs = restartMs + 50;
+        }
+    });
+
+    it('should derive next track from authoritative race snapshot even if room track cache drifts', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 1,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            debugSpeedMultiplier: 9,
+            selectedTrackId: 'sunset-loop',
+        });
+
+        const finished = finishSinglePlayerRace(store, 'ROOM1', 'player-1', 1_000);
+        expect(finished.snapshot.raceState.trackId).toEqual('sunset-loop');
+        expect(finished.snapshot.raceState.status).toEqual('finished');
+
+        // Simulate stale cached room track id; progression should still follow snapshot.raceState.trackId.
+        const room = store.getRoom('ROOM1');
+        expect(room).not.toBeNull();
+        if (room) {
+            room.trackId = 'desert-oasis';
+        }
+
+        const restarted = store.restartFinishedRoomRace('ROOM1', finished.nowMs + 50);
+        expect(restarted).toEqual(true);
+
+        const restartedSnapshot = store.buildRoomSnapshot('ROOM1', finished.nowMs + 50);
+        expect(restartedSnapshot?.raceState.trackId).toEqual('canyon-sprint');
+    });
+
+    it('should keep increasing hazard density as the room advances through multiple levels', () => {
+        const store = new RoomStore(() => 1, {
+            defaultTrackId: 'sunset-loop',
+            simulationTickHz: 20,
+            totalLaps: 1,
+        });
+
+        store.joinRoom('ROOM1', 'player-1', 'Alice', {
+            selectedTrackId: 'sunset-loop',
+        });
+
+        const level1 = store.buildRoomSnapshot('ROOM1', 1_000);
+        store.advanceRoomToNextTrack('ROOM1', 2_000);
+        const level2 = store.buildRoomSnapshot('ROOM1', 2_000);
+        store.advanceRoomToNextTrack('ROOM1', 3_000);
+        const level3 = store.buildRoomSnapshot('ROOM1', 3_000);
+
+        expect(level1?.raceState.trackId).toEqual('sunset-loop');
+        expect(level2?.raceState.trackId).toEqual('canyon-sprint');
+        expect(level3?.raceState.trackId).toEqual('neon-city');
+        expect(level2?.hazards.length ?? 0).toBeGreaterThan(level1?.hazards.length ?? 0);
+        expect(level3?.hazards.length ?? 0).toBeGreaterThan(level2?.hazards.length ?? 0);
     });
 
     it('should return false from queueAbilityActivation for an unknown room', () => {

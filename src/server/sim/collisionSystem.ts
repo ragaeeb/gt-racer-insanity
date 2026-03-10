@@ -1,4 +1,5 @@
 import type { EventQueue, RigidBody } from '@dimforge/rapier3d-compat';
+import { sanitizeDebugSpeedMultiplier } from '@/server/debugSpeed';
 import { updateDriftState } from '@/server/sim/driftSystem';
 import type { SimPlayerState } from '@/server/sim/types';
 import { getStatusEffectManifestById } from '@/shared/game/effects/statusEffectManifest';
@@ -58,12 +59,17 @@ const getMotionMultipliers = (player: SimPlayerState): MotionMultipliers => {
     };
 };
 
+const getDebugSpeedMultiplier = (player: SimPlayerState) => {
+    return sanitizeDebugSpeedMultiplier(player.debugSpeedMultiplier);
+};
+
 const applyScalarSpeed = (player: SimPlayerState, dtSeconds: number, movementMultiplier: number) => {
     const vehicleClass = getVehicleClassManifestById(player.vehicleId);
-    const maxForwardSpeed = vehicleClass.physics.maxForwardSpeed * movementMultiplier;
-    const maxReverseSpeed = vehicleClass.physics.maxReverseSpeed * movementMultiplier;
-    const acceleration = vehicleClass.physics.acceleration * movementMultiplier;
-    const friction = vehicleClass.physics.friction;
+    const effectiveMovementMultiplier = movementMultiplier * getDebugSpeedMultiplier(player);
+    const maxForwardSpeed = vehicleClass.physics.maxForwardSpeed * effectiveMovementMultiplier;
+    const maxReverseSpeed = vehicleClass.physics.maxReverseSpeed * effectiveMovementMultiplier;
+    const acceleration = vehicleClass.physics.acceleration * effectiveMovementMultiplier;
+    const friction = vehicleClass.physics.friction * effectiveMovementMultiplier;
 
     let speed = player.motion.speed;
 
@@ -111,6 +117,8 @@ const MAX_IMPULSE_ACCELERATION_FACTOR = 3;
 
 export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveStepArgs) => {
     const multipliers = getMotionMultipliers(player);
+    const debugSpeedMultiplier = getDebugSpeedMultiplier(player);
+    const effectiveMovementMultiplier = multipliers.movementMultiplier * debugSpeedMultiplier;
 
     applyScalarSpeed(player, dtSeconds, multipliers.movementMultiplier);
 
@@ -141,7 +149,7 @@ export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveSte
     const rawDelta = desiredForwardSpeed - currentForwardSpeed;
     const maxDelta =
         vehicleClass.physics.acceleration *
-        multipliers.movementMultiplier *
+        effectiveMovementMultiplier *
         dtSeconds *
         MAX_IMPULSE_ACCELERATION_FACTOR;
     const deltaForward = clamp(rawDelta, -maxDelta, maxDelta);

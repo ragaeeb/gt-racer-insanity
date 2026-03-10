@@ -4,6 +4,7 @@ import { COLOR_ID_TO_HSL } from '@/client/game/vehicleSelections';
 import type { VehicleClassId } from '@/shared/game/vehicle/vehicleClassManifest';
 import { generateRoomId, readLobbyMode, sanitizePlayerName, sanitizeRoomId, writeLobbyMode } from './appUtils';
 import { clientConfig } from './config';
+import { shouldCheckServerHealth } from './healthCheck';
 import { LandingHero } from './LandingHero';
 import { LobbyScreen } from './LobbyScreen';
 import { RaceScreen } from './RaceScreen';
@@ -23,7 +24,7 @@ export const App = () => {
         const colors = Object.keys(COLOR_ID_TO_HSL);
         return colors[Math.floor(Math.random() * colors.length)];
     });
-    const [selectedTrackId, setSelectedTrackId] = useState<string>('');
+    const [selectedTrackId, setSelectedTrackId] = useState<string>('sunset-loop');
 
     const routeParams = new URLSearchParams(routeSearch);
     const roomIdFromUrl = sanitizeRoomId(routeParams.get('room') ?? '');
@@ -87,6 +88,12 @@ export const App = () => {
 
     const handleCreateNewGame = async () => {
         setHomeError('');
+        if (!shouldCheckServerHealth(clientConfig.gameMode)) {
+            writeLobbyMode('create');
+            navigateTo('/lobby', generateRoomId());
+            return;
+        }
+
         setIsCheckingServer(true);
         try {
             const response = await fetch(`${clientConfig.serverUrl}/health`);

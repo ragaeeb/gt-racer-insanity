@@ -1,5 +1,16 @@
 import { io, type Socket } from 'socket.io-client';
 import { clientConfig } from '@/client/app/config';
+import type {
+    OnConnectionStatusCallback,
+    OnJoinErrorCallback,
+    OnPlayerJoinedCallback,
+    OnPlayerLeftCallback,
+    OnRaceEventCallback,
+    OnRoomJoinedCallback,
+    OnServerSnapshotCallback,
+    RealtimeTransport,
+    RealtimeTransportOptions,
+} from '@/client/network/realtimeTransport';
 import { sanitizeClientInputFrame } from '@/shared/network/inputFrame';
 import { PROTOCOL_V2 } from '@/shared/network/protocolVersion';
 import type {
@@ -8,28 +19,11 @@ import type {
     ConnectionStatus,
     JoinErrorPayload,
     JoinRoomPayload,
-    PlayerState,
     ProtocolVersion,
-    RaceEventPayload,
     RoomJoinedPayload,
-    ServerSnapshotEventPayload,
     ServerSnapshotPayload,
+    ServerSnapshotEventPayload,
 } from '@/shared/network/types';
-
-type NetworkManagerOptions = {
-    protocolVersion?: ProtocolVersion;
-    selectedColorId?: string;
-    selectedTrackId?: string;
-    selectedVehicleId?: string;
-};
-
-export type OnRoomJoinedCallback = (seed: number, players: PlayerState[], payload: RoomJoinedPayload) => void;
-export type OnPlayerJoinedCallback = (player: PlayerState) => void;
-export type OnPlayerLeftCallback = (playerId: string) => void;
-export type OnConnectionStatusCallback = (status: ConnectionStatus) => void;
-export type OnServerSnapshotCallback = (payload: ServerSnapshotPayload) => void;
-export type OnRaceEventCallback = (payload: RaceEventPayload) => void;
-export type OnJoinErrorCallback = (payload: JoinErrorPayload) => void;
 
 export const shouldEmitByInterval = (nowMs: number, lastEmitAtMs: number, intervalMs: number) => {
     return nowMs - lastEmitAtMs >= intervalMs;
@@ -49,23 +43,26 @@ export const buildSequencedInputFrame = (
     });
 };
 
-export class NetworkManager {
+export class NetworkManager implements RealtimeTransport {
     private socket: Socket;
     private readonly connectionStatusCallbacks = new Set<OnConnectionStatusCallback>();
     private readonly joinErrorCallbacks = new Set<OnJoinErrorCallback>();
     private readonly minInputFrameEmitIntervalMs: number;
     private lastInputFrameEmitAt = 0;
     private readonly protocolVersion: ProtocolVersion;
+    private readonly debugSpeedMultiplier: number;
     private readonly selectedVehicleId: string;
     private readonly selectedColorId: string;
     private readonly selectedTrackId?: string;
+    private pendingRestartRaceRequest: { advanceLevel: boolean } | null = null;
     public roomId: string;
     public readonly playerName: string;
 
-    constructor(playerName: string, roomId: string, options: NetworkManagerOptions = {}) {
+    constructor(playerName: string, roomId: string, options: RealtimeTransportOptions = {}) {
         this.roomId = roomId;
         this.playerName = playerName;
         this.protocolVersion = options.protocolVersion ?? PROTOCOL_V2;
+        this.debugSpeedMultiplier = options.debugSpeedMultiplier ?? 1;
         this.selectedVehicleId = options.selectedVehicleId ?? 'sport';
         this.selectedColorId = options.selectedColorId ?? 'red';
         this.selectedTrackId = options.selectedTrackId;
@@ -81,6 +78,7 @@ export class NetworkManager {
             this.emitConnectionStatus('connected');
             console.log(`Connected to server as ${this.socket.id}`);
             const payload: JoinRoomPayload = {
+                debugSpeedMultiplier: this.debugSpeedMultiplier,
                 playerName: this.playerName,
                 protocolVersion: this.protocolVersion,
                 roomId: this.roomId,
@@ -89,6 +87,14 @@ export class NetworkManager {
                 selectedVehicleId: this.selectedVehicleId,
             };
             this.socket.emit('join_room', payload);
+
+            if (this.pendingRestartRaceRequest) {
+                this.socket.emit('restart_race', {
+                    advanceLevel: this.pendingRestartRaceRequest.advanceLevel,
+                    roomId: this.roomId,
+                });
+                this.pendingRestartRaceRequest = null;
+            }
         });
 
         this.socket.on('disconnect', () => {
@@ -198,11 +204,14 @@ export class NetworkManager {
         });
     }
 
-    public emitRestartRace() {
+    public emitRestartRace(advanceLevel = false) {
         if (!this.socket.connected) {
+            this.pendingRestartRaceRequest = { advanceLevel };
             return;
         }
+        this.pendingRestartRaceRequest = null;
         this.socket.emit('restart_race', {
+            advanceLevel,
             roomId: this.roomId,
         });
     }

@@ -49,6 +49,49 @@ const parseDiagnosticsVerboseFlag = () => {
     return localStorageFlag === '1' || localStorageFlag === 'true';
 };
 
+type DiagnosticSamplingKey = {
+    roomId: string | null;
+    startedAtMs: number | null;
+    trackId: string | null;
+};
+
+export const buildDiagnosticSamplingKey = (
+    roomId: string | null,
+    trackId: string | null,
+    startedAtMs: number | null,
+): DiagnosticSamplingKey => ({
+    roomId,
+    startedAtMs,
+    trackId,
+});
+
+export const shouldResetDiagnosticSamplingBaseline = (
+    previousKey: DiagnosticSamplingKey | null,
+    nextKey: DiagnosticSamplingKey,
+) => {
+    if (previousKey === null) {
+        return false;
+    }
+
+    return (
+        previousKey.roomId !== nextKey.roomId ||
+        previousKey.trackId !== nextKey.trackId ||
+        previousKey.startedAtMs !== nextKey.startedAtMs
+    );
+};
+
+export const getDiagnosticSpeedMetrics = (localSpeedMps: number, snapshotSpeedMps: number | null | undefined) => {
+    const localSpeedKphExact = Math.max(0, localSpeedMps * 3.6);
+    const snapshotSpeedKphExact = Math.max(0, (snapshotSpeedMps ?? 0) * 3.6);
+
+    return {
+        localSpeedKph: Math.round(localSpeedKphExact),
+        localSpeedKphExact,
+        snapshotSpeedKphExact,
+        speedDeltaKph: localSpeedKphExact - snapshotSpeedKphExact,
+    };
+};
+
 const downloadReport = (capture: DiagCaptureState) => {
     const nowMs = Date.now();
     const durationMs = Math.max(1, nowMs - capture.sessionStartedAtMs);
@@ -123,6 +166,9 @@ export const useDiagnostics = (
     const maxFrameGapMsSinceLogRef = useRef(0);
     const longFrameGapCountSinceLogRef = useRef(0);
     const lastFrameAtMsRef = useRef(0);
+    const lastSamplePositionRef = useRef<{ x: number; z: number } | null>(null);
+    const skipNextSampleAfterResetRef = useRef(false);
+    const lastSamplingKeyRef = useRef<DiagnosticSamplingKey | null>(null);
 
     // Focused sub-hooks
     const { longTaskCountRef, longTaskMaxMsRef, reset: resetLongTasks } = useLongTaskObserver(verboseRef);
@@ -140,6 +186,9 @@ export const useDiagnostics = (
         maxFrameGapMsSinceLogRef.current = 0;
         longFrameGapCountSinceLogRef.current = 0;
         lastFrameAtMsRef.current = 0;
+        lastSamplePositionRef.current = null;
+        skipNextSampleAfterResetRef.current = true;
+        lastSamplingKeyRef.current = null;
         resetLongTasks();
         lastCollisionEventLoggedAtMsRef.current = null;
         lastCollisionFlipStartedLoggedAtMsRef.current = null;
@@ -153,7 +202,10 @@ export const useDiagnostics = (
         resetAllRefs();
 
         const debugWindow = window as Window & {
-            __GT_DEBUG__?: { getState: () => GTDebugState };
+            __GT_DEBUG__?: {
+                forceFinishRaceForTesting?: () => boolean;
+                getState: () => GTDebugState;
+            };
             __GT_DIAG__?: {
                 clearReport: () => void;
                 disable: () => void;
@@ -173,6 +225,13 @@ export const useDiagnostics = (
         };
 
         debugWindow.__GT_DEBUG__ = {
+            forceFinishRaceForTesting: () => {
+                const manager = sessionRef.current.networkManager;
+                if (!manager?.forceFinishRaceForTesting) {
+                    return false;
+                }
+                return manager.forceFinishRaceForTesting();
+            },
             getState: (): GTDebugState => {
                 const session = sessionRef.current;
                 const latestSnapshot = useRuntimeStore.getState().latestSnapshot;
@@ -307,6 +366,18 @@ export const useDiagnostics = (
         const cm = cameraMetricsRef.current;
         const correction = session.lastCorrection;
         const localSnapshot = session.latestLocalSnapshot;
+        const latestSnapshot = useRuntimeStore.getState().latestSnapshot;
+        const nextSamplingKey = buildDiagnosticSamplingKey(
+            latestSnapshot?.roomId ?? session.networkManager?.roomId ?? null,
+            latestSnapshot?.raceState.trackId ?? session.activeTrackId ?? null,
+            latestSnapshot?.raceState.startedAtMs ?? null,
+        );
+
+        if (shouldResetDiagnosticSamplingBaseline(lastSamplingKeyRef.current, nextSamplingKey)) {
+            lastSamplePositionRef.current = null;
+            skipNextSampleAfterResetRef.current = true;
+        }
+        lastSamplingKeyRef.current = nextSamplingKey;
 
         // Draw call tracking (per frame)
         const drawCalls = gl.info.render.calls;
@@ -356,10 +427,18 @@ export const useDiagnostics = (
             maxFrameGapMsSinceLogRef.current = 0;
             longFrameGapCountSinceLogRef.current = 0;
 
-            const localSpeedKph = Math.round(
-                Math.max(0, localSnapshot?.speed !== undefined ? localSnapshot.speed * 3.6 : localCar.getSpeed() * 3.6),
-            );
-            const snapshotSpeedKph = Math.round(Math.max(0, (localSnapshot?.speed ?? 0) * 3.6));
+            const { localSpeedKph, localSpeedKphExact, snapshotSpeedKphExact, speedDeltaKph } =
+                getDiagnosticSpeedMetrics(localCar.getSpeed(), localSnapshot?.speed);
+            const lastSamplePosition = lastSamplePositionRef.current;
+            const shouldSkipSample = skipNextSampleAfterResetRef.current;
+            const sampleDistanceMeters =
+                shouldSkipSample || lastSamplePosition === null
+                    ? 0
+                    : Math.hypot(localCar.position.x - lastSamplePosition.x, localCar.position.z - lastSamplePosition.z);
+            if (shouldSkipSample) {
+                skipNextSampleAfterResetRef.current = false;
+            }
+            lastSamplePositionRef.current = { x: localCar.position.x, z: localCar.position.z };
 
             capture.framesCaptured += 1;
             capture.fpsSampleCount += 1;
@@ -410,6 +489,9 @@ export const useDiagnostics = (
                         : Number(session.lastSnapshotProcessingMs.toFixed(2)),
                 playerX: Number(localCar.position.x.toFixed(4)),
                 playerZ: Number(localCar.position.z.toFixed(4)),
+                sampleDistanceMeters: Number(sampleDistanceMeters.toFixed(4)),
+                serverSpeedKph: Number(snapshotSpeedKphExact.toFixed(3)),
+                speedDeltaKph: Number(speedDeltaKph.toFixed(3)),
                 speedKph: localSpeedKph,
                 tMs: nowMs,
                 visibilityState: document.visibilityState,
@@ -424,7 +506,7 @@ export const useDiagnostics = (
                     console.debug('[diag][snapshot]', {
                         lastProcessedInputSeq: localSnapshot?.lastProcessedInputSeq ?? null,
                         seq: lastSnapshotSeqRef.current,
-                        serverSpeedKph: snapshotSpeedKph,
+                        serverSpeedKph: Number(snapshotSpeedKphExact.toFixed(3)),
                         snapshotAgeMs: lastSnapshotAgeMs,
                     });
                 }
@@ -446,16 +528,18 @@ export const useDiagnostics = (
                     correctionYawError: Number((correction?.yawError ?? 0).toFixed(4)),
                     frameDtMs: Number(frameDtMs.toFixed(2)),
                     fps: instantaneousFps,
-                    nearestOpponentDistanceMeters: nearest === null ? null : Number(nearest.distanceMeters.toFixed(4)),
-                    nearestOpponentRelativeZ: nearest === null ? null : Number(nearest.relativeZ.toFixed(4)),
-                    localSpeedKph,
+                        nearestOpponentDistanceMeters: nearest === null ? null : Number(nearest.distanceMeters.toFixed(4)),
+                        nearestOpponentRelativeZ: nearest === null ? null : Number(nearest.relativeZ.toFixed(4)),
+                        localSpeedKph: Number(localSpeedKphExact.toFixed(3)),
                     playerRotationY: Number(localCar.rotationY.toFixed(4)),
                     playerX: Number(localCar.position.x.toFixed(4)),
                     playerZ: Number(localCar.position.z.toFixed(4)),
-                    snapshotAgeMs: lastSnapshotAgeMs,
-                    snapshotSpeedKph,
-                    spikeCount: spikeCountRef.current,
-                    wallClampCount: wallClampCountRef.current,
+                        sampleDistanceMeters: Number(sampleDistanceMeters.toFixed(4)),
+                        snapshotAgeMs: lastSnapshotAgeMs,
+                        snapshotSpeedKph: Number(snapshotSpeedKphExact.toFixed(3)),
+                        speedDeltaKph: Number(speedDeltaKph.toFixed(3)),
+                        spikeCount: spikeCountRef.current,
+                        wallClampCount: wallClampCountRef.current,
                 });
 
                 if (

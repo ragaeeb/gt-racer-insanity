@@ -93,6 +93,7 @@ export class PlayerManager {
         playerName: string,
         vehicleId: string,
         colorId: string,
+        debugSpeedMultiplier: number,
         playerIndex: number,
     ): SimPlayerState {
         if (this.players.has(playerId)) {
@@ -108,6 +109,7 @@ export class PlayerManager {
             abilityUsesThisRace: {},
             activeEffects: [],
             colorId: colorId || 'red',
+            debugSpeedMultiplier,
             driftContext: createInitialDriftContext(),
             id: playerId,
             inputState: { boost: false, brake: false, handbrake: false, steering: 0, throttle: 0 },

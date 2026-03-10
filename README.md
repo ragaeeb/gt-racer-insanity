@@ -24,6 +24,10 @@ Multiplayer racing game with a server-authoritative V2 simulation stack, finite 
   - server health check before create flow continues
   - `/lobby?room=...` pre-race configuration for callsign, vehicle, color, and track (track selection for host/create flow)
   - `/race?room=...` guarded so direct race links without a name are redirected to lobby first
+- Single-player serverless mode:
+  - browser-local authoritative simulation with no backend calls when `VITE_GAME_MODE=singleplayer`
+  - query override via `?gameMode=singleplayer` for local debugging and demos
+  - same HUD, hazards, powerups, race events, restart flow, and level progression path as multiplayer
 - V2-only realtime transport (`join_room`, `join_error`, `input_frame`, `ability_activate`, `restart_race`, `server_snapshot`, `race_event`) with sequenced input acknowledgements.
 - Authoritative server simulation with Rapier rigid bodies for collision bumping, track boundary enforcement, and non-overlap guarantees.
 - Late join now receives a fresh authoritative snapshot so active player positions are correct on entry.
@@ -73,6 +77,17 @@ Client:
 Server health:
 - [http://localhost:3001/health](http://localhost:3001/health)
 
+Single-player serverless mode:
+
+```bash
+VITE_GAME_MODE=singleplayer bun run dev
+```
+
+Notes:
+- `VITE_GAME_MODE=singleplayer` removes the backend dependency for solo play.
+- `?gameMode=singleplayer` overrides the env setting at runtime, so query params win over `VITE_GAME_MODE`.
+- share-room actions stay visible in solo mode but do not create a joinable multiplayer session.
+
 ## Scripts
 - `bun run dev` -> start Vite dev client
 - `bun run server` -> start Bun Socket.IO server
@@ -81,6 +96,7 @@ Server health:
 - `bun run test:watch` -> run tests in watch mode
 - `bun run test:e2e:install` -> `bun x playwright install chromium`
 - `bun run e2e` -> run full Playwright suite in `testing/*.e2e.ts` (includes build)
+- `bun run e2e:singleplayer` -> run the preview-only serverless E2E without starting Socket.IO
 - `bun run build` -> typecheck and production build
 - `bun run check` -> run tests then build
 
@@ -108,7 +124,7 @@ PLAY_CLIENT_PORT=4000 PLAY_SERVER_PORT=4001 bun run play
 - `src/client/game`: R3F runtime, entity controllers, finite track renderer, scene systems, camera loop.
 - `src/client/game/state`: Zustand stores for runtime and HUD state.
 - `src/client/game/systems`: interpolation/reconciliation/prediction helpers and gameplay adapters.
-- `src/client/network`: Socket.IO V2 transport with sequenced `input_frame` and snapshot/race-event listeners.
+- `src/client/network`: transport abstraction for Socket.IO multiplayer and browser-local single-player authority.
 - `src/server`: Socket.IO server, room lifecycle, authoritative simulation tick/snapshot broadcast.
 - `src/server/sim`: authoritative simulation modules (Rapier world, colliders, input queue, race progression, effect/ability systems).
 - `src/shared`: protocol contracts, manifests, deterministic logic and validators used by client/server.
@@ -167,7 +183,7 @@ Each vehicle class is equipped with a distinct combat ability triggered by the `
 - **Sport**: **Turbo Boost** — INSTANT speed surge for a short burst window.
 - **Muscle**: **Ram Wave** — INSTANT impulse wave that slows nearby opponents.
 - **Patrol**: **Homing EMP** — Fires a HOMING PROJECTILE that curves and tracks the nearest opponent. On hit, the opponent is stunned (cannot steer) for 1.5s.
-- **Truck**: **Spike Burst** — INSTANT launch of spikes in a forward cone to flatten tires.
+- **Truck**: **Turbo Boost** — INSTANT speed surge with the truck-specific boost intensity modifier.
 
 Additionally, players can deploy **Oil Slicks** behind them using the `boost` input, which applies a slippery/slowed effect to opponents driving through them.
 

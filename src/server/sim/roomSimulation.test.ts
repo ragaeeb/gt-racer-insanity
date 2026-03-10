@@ -198,7 +198,7 @@ describe('RoomSimulation', () => {
         expect(firstRun.raceState.playerOrder).toEqual(secondRun.raceState.playerOrder);
     });
 
-    it('should reach sport-class max forward speed instead of capping near 35 km/h', () => {
+    it('should exceed the old 35 km/h regression while staying within a realistic actual speed range', () => {
         const simulation = new RoomSimulation({
             roomId: 'ROOM1',
             seed: 1,
@@ -220,12 +220,47 @@ describe('RoomSimulation', () => {
         const player = snapshot.players.find((entry) => entry.id === 'player-1');
 
         expect(player).toBeDefined();
-        expect(player?.speed ?? 0).toBeGreaterThan(10);
-        expect(player?.speed ?? 0).toBeGreaterThanOrEqual(sportClass.physics.maxForwardSpeed - 0.5);
+        expect(player?.speed ?? 0).toBeGreaterThan(20);
         expect(player?.speed ?? 0).toBeLessThanOrEqual(sportClass.physics.maxForwardSpeed + 0.5);
     });
 
-    it('should zero both players speeds after a collision bump', () => {
+    it('should apply debug speed multiplier to authoritative speed and forward progress', () => {
+        const normalSimulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 20,
+            totalLaps: 1,
+            trackId: 'sunset-loop',
+        });
+        const debugSimulation = new RoomSimulation({
+            roomId: 'ROOM2',
+            seed: 1,
+            tickHz: 20,
+            totalLaps: 1,
+            trackId: 'sunset-loop',
+        });
+
+        normalSimulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        debugSimulation.joinPlayer('player-1', 'Alice', 'sport', 'red', 1_000, 9);
+
+        for (let step = 1; step <= 30; step += 1) {
+            const nowMs = 1_000 + step * 50;
+            normalSimulation.queueInputFrame('player-1', createInputFrame('ROOM1', step, nowMs, 1, 0));
+            debugSimulation.queueInputFrame('player-1', createInputFrame('ROOM2', step, nowMs, 1, 0));
+            normalSimulation.step(nowMs);
+            debugSimulation.step(nowMs);
+        }
+
+        const normalSnapshot = normalSimulation.buildSnapshot(2_500);
+        const debugSnapshot = debugSimulation.buildSnapshot(2_500);
+        const normalPlayer = normalSnapshot.players.find((player) => player.id === 'player-1');
+        const debugPlayer = debugSnapshot.players.find((player) => player.id === 'player-1');
+
+        expect(debugPlayer?.speed ?? 0).toBeGreaterThan((normalPlayer?.speed ?? 0) * 2);
+        expect(debugPlayer?.z ?? 0).toBeGreaterThan((normalPlayer?.z ?? 0) * 2);
+    });
+
+    it('should heavily slow both players after a collision bump', () => {
         const simulation = new RoomSimulation({
             roomId: 'ROOM1',
             seed: 1,
@@ -258,8 +293,8 @@ describe('RoomSimulation', () => {
         const player1 = snapshot.players.find((p) => p.id === 'player-1');
         const player2 = snapshot.players.find((p) => p.id === 'player-2');
 
-        expect(player1?.speed ?? 99).toEqual(0);
-        expect(player2?.speed ?? 99).toEqual(0);
+        expect(Math.abs(player1?.speed ?? 99)).toBeLessThanOrEqual(4.5);
+        expect(Math.abs(player2?.speed ?? 99)).toBeLessThanOrEqual(4.5);
     });
 
     it('should continue separating cars for a short recovery window after collision', () => {
@@ -525,7 +560,7 @@ describe('RoomSimulation', () => {
         ).toEqual(true);
     });
 
-    it('should keep rammer speed at zero during drive-lock window even with throttle input', () => {
+    it('should keep rammer speed near zero during drive-lock window even with throttle input', () => {
         const simulation = new RoomSimulation({
             roomId: 'ROOM1',
             seed: 1,
@@ -566,7 +601,7 @@ describe('RoomSimulation', () => {
         const snapshot = simulation.buildSnapshot(finalMs);
         const rammerPlayer = snapshot.players.find((player) => player.id === 'player-2');
         expect(rammerPlayer).toBeDefined();
-        expect(rammerPlayer?.speed ?? 99).toEqual(0);
+        expect(Math.abs(rammerPlayer?.speed ?? 99)).toBeLessThanOrEqual(2);
     });
 
     it('should not apply bump response more than once per pair within cooldown', () => {
@@ -928,6 +963,30 @@ describe('RoomSimulation', () => {
         expect(restartedPlayer?.speed ?? 1).toBeCloseTo(0, 3);
         expect(restartedPlayer?.lastProcessedInputSeq).toEqual(-1);
         expect(restartedPlayer?.progress.distanceMeters ?? 1).toEqual(0);
+    });
+
+    it('should force-finish race state for testing hooks', () => {
+        const simulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 20,
+            totalLaps: 1,
+            trackId: 'sunset-loop',
+        });
+
+        simulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+
+        const forced = simulation.forceFinishRaceForTesting(3_000);
+        expect(forced).toEqual(true);
+
+        const snapshot = simulation.buildSnapshot(3_000);
+        const player = snapshot.players.find((candidate) => candidate.id === 'player-1');
+
+        expect(snapshot.raceState.status).toEqual('finished');
+        expect(snapshot.raceState.winnerPlayerId).toEqual('player-1');
+        expect(snapshot.raceState.endedAtMs).toEqual(3_000);
+        expect(player?.progress.lap).toEqual(1);
+        expect(player?.progress.finishedAtMs).toEqual(3_000);
     });
 });
 

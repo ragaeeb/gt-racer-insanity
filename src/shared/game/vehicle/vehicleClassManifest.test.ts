@@ -17,6 +17,7 @@ describe('getVehicleModifiers', () => {
         expect(mods.abilityUseLimitPerRace).toBe(3);
         expect(mods.powerupSpeedMultiplier).toBe(1);
         expect(mods.stunDurationMultiplier).toBe(1);
+        expect(mods.turboBoostIntensity).toBe(1);
     });
 
     it('should return truck modifiers with 2x powerup speed', () => {
@@ -24,6 +25,7 @@ describe('getVehicleModifiers', () => {
         expect(mods.powerupSpeedMultiplier).toBe(2);
         expect(mods.abilityUseLimitPerRace).toBe(Infinity);
         expect(mods.stunDurationMultiplier).toBe(1);
+        expect(mods.turboBoostIntensity).toBe(2.2);
     });
 
     it('should return patrol modifiers with 0.5x stun duration', () => {
@@ -31,6 +33,7 @@ describe('getVehicleModifiers', () => {
         expect(mods.stunDurationMultiplier).toBe(0.5);
         expect(mods.abilityUseLimitPerRace).toBe(Infinity);
         expect(mods.powerupSpeedMultiplier).toBe(1);
+        expect(mods.turboBoostIntensity).toBe(1);
     });
 
     it('should fall back to defaults for unknown vehicle id', () => {
@@ -57,5 +60,11 @@ describe('VEHICLE_CLASS_MANIFESTS', () => {
     it('should include bike with turbo-boost ability', () => {
         const bike = getVehicleClassManifestById('bike');
         expect(bike.abilityId).toBe('turbo-boost');
+    });
+
+    it('should give truck the stronger turbo-boost ability', () => {
+        const truck = getVehicleClassManifestById('truck');
+        expect(truck.abilityId).toBe('turbo-boost');
+        expect(getVehicleModifiers('truck').turboBoostIntensity).toBe(2.2);
     });
 });

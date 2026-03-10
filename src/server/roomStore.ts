@@ -1,8 +1,15 @@
 import { serverConfig } from '@/server/config';
+import { sanitizeDebugSpeedMultiplier } from '@/server/debugSpeed';
 import type { HazardTrigger } from '@/server/sim/hazardSystem';
 import type { PowerupTrigger } from '@/server/sim/powerupSystem';
 import { RoomSimulation } from '@/server/sim/roomSimulation';
-import { getTrackManifestById, getTrackManifestIds, isTrackId, type TrackId } from '@/shared/game/track/trackManifest';
+import {
+    getNextTrackId,
+    getTrackManifestById,
+    getTrackManifestIds,
+    isTrackId,
+    type TrackId,
+} from '@/shared/game/track/trackManifest';
 import type {
     AbilityActivatePayload,
     JoinRoomPayload,
@@ -13,7 +20,7 @@ import type {
 
 export type Room = {
     id: string;
-    playerSelections: Map<string, { colorId: string; vehicleId: string }>;
+    playerSelections: Map<string, { colorId: string; debugSpeedMultiplier: number; vehicleId: string }>;
     players: Map<string, PlayerState>;
     seed: number;
     simulation: RoomSimulation;
@@ -34,7 +41,10 @@ type RoomStoreRuntimeOptions = {
     totalLaps: number;
 };
 
-type JoinRoomOptions = Pick<JoinRoomPayload, 'selectedColorId' | 'selectedTrackId' | 'selectedVehicleId'>;
+type JoinRoomOptions = Pick<
+    JoinRoomPayload,
+    'debugSpeedMultiplier' | 'selectedColorId' | 'selectedTrackId' | 'selectedVehicleId'
+>;
 
 export type RoomSnapshotEnvelope = {
     roomId: string;
@@ -105,6 +115,16 @@ export class RoomStore {
             return selectedTrackId;
         }
 
+        if (selectedTrackId?.trim().toLowerCase() === 'rotation') {
+            const trackIds = getTrackManifestIds();
+            if (trackIds.length === 0) {
+                return 'sunset-loop';
+            }
+
+            const selectedIndex = Math.abs(seed) % trackIds.length;
+            return trackIds[selectedIndex];
+        }
+
         const configuredTrackId = this.runtimeOptions.defaultTrackId.trim().toLowerCase();
 
         if (isTrackId(configuredTrackId)) {
@@ -140,6 +160,40 @@ export class RoomStore {
         }
     };
 
+    private rebuildRoomSimulation = (room: Room, trackId: TrackId, nowMs: number) => {
+        const playerEntries = Array.from(room.players.values()).map((player) => ({
+            colorId: room.playerSelections.get(player.id)?.colorId ?? 'red',
+            debugSpeedMultiplier: room.playerSelections.get(player.id)?.debugSpeedMultiplier ?? 1,
+            id: player.id,
+            name: player.name,
+            vehicleId: room.playerSelections.get(player.id)?.vehicleId ?? 'sport',
+        }));
+
+        room.trackId = trackId;
+        room.simulation = new RoomSimulation({
+            roomId: room.id,
+            seed: room.seed,
+            tickHz: this.runtimeOptions.simulationTickHz,
+            totalLaps: this.runtimeOptions.totalLaps,
+            trackId,
+        });
+
+        room.players.clear();
+        for (const player of playerEntries) {
+            room.simulation.joinPlayer(
+                player.id,
+                player.name,
+                player.vehicleId,
+                player.colorId,
+                nowMs,
+                player.debugSpeedMultiplier,
+            );
+        }
+
+        const snapshot = room.simulation.buildSnapshot(nowMs);
+        this.syncRoomPlayersFromSnapshot(room, snapshot);
+    };
+
     public joinRoom = (
         roomId: string,
         playerId: string,
@@ -156,8 +210,11 @@ export class RoomStore {
 
         room.playerSelections.set(playerId, {
             colorId: joinOptions.selectedColorId ?? 'red',
+            debugSpeedMultiplier: sanitizeDebugSpeedMultiplier(joinOptions.debugSpeedMultiplier),
             vehicleId: joinOptions.selectedVehicleId ?? 'sport',
         });
+
+        const debugSpeedMultiplier = room.playerSelections.get(playerId)?.debugSpeedMultiplier ?? 1;
 
         const sanitizedName = sanitizePlayerName(playerName);
         const simulationPlayer = room.simulation.joinPlayer(
@@ -166,6 +223,7 @@ export class RoomStore {
             joinOptions.selectedVehicleId ?? 'sport',
             joinOptions.selectedColorId ?? 'red',
             Date.now(),
+            debugSpeedMultiplier,
         );
 
         const player = {
@@ -268,6 +326,60 @@ export class RoomStore {
         }
 
         room.simulation.restartRace(nowMs);
+        const snapshot = room.simulation.buildSnapshot(nowMs);
+        this.syncRoomPlayersFromSnapshot(room, snapshot);
+        return true;
+    };
+
+    public restartFinishedRoomRace = (roomId: string, nowMs = Date.now(), advanceLevel = true) => {
+        const room = this.rooms.get(roomId);
+        if (!room) {
+            return false;
+        }
+
+        const snapshot = room.simulation.buildSnapshot(nowMs);
+        this.syncRoomPlayersFromSnapshot(room, snapshot);
+
+        if (snapshot.raceState.status !== 'finished') {
+            return false;
+        }
+
+        if (!snapshot.raceState.winnerPlayerId) {
+            return false;
+        }
+
+        if (advanceLevel) {
+            this.rebuildRoomSimulation(room, getNextTrackId(snapshot.raceState.trackId), nowMs);
+            return true;
+        }
+
+        room.simulation.restartRace(nowMs);
+        const restartedSnapshot = room.simulation.buildSnapshot(nowMs);
+        this.syncRoomPlayersFromSnapshot(room, restartedSnapshot);
+        return true;
+    };
+
+    public advanceRoomToNextTrack = (roomId: string, nowMs = Date.now()) => {
+        const room = this.rooms.get(roomId);
+        if (!room) {
+            return false;
+        }
+
+        this.rebuildRoomSimulation(room, getNextTrackId(room.trackId), nowMs);
+        return true;
+    };
+
+    public forceFinishRoomRaceForTesting = (roomId: string, nowMs = Date.now(), winnerPlayerId?: string) => {
+        const room = this.rooms.get(roomId);
+        if (!room) {
+            return false;
+        }
+
+        const forced = room.simulation.forceFinishRaceForTesting(nowMs, winnerPlayerId);
+        if (!forced) {
+            return false;
+        }
+
         const snapshot = room.simulation.buildSnapshot(nowMs);
         this.syncRoomPlayersFromSnapshot(room, snapshot);
         return true;

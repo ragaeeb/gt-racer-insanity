@@ -225,7 +225,8 @@ export const applyAbilityActivation = (
         };
     }
 
-    applyStatusEffectToPlayer(targetPlayer, ability.effectId, nowMs, 1);
+    const effectIntensity = ability.effectId === 'boosted' ? modifiers.turboBoostIntensity : 1;
+    applyStatusEffectToPlayer(targetPlayer, ability.effectId, nowMs, effectIntensity);
     cooldownStore.set(cooldownKey, nowMs + ability.baseCooldownMs);
     incrementAbilityUseCount(sourcePlayer, ability.id);
 

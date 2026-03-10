@@ -4,7 +4,7 @@ import type { InputManager } from '@/client/game/systems/InputManager';
 import type { InterpolationBuffer } from '@/client/game/systems/interpolationSystem';
 import type { SceneryManager } from '@/client/game/systems/SceneryManager';
 import type { TrackManager } from '@/client/game/systems/TrackManager';
-import type { NetworkManager } from '@/client/network/NetworkManager';
+import type { RealtimeTransport } from '@/client/network/realtimeTransport';
 import type { ConnectionStatus, SnapshotPlayerState } from '@/shared/network/types';
 
 export type CarModelVariant = {
@@ -49,12 +49,14 @@ export type RaceSession = {
     localCollisionHardSnapUntilMs: number | null;
     lastCorrection: CorrectionSnapshot | null;
     lastReconciledSnapshotSeq: number | null;
+    lastAcceptedSnapshotSeq: number | null;
     lastSnapshotReceivedAtMs: number | null;
+    lastAcceptedSnapshotServerTimeMs: number | null;
     latestLocalSnapshot: SnapshotPlayerState | null;
     latestLocalSnapshotSeq: number | null;
     localCar: Car | null;
     localInputSequence: number;
-    networkManager: NetworkManager | null;
+    networkManager: RealtimeTransport | null;
     networkUpdateTimer: number;
     opponentInterpolationBuffers: Map<string, InterpolationBuffer<InterpolationState>>;
     opponents: Map<string, Car>;

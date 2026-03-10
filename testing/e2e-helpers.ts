@@ -46,6 +46,7 @@ export const joinRace = async (
     roomId: string,
     name: string,
     options?: {
+        gameMode?: 'multiplayer' | 'singleplayer';
         trackId?: string;
         vehicleLabel?: string;
     },
@@ -56,7 +57,7 @@ export const joinRace = async (
         window.sessionStorage.setItem('gt-lobby-mode', mode);
     }, lobbyMode);
 
-    await gotoLobby(page, normalizedRoomId);
+    await gotoLobby(page, normalizedRoomId, options?.gameMode);
     await page.bringToFront();
     await page.focus('body');
     await page.locator('#player-name-input').fill(name);
@@ -96,16 +97,17 @@ const isRefusedNavigationError = (error: unknown) =>
         error.message.includes('net::ERR_CONNECTION_RESET') ||
         error.message.includes('net::ERR_CONNECTION_ABORTED'));
 
-export const gotoLobby = async (page: Page, roomId: string) => {
+export const gotoLobby = async (page: Page, roomId: string, gameMode?: 'multiplayer' | 'singleplayer') => {
     const normalizedRoomId = sanitizeRoomIdForUrl(roomId);
     if (!normalizedRoomId) {
         throw new Error(`Invalid roomId: "${roomId}" becomes empty after sanitization`);
     }
+    const gameModeParam = gameMode ? `&gameMode=${encodeURIComponent(gameMode)}` : '';
     let lastError: unknown = null;
 
     for (let attempt = 1; attempt <= LOBBY_GOTO_RETRIES; attempt += 1) {
         try {
-            await page.goto(`/lobby?room=${normalizedRoomId}`, {
+            await page.goto(`/lobby?room=${normalizedRoomId}${gameModeParam}`, {
                 timeout: STARTUP_TIMEOUT_MS,
                 waitUntil: 'domcontentloaded',
             });
@@ -134,6 +136,45 @@ export const waitForCarSpawn = async (page: Page) => {
     }
 
     throw new Error('Timed out waiting for local car spawn');
+};
+
+export const forceFinishRaceViaDebug = async (page: Page) => {
+    const forced = await page.evaluate(() => {
+        const debugWindow = window as Window & {
+            __GT_DEBUG__?: {
+                forceFinishRaceForTesting?: () => boolean;
+            };
+        };
+        return debugWindow.__GT_DEBUG__?.forceFinishRaceForTesting?.() ?? false;
+    });
+    expect(forced).toBeTruthy();
+};
+
+export const waitForTrackLabel = async (page: Page, expectedTrackLabel: string) => {
+    await expect(page.locator('#track-name')).toHaveText(expectedTrackLabel, { timeout: 15_000 });
+};
+
+export const driveForwardAndAssertMovement = async (page: Page) => {
+    const before = await readDebugState(page);
+    expect(before?.isRunning).toBe(true);
+    const startX = before?.localCarX ?? 0;
+    const startZ = before?.localCarZ ?? 0;
+
+    await page.bringToFront();
+    await page.focus('body');
+    await page.keyboard.down('w');
+    await expect.poll(async () => (await readDebugState(page))?.isRunning ?? false).toBe(true);
+    await expect
+        .poll(async () => (await readDebugState(page))?.speedKph ?? 0, { timeout: 8_000 })
+        .toBeGreaterThan(1);
+    await page.keyboard.up('w');
+    await page.waitForTimeout(300);
+
+    const after = await readDebugState(page);
+    const endX = after?.localCarX ?? startX;
+    const endZ = after?.localCarZ ?? startZ;
+    const displacement = Math.hypot(endX - startX, endZ - startZ);
+    expect(displacement).toBeGreaterThan(0.2);
 };
 
 export const setDrivingKeyState = async (page: Page, code: string, pressed: boolean) => {

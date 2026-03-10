@@ -1,10 +1,13 @@
 type ClientRuntimeConfig = {
+    gameMode: GameMode;
     inputFrameRateHz: number;
     interpolationDelayMs: number;
     reconciliationPositionThreshold: number;
     reconciliationYawThresholdRadians: number;
     serverUrl: string;
 };
+
+export type GameMode = 'multiplayer' | 'singleplayer';
 
 const DEFAULT_SERVER_PORT = '3001';
 const MAX_INPUT_FRAME_RATE_HZ = 30;
@@ -24,6 +27,36 @@ const resolveServerUrl = () => {
     }
 
     return `${window.location.protocol}//${window.location.hostname}:${DEFAULT_SERVER_PORT}`;
+};
+
+export const coerceGameMode = (value: string | undefined | null): GameMode | null => {
+    if (!value) {
+        return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'singleplayer') {
+        return 'singleplayer';
+    }
+    if (normalized === 'multiplayer') {
+        return 'multiplayer';
+    }
+    return null;
+};
+
+export const resolveGameMode = (envValue?: string, querySearch?: string): GameMode => {
+    const queryMode = querySearch
+        ? coerceGameMode(new URLSearchParams(querySearch).get('gameMode'))
+        : null;
+    if (queryMode) {
+        return queryMode;
+    }
+
+    const envMode = coerceGameMode(envValue);
+    if (envMode) {
+        return envMode;
+    }
+
+    return 'multiplayer';
 };
 
 const parseInputFrameRate = () => {
@@ -67,6 +100,10 @@ const parseYawThreshold = () => {
 };
 
 export const clientConfig: ClientRuntimeConfig = {
+    gameMode:
+        typeof window === 'undefined'
+            ? resolveGameMode(import.meta.env.VITE_GAME_MODE)
+            : resolveGameMode(import.meta.env.VITE_GAME_MODE, window.location.search),
     inputFrameRateHz: parseInputFrameRate(),
     interpolationDelayMs: parseInterpolationDelayMs(),
     reconciliationPositionThreshold: parsePositionThreshold(),

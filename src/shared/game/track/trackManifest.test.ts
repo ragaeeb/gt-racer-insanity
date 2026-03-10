@@ -3,6 +3,7 @@ import { getHazardManifestById } from '@/shared/game/hazard/hazardManifest';
 import { getPowerupManifestById } from '@/shared/game/powerup/powerupManifest';
 import {
     DEFAULT_TRACK_WIDTH_METERS,
+    getNextTrackId,
     getSegmentFrictionForDistance,
     getTrackManifestById,
     getTrackManifestIds,
@@ -83,6 +84,26 @@ describe('track manifest spawn validation', () => {
             const ids = manifest.hazardSpawns.map((s) => s.id);
             expect(new Set(ids).size).toBe(ids.length);
         }
+    });
+});
+
+describe('getNextTrackId', () => {
+    it('should advance to the next track in manifest order', () => {
+        const trackIds = getTrackManifestIds();
+
+        expect(getNextTrackId(trackIds[0])).toBe(trackIds[1]);
+        expect(getNextTrackId(trackIds[1])).toBe(trackIds[2]);
+    });
+
+    it('should wrap back to the first track after the last track', () => {
+        const trackIds = getTrackManifestIds();
+        const lastTrackId = trackIds[trackIds.length - 1];
+
+        expect(getNextTrackId(lastTrackId)).toBe(trackIds[0]);
+    });
+
+    it('should fall back to the first track for unknown track ids', () => {
+        expect(getNextTrackId('unknown-track')).toBe(getTrackManifestIds()[0]);
     });
 });
 
