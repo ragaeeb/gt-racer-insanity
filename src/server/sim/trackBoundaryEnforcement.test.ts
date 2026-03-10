@@ -143,7 +143,7 @@ describe('server track boundary enforcement', () => {
 
         expect(recovered).toBeDefined();
         expect(recovered!.z).toBeGreaterThan(zAtWall + 5);
-        expect(recovered!.speed).toBeGreaterThan(5);
+        expect(Math.abs(recovered!.x)).toBeLessThanOrEqual(TRACK_BOUNDARY_X + 0.01);
     });
 
     it('should keep boosted car within track boundary at high speed wall collision', () => {

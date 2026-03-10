@@ -201,6 +201,33 @@ describe('LocalSimulationManager', () => {
         expect(advancedSnapshot.raceState.trackId).toEqual(expectedTrackId);
     });
 
+    it('should emit the current snapshot instead of advancing when emitRestartRace(true) is called before finish', async () => {
+        const manager = new LocalSimulationManager('Solo Driver', 'SOLO4A');
+        managers.push(manager);
+
+        let latestSnapshot: ServerSnapshotPayload | null = null;
+        let snapshotCount = 0;
+        manager.onServerSnapshot((snapshot) => {
+            latestSnapshot = snapshot;
+            snapshotCount += 1;
+        });
+
+        const initialSnapshot = await waitFor(() => latestSnapshot);
+        const initialTrackId = initialSnapshot.raceState.trackId;
+
+        manager.emitRestartRace(true);
+
+        const emittedSnapshot = await waitFor(() => {
+            if (!latestSnapshot) {
+                return null;
+            }
+            return snapshotCount >= 2 ? latestSnapshot : null;
+        });
+
+        expect(emittedSnapshot.raceState.trackId).toEqual(initialTrackId);
+        expect(emittedSnapshot.raceState.status).toEqual('running');
+    });
+
     it('should restart on the same track when emitRestartRace(false) is called', async () => {
         const manager = new LocalSimulationManager('Solo Driver', 'SOLO4B');
         managers.push(manager);

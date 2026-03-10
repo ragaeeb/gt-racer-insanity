@@ -23,6 +23,8 @@ type DriveStepArgs = {
     rigidBody: RigidBody;
 };
 
+const MAX_DEBUG_SPEED_MULTIPLIER = 9;
+
 const clamp = (value: number, min: number, max: number) => {
     return Math.max(min, Math.min(value, max));
 };
@@ -58,12 +60,22 @@ const getMotionMultipliers = (player: SimPlayerState): MotionMultipliers => {
     };
 };
 
+const getDebugSpeedMultiplier = (player: SimPlayerState) => {
+    const multiplier = player.debugSpeedMultiplier;
+    if (!Number.isFinite(multiplier)) {
+        return 1;
+    }
+
+    return clamp(multiplier ?? 1, 1, MAX_DEBUG_SPEED_MULTIPLIER);
+};
+
 const applyScalarSpeed = (player: SimPlayerState, dtSeconds: number, movementMultiplier: number) => {
     const vehicleClass = getVehicleClassManifestById(player.vehicleId);
-    const maxForwardSpeed = vehicleClass.physics.maxForwardSpeed * movementMultiplier;
-    const maxReverseSpeed = vehicleClass.physics.maxReverseSpeed * movementMultiplier;
-    const acceleration = vehicleClass.physics.acceleration * movementMultiplier;
-    const friction = vehicleClass.physics.friction;
+    const effectiveMovementMultiplier = movementMultiplier * getDebugSpeedMultiplier(player);
+    const maxForwardSpeed = vehicleClass.physics.maxForwardSpeed * effectiveMovementMultiplier;
+    const maxReverseSpeed = vehicleClass.physics.maxReverseSpeed * effectiveMovementMultiplier;
+    const acceleration = vehicleClass.physics.acceleration * effectiveMovementMultiplier;
+    const friction = vehicleClass.physics.friction * effectiveMovementMultiplier;
 
     let speed = player.motion.speed;
 
@@ -111,6 +123,8 @@ const MAX_IMPULSE_ACCELERATION_FACTOR = 3;
 
 export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveStepArgs) => {
     const multipliers = getMotionMultipliers(player);
+    const debugSpeedMultiplier = getDebugSpeedMultiplier(player);
+    const effectiveMovementMultiplier = multipliers.movementMultiplier * debugSpeedMultiplier;
 
     applyScalarSpeed(player, dtSeconds, multipliers.movementMultiplier);
 
@@ -141,7 +155,7 @@ export const applyDriveStep = ({ dtSeconds, nowMs, player, rigidBody }: DriveSte
     const rawDelta = desiredForwardSpeed - currentForwardSpeed;
     const maxDelta =
         vehicleClass.physics.acceleration *
-        multipliers.movementMultiplier *
+        effectiveMovementMultiplier *
         dtSeconds *
         MAX_IMPULSE_ACCELERATION_FACTOR;
     const deltaForward = clamp(rawDelta, -maxDelta, maxDelta);

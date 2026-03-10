@@ -224,6 +224,42 @@ describe('RoomSimulation', () => {
         expect(player?.speed ?? 0).toBeLessThanOrEqual(sportClass.physics.maxForwardSpeed + 0.5);
     });
 
+    it('should apply debug speed multiplier to authoritative speed and forward progress', () => {
+        const normalSimulation = new RoomSimulation({
+            roomId: 'ROOM1',
+            seed: 1,
+            tickHz: 20,
+            totalLaps: 1,
+            trackId: 'sunset-loop',
+        });
+        const debugSimulation = new RoomSimulation({
+            roomId: 'ROOM2',
+            seed: 1,
+            tickHz: 20,
+            totalLaps: 1,
+            trackId: 'sunset-loop',
+        });
+
+        normalSimulation.joinPlayer('player-1', 'Alice', 'sport', 'red');
+        debugSimulation.joinPlayer('player-1', 'Alice', 'sport', 'red', 1_000, 9);
+
+        for (let step = 1; step <= 30; step += 1) {
+            const nowMs = 1_000 + step * 50;
+            normalSimulation.queueInputFrame('player-1', createInputFrame('ROOM1', step, nowMs, 1, 0));
+            debugSimulation.queueInputFrame('player-1', createInputFrame('ROOM2', step, nowMs, 1, 0));
+            normalSimulation.step(nowMs);
+            debugSimulation.step(nowMs);
+        }
+
+        const normalSnapshot = normalSimulation.buildSnapshot(2_500);
+        const debugSnapshot = debugSimulation.buildSnapshot(2_500);
+        const normalPlayer = normalSnapshot.players.find((player) => player.id === 'player-1');
+        const debugPlayer = debugSnapshot.players.find((player) => player.id === 'player-1');
+
+        expect(debugPlayer?.speed ?? 0).toBeGreaterThan((normalPlayer?.speed ?? 0) * 2);
+        expect(debugPlayer?.z ?? 0).toBeGreaterThan((normalPlayer?.z ?? 0) * 2);
+    });
+
     it('should heavily slow both players after a collision bump', () => {
         const simulation = new RoomSimulation({
             roomId: 'ROOM1',

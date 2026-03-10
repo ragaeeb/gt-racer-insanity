@@ -302,6 +302,7 @@ export class LocalSimulationManager implements RealtimeTransport {
         if (advanceLevel) {
             const snapshot = this.simulation.buildSnapshot(nowMs);
             if (snapshot.raceState.status !== 'finished') {
+                this.emitSnapshot(snapshot);
                 return;
             }
 
