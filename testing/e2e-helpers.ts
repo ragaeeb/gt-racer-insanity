@@ -167,14 +167,18 @@ export const driveForwardAndAssertMovement = async (page: Page) => {
     await expect
         .poll(async () => (await readDebugState(page))?.speedKph ?? 0, { timeout: 8_000 })
         .toBeGreaterThan(1);
+    await expect
+        .poll(
+            async () => {
+                const after = await readDebugState(page);
+                const endX = after?.localCarX ?? startX;
+                const endZ = after?.localCarZ ?? startZ;
+                return Math.hypot(endX - startX, endZ - startZ);
+            },
+            { timeout: 8_000 },
+        )
+        .toBeGreaterThan(0.2);
     await page.keyboard.up('w');
-    await page.waitForTimeout(300);
-
-    const after = await readDebugState(page);
-    const endX = after?.localCarX ?? startX;
-    const endZ = after?.localCarZ ?? startZ;
-    const displacement = Math.hypot(endX - startX, endZ - startZ);
-    expect(displacement).toBeGreaterThan(0.2);
 };
 
 export const setDrivingKeyState = async (page: Page, code: string, pressed: boolean) => {
