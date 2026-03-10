@@ -148,4 +148,15 @@ describe('validateVehicleClassManifests', () => {
         expect(result.isValid).toBeFalse();
         expect(result.issues.some((i) => i.includes('stunDurationMultiplier'))).toBeTrue();
     });
+
+    it('should reject negative turboBoostIntensity modifiers', () => {
+        const m = makeManifest({
+            modifiers: {
+                turboBoostIntensity: -0.5,
+            },
+        });
+        const result = validateVehicleClassManifests([m]);
+        expect(result.isValid).toBeFalse();
+        expect(result.issues.some((i) => i.includes('turboBoostIntensity'))).toBeTrue();
+    });
 });

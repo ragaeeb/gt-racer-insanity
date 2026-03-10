@@ -42,7 +42,7 @@ const parseAllowedOrigins = (value: string | undefined) => {
 export const serverConfig: ServerRuntimeConfig = {
     allowedOrigins: parseAllowedOrigins(Bun.env.ALLOWED_ORIGINS),
     defaultTotalLaps: Math.max(1, Math.floor(parseNumber(Bun.env.DEFAULT_TOTAL_LAPS, 3))),
-    defaultTrackId: Bun.env.DEFAULT_TRACK_ID?.trim() || 'rotation',
+    defaultTrackId: Bun.env.DEFAULT_TRACK_ID?.trim() || 'sunset-loop',
     maxInboundTickRateHz: parseNumber(Bun.env.MAX_INBOUND_TICK_RATE_HZ, 30),
     maxInputFramePayloadBytes: parseNumber(Bun.env.MAX_INPUT_FRAME_PAYLOAD_BYTES, 512),
     maxInputRateHz: Math.max(1, parseNumber(Bun.env.MAX_INPUT_RATE_HZ, 30)),

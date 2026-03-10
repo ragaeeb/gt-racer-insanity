@@ -185,16 +185,17 @@ export const LobbyCarPreview = ({
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         <button
                             type="button"
-                            onClick={() => onSelectTrack('')}
+                            onClick={() => onSelectTrack('rotation')}
                             className="py-3 px-2 font-mono text-xs uppercase tracking-wider transition-all"
                             style={{
-                                background: selectedTrackId === '' ? 'rgba(0,229,255,0.12)' : 'rgba(0,0,0,0.3)',
+                                background: selectedTrackId === 'rotation' ? 'rgba(0,229,255,0.12)' : 'rgba(0,0,0,0.3)',
                                 border:
-                                    selectedTrackId === ''
+                                    selectedTrackId === 'rotation'
                                         ? '1px solid rgba(0,229,255,0.6)'
                                         : '1px solid rgba(0,229,255,0.12)',
-                                color: selectedTrackId === '' ? '#00E5FF' : 'rgba(0,229,255,0.4)',
-                                boxShadow: selectedTrackId === '' ? '0 0 12px rgba(0,229,255,0.15)' : 'none',
+                                color: selectedTrackId === 'rotation' ? '#00E5FF' : 'rgba(0,229,255,0.4)',
+                                boxShadow:
+                                    selectedTrackId === 'rotation' ? '0 0 12px rgba(0,229,255,0.15)' : 'none',
                             }}
                         >
                             <div className="flex flex-col items-center gap-0.5">

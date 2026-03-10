@@ -145,9 +145,17 @@ export class RoomSimulation {
         vehicleId: string,
         colorId: string,
         nowMs = Date.now(),
+        debugSpeedMultiplier = 1,
     ) => {
         const playerIndex = this.state.players.size;
-        const player = this.playerManager.joinPlayer(playerId, playerName, vehicleId, colorId, playerIndex);
+        const player = this.playerManager.joinPlayer(
+            playerId,
+            playerName,
+            vehicleId,
+            colorId,
+            debugSpeedMultiplier,
+            playerIndex,
+        );
 
         if (this.state.players.size >= 2 && this.state.raceState.playerOrder.length === 0) {
             this.pushRaceEvent({
@@ -229,6 +237,47 @@ export class RoomSimulation {
         }
     };
 
+    // Test-only helper used by E2E hooks to deterministically trigger end-of-race flow.
+    public forceFinishRaceForTesting = (nowMs: number, winnerPlayerId?: string) => {
+        if (this.state.players.size === 0) {
+            return false;
+        }
+
+        const fallbackWinnerId = this.state.players.keys().next().value as string | undefined;
+        const resolvedWinnerId =
+            winnerPlayerId && this.state.players.has(winnerPlayerId) ? winnerPlayerId : fallbackWinnerId;
+        if (!resolvedWinnerId) {
+            return false;
+        }
+
+        for (const player of this.state.players.values()) {
+            const finishedAtMs = player.id === resolvedWinnerId ? nowMs : null;
+            player.progress = {
+                ...player.progress,
+                distanceMeters: this.totalTrackLengthMeters,
+                finishedAtMs,
+                lap: this.state.raceState.totalLaps,
+            };
+        }
+
+        this.state.raceState.status = 'finished';
+        this.state.raceState.winnerPlayerId = resolvedWinnerId;
+        this.state.raceState.endedAtMs = nowMs;
+        if (this.state.raceState.startedAtMs === null) {
+            this.state.raceState.startedAtMs = nowMs;
+        }
+
+        this.pushRaceEvent({
+            kind: 'race_finished',
+            metadata: { forced: 'true' },
+            playerId: resolvedWinnerId,
+            roomId: this.state.roomId,
+            serverTimeMs: nowMs,
+        });
+
+        return true;
+    };
+
     public step = (nowMs: number) => {
         if (this.state.players.size === 0) {
             return;
@@ -278,7 +327,8 @@ export class RoomSimulation {
         }
     };
 
-    public buildSnapshot = (nowMs: number): ServerSnapshotPayload => buildServerSnapshot(this.state, nowMs);
+    public buildSnapshot = (nowMs: number): ServerSnapshotPayload =>
+        buildServerSnapshot(this.state, nowMs, this.playerManager.rigidBodyById);
 
     public drainRaceEvents = () => {
         if (this.state.raceEvents.length === 0) {

@@ -19,6 +19,7 @@ export type PlayerState = {
 };
 
 export type JoinRoomPayload = {
+    debugSpeedMultiplier?: number;
     playerName: string;
     protocolVersion?: ProtocolVersion;
     roomId: string;

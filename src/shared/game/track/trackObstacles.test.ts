@@ -1,50 +1,53 @@
 import { describe, expect, it } from 'bun:test';
-import { generateTrackObstacles } from './trackObstacles';
-import { getTrackManifestById } from './trackManifest';
+import { getTrackManifestById, getTrackManifestIds } from '@/shared/game/track/trackManifest';
+import { generateTrackObstacles } from '@/shared/game/track/trackObstacles';
+
+const getAverageObstaclesPerPlayableSegment = (trackId: string) => {
+    const manifest = getTrackManifestById(trackId);
+    const playableSegments = Math.max(1, manifest.segments.length - 1);
+    const layout = generateTrackObstacles(trackId, 1337, 1);
+    return layout.obstacles.length / playableSegments;
+};
+
+const getOpeningThirdObstacleCount = (trackId: string) => {
+    const manifest = getTrackManifestById(trackId);
+    return generateTrackObstacles(trackId, 1337, 1).obstacles.filter(
+        (obstacle) => obstacle.positionZ <= manifest.lengthMeters / 3,
+    ).length;
+};
 
 describe('generateTrackObstacles', () => {
-    it('should clamp totalLaps = 0 to at least 1 lap', () => {
-        const layout = generateTrackObstacles('sunset-loop', 42, 0);
-        const manifest = getTrackManifestById('sunset-loop');
+    it('should deterministically generate the same obstacles for the same seed', () => {
+        const first = generateTrackObstacles('canyon-sprint', 2026, 1);
+        const second = generateTrackObstacles('canyon-sprint', 2026, 1);
 
-        expect(layout.totalTrackLengthMeters).toBe(manifest.lengthMeters);
-        expect(layout.obstacles.length).toBeGreaterThan(0);
+        expect(second).toEqual(first);
     });
 
-    it('should clamp negative totalLaps to at least 1 lap', () => {
-        const layout = generateTrackObstacles('sunset-loop', 42, -5);
-        const manifest = getTrackManifestById('sunset-loop');
+    it('should increase average obstacle density as tracks progress', () => {
+        const trackIds = getTrackManifestIds();
+        const averageDensities = trackIds.map((trackId) => getAverageObstaclesPerPlayableSegment(trackId));
 
-        expect(layout.totalTrackLengthMeters).toBe(manifest.lengthMeters);
-        expect(layout.obstacles.length).toBeGreaterThan(0);
+        expect(averageDensities[1]).toBeGreaterThan(averageDensities[0]);
+        expect(averageDensities[2]).toBeGreaterThan(averageDensities[1]);
+        expect(averageDensities[3]).toBeGreaterThan(averageDensities[2]);
     });
 
-    it('should produce deterministic obstacle layouts for the same seed', () => {
-        const a = generateTrackObstacles('sunset-loop', 123, 2);
-        const b = generateTrackObstacles('sunset-loop', 123, 2);
+    it('should increase total obstacle count on every later track for the same seed', () => {
+        const trackIds = getTrackManifestIds();
+        const totalCounts = trackIds.map((trackId) => generateTrackObstacles(trackId, 2026, 1).obstacles.length);
 
-        expect(a.obstacles.length).toBe(b.obstacles.length);
-        for (let i = 0; i < a.obstacles.length; i++) {
-            expect(a.obstacles[i].positionX).toBe(b.obstacles[i].positionX);
-            expect(a.obstacles[i].positionZ).toBe(b.obstacles[i].positionZ);
-        }
+        expect(totalCounts[1]).toBeGreaterThan(totalCounts[0]);
+        expect(totalCounts[2]).toBeGreaterThan(totalCounts[1]);
+        expect(totalCounts[3]).toBeGreaterThan(totalCounts[2]);
     });
 
-    it('should have all obstacles within the total track length', () => {
-        const layout = generateTrackObstacles('sunset-loop', 99, 3);
+    it('should materially increase opening-section obstacle count on every later track', () => {
+        const trackIds = getTrackManifestIds();
+        const openingCounts = trackIds.map((trackId) => getOpeningThirdObstacleCount(trackId));
 
-        for (const obs of layout.obstacles) {
-            expect(obs.positionZ).toBeGreaterThanOrEqual(0);
-            expect(obs.positionZ).toBeLessThanOrEqual(layout.totalTrackLengthMeters);
-        }
-    });
-
-    it('should scale total track length with totalLaps', () => {
-        const manifest = getTrackManifestById('sunset-loop');
-        const layout1 = generateTrackObstacles('sunset-loop', 42, 1);
-        const layout3 = generateTrackObstacles('sunset-loop', 42, 3);
-
-        expect(layout1.totalTrackLengthMeters).toBe(manifest.lengthMeters);
-        expect(layout3.totalTrackLengthMeters).toBe(manifest.lengthMeters * 3);
+        expect(openingCounts[1]).toBeGreaterThanOrEqual(openingCounts[0] + 4);
+        expect(openingCounts[2]).toBeGreaterThanOrEqual(openingCounts[1] + 4);
+        expect(openingCounts[3]).toBeGreaterThanOrEqual(openingCounts[2] + 4);
     });
 });

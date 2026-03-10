@@ -62,6 +62,29 @@ describe('ability system', () => {
         expect(cooldownStore.size).toEqual(1);
     });
 
+    it('should apply a stronger turbo boost intensity for truck', () => {
+        const truck = createPlayer('player-1');
+        truck.vehicleId = 'truck';
+        const players = new Map<string, SimPlayerState>([['player-1', truck]]);
+        const cooldownStore = new Map<string, number>();
+
+        const result = applyAbilityActivation(
+            players,
+            'player-1',
+            {
+                abilityId: 'turbo-boost',
+                seq: 1,
+                targetPlayerId: null,
+            },
+            1_000,
+            cooldownStore,
+        );
+
+        expect(result.applied).toEqual(true);
+        expect(players.get('player-1')?.activeEffects[0]?.effectType).toEqual('boosted');
+        expect(players.get('player-1')?.activeEffects[0]?.intensity).toEqual(2.2);
+    });
+
     it('should reject activation while cooldown is active', () => {
         const players = new Map<string, SimPlayerState>([['player-1', createPlayer('player-1')]]);
         const cooldownStore = new Map<string, number>();

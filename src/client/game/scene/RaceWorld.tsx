@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useControls } from 'leva';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type * as THREE from 'three';
 import type { RaceSession } from '@/client/game/hooks/types';
 import { useAbilityEmitter } from '@/client/game/hooks/useAbilityEmitter';
@@ -54,6 +54,7 @@ export const resolveParticlePoolCapacity = (hardwareConcurrency: number | undefi
 };
 
 type RaceWorldProps = {
+    advanceLevelOnReset: boolean;
     cruiseControlEnabled: boolean;
     onConnectionStatusChange: (status: ConnectionStatus) => void;
     onGameOverChange: (isGameOver: boolean) => void;
@@ -67,6 +68,7 @@ type RaceWorldProps = {
 };
 
 export const RaceWorld = ({
+    advanceLevelOnReset,
     cruiseControlEnabled,
     onConnectionStatusChange,
     onGameOverChange,
@@ -94,9 +96,9 @@ export const RaceWorld = ({
         inputManager.setCruiseControlEnabled(cruiseControlEnabled);
     }, [cruiseControlEnabled, inputManager]);
     useEffect(() => () => inputManager.dispose(), [inputManager]);
-    const handleCollisionShake = (intensity: number) => {
+    const handleCollisionShake = useCallback((intensity: number) => {
         cameraShakeRef.current?.trigger(intensity);
-    };
+    }, []);
 
     useEffect(() => {
         const cameraShake = new CameraShake(camera);
@@ -128,6 +130,7 @@ export const RaceWorld = ({
     const sessionRef = useRaceSession(inputManager);
 
     const sceneEnvironmentId = useNetworkConnection({
+        advanceLevelOnReset,
         audioListenerRef,
         carAssetsBundle,
         onConnectionStatusChange,

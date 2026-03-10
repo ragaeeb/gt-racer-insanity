@@ -188,6 +188,24 @@ export const getTrackManifestIds = (): TrackId[] => {
     return TRACK_MANIFESTS.map((track) => track.id);
 };
 
+export const getTrackSequenceIndex = (trackId: string): number => {
+    return Math.max(0, getTrackManifestIds().findIndex((candidate) => candidate === trackId));
+};
+
+export const getNextTrackId = (currentTrackId: string): TrackId => {
+    const trackIds = getTrackManifestIds();
+    if (trackIds.length === 0) {
+        return 'sunset-loop';
+    }
+
+    const currentIndex = trackIds.findIndex((trackId) => trackId === currentTrackId);
+    if (currentIndex < 0) {
+        return trackIds[0];
+    }
+
+    return trackIds[(currentIndex + 1) % trackIds.length];
+};
+
 export const isTrackId = (trackId: string): trackId is TrackId => {
     return TRACK_MANIFESTS.some((track) => track.id === trackId);
 };

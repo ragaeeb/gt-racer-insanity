@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { buildSpikeShotFxPayload, computeDirtIntensityFromDistance } from '@/client/game/hooks/useNetworkConnection';
+import {
+    buildSpikeShotFxPayload,
+    computeDirtIntensityFromDistance,
+    isSnapshotFreshByServerTime,
+    isSnapshotRaceActive,
+} from '@/client/game/hooks/useNetworkConnection';
 import type { ServerSnapshotPayload, SnapshotPlayerState } from '@/shared/network/types';
 
 const createSnapshotPlayer = (id: string, x: number, z: number): SnapshotPlayerState => ({
@@ -90,5 +95,37 @@ describe('computeDirtIntensityFromDistance', () => {
         expect(computeDirtIntensityFromDistance(0, 1_000)).toBe(0);
         expect(computeDirtIntensityFromDistance(500, 1_000)).toBe(0.5);
         expect(computeDirtIntensityFromDistance(1_500, 1_000)).toBe(1);
+    });
+});
+
+describe('isSnapshotRaceActive', () => {
+    it('should return true for a running race', () => {
+        expect(isSnapshotRaceActive('running')).toBeTrue();
+    });
+
+    it('should return true for a countdown race', () => {
+        expect(isSnapshotRaceActive('countdown')).toBeTrue();
+    });
+
+    it('should return false for a finished race', () => {
+        expect(isSnapshotRaceActive('finished')).toBeFalse();
+    });
+});
+
+describe('isSnapshotFreshByServerTime', () => {
+    it('should accept a snapshot when no prior snapshot was accepted', () => {
+        expect(isSnapshotFreshByServerTime(null, 1000)).toBeTrue();
+    });
+
+    it('should accept snapshots with equal serverTimeMs', () => {
+        expect(isSnapshotFreshByServerTime(2000, 2000)).toBeTrue();
+    });
+
+    it('should accept snapshots with newer serverTimeMs', () => {
+        expect(isSnapshotFreshByServerTime(2000, 2001)).toBeTrue();
+    });
+
+    it('should reject snapshots with older serverTimeMs', () => {
+        expect(isSnapshotFreshByServerTime(2000, 1999)).toBeFalse();
     });
 });

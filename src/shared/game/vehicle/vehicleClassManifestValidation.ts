@@ -70,6 +70,15 @@ export const validateVehicleClassManifests = (
                 );
             }
         }
+
+        if (modifiers.turboBoostIntensity !== undefined) {
+            const turboBoostIntensity = modifiers.turboBoostIntensity;
+            if (!Number.isFinite(turboBoostIntensity) || turboBoostIntensity < 0) {
+                issues.push(
+                    `Invalid modifiers.turboBoostIntensity for ${manifest.id}; expected finite number >= 0`,
+                );
+            }
+        }
     }
 
     return {

@@ -19,12 +19,15 @@ export type VehicleModifiers = {
     powerupSpeedMultiplier: number;
     /** Scales stun duration from all sources. 1 = normal, 0.5 = half. */
     stunDurationMultiplier: number;
+    /** Scales the intensity of the turbo-boost ability. 1 = normal. */
+    turboBoostIntensity: number;
 };
 
 export const DEFAULT_VEHICLE_MODIFIERS: VehicleModifiers = {
     abilityUseLimitPerRace: Infinity,
     powerupSpeedMultiplier: 1,
     stunDurationMultiplier: 1,
+    turboBoostIntensity: 1,
 };
 
 export type VehicleClassManifest = {
@@ -84,11 +87,11 @@ export const VEHICLE_CLASS_MANIFESTS: VehicleClassManifest[] = [
         },
     },
     {
-        abilityId: 'spike-burst',
+        abilityId: 'turbo-boost',
         colorPaletteIds: ['green', 'yellow', 'gray', 'white'],
         id: 'truck',
         label: 'Truck',
-        modifiers: { powerupSpeedMultiplier: 2 },
+        modifiers: { powerupSpeedMultiplier: 2, turboBoostIntensity: 2.2 },
         physics: {
             acceleration: 18,
             collisionMass: 1800,

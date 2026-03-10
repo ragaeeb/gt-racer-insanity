@@ -26,6 +26,9 @@ export type DiagFrameSample = {
     snapshotProcessingMs: number | null;
     playerX: number;
     playerZ: number;
+    sampleDistanceMeters: number;
+    serverSpeedKph: number;
+    speedDeltaKph: number;
     speedKph: number;
     tMs: number;
     visibilityState: DocumentVisibilityState;

@@ -17,7 +17,7 @@ import { createInterpolationBuffer, pushInterpolationSample } from '@/client/gam
 import { SceneryManager } from '@/client/game/systems/SceneryManager';
 import { TrackManager } from '@/client/game/systems/TrackManager';
 import { colorIdToHSL, vehicleClassToModelIndex } from '@/client/game/vehicleSelections';
-import { NetworkManager } from '@/client/network/NetworkManager';
+import { createRealtimeTransport } from '@/client/network/transportFactory';
 import { getAbilityManifestById } from '@/shared/game/ability/abilityManifest';
 import { DEFAULT_CAR_PHYSICS_CONFIG } from '@/shared/game/carPhysics';
 import {
@@ -46,6 +46,8 @@ import { clamp01 } from '@/shared/utils/math';
 import { seededRandom } from '@/shared/utils/prng';
 
 const SHAKE_SPIKE_GRACE_PERIOD_MS = 1800;
+const DEFAULT_DEBUG_SPEED_MULTIPLIER = 1;
+const MAX_DEBUG_SPEED_MULTIPLIER = 9;
 const COLLISION_SHAKE_BASE_INTENSITY = 0.12;
 const COLLISION_SHAKE_FLIP_BONUS = 0.2;
 const COLLISION_SHAKE_STUN_BONUS = 0.15;
@@ -89,6 +91,32 @@ const getSnapshotSpeedMps = (snapshot: ServerSnapshotPayload | null, playerId: s
         return null;
     }
     return Math.abs(player.speed);
+};
+
+const readDebugSpeedMultiplier = () => {
+    if (typeof window === 'undefined') {
+        return DEFAULT_DEBUG_SPEED_MULTIPLIER;
+    }
+
+    const value = new URLSearchParams(window.location.search).get('debugSpeed');
+    if (value === null) {
+        return DEFAULT_DEBUG_SPEED_MULTIPLIER;
+    }
+
+    const parsedValue = Number(value);
+    if (!Number.isFinite(parsedValue)) {
+        return DEFAULT_DEBUG_SPEED_MULTIPLIER;
+    }
+
+    return Math.max(DEFAULT_DEBUG_SPEED_MULTIPLIER, Math.min(MAX_DEBUG_SPEED_MULTIPLIER, parsedValue));
+};
+
+export const isSnapshotRaceActive = (status: RaceState['status']) => status !== 'finished';
+export const isSnapshotFreshByServerTime = (lastAcceptedServerTimeMs: number | null, incomingServerTimeMs: number) => {
+    if (lastAcceptedServerTimeMs === null) {
+        return true;
+    }
+    return incomingServerTimeMs >= lastAcceptedServerTimeMs;
 };
 
 export const computeDirtIntensityFromDistance = (distanceMeters: number, totalRaceDistanceMeters: number): number => {
@@ -170,6 +198,7 @@ export const buildSpikeShotFxPayload = (
 };
 
 type UseNetworkConnectionParams = {
+    advanceLevelOnReset: boolean;
     audioListenerRef: React.RefObject<THREE.AudioListener | null>;
     carAssetsBundle: CarAssetsBundle;
     onConnectionStatusChange: (status: ConnectionStatus) => void;
@@ -186,6 +215,7 @@ type UseNetworkConnectionParams = {
 };
 
 export const useNetworkConnection = ({
+    advanceLevelOnReset,
     audioListenerRef,
     carAssetsBundle,
     onConnectionStatusChange,
@@ -210,6 +240,7 @@ export const useNetworkConnection = ({
     const raceStatusRef = useRef<RaceState['status'] | null>(null);
     const mixStateManagerRef = useRef<MixStateManager | null>(null);
     const session = sessionRef.current;
+    const debugSpeedMultiplier = readDebugSpeedMultiplier();
     const playOneShotSfx = (soundId: string, buffer: AudioBuffer | undefined, volume = 1, playbackRate = 1) => {
         const logSfx = (status: string, details?: Record<string, unknown>) => {
             console.debug('[sfx]', soundId, status, {
@@ -373,7 +404,8 @@ export const useNetworkConnection = ({
 
     useEffect(() => {
         const { modelVariants, assets } = carAssetsBundle;
-        const networkManager = new NetworkManager(playerName, roomId, {
+        const networkManager = createRealtimeTransport(playerName, roomId, {
+            debugSpeedMultiplier,
             protocolVersion: PROTOCOL_V2,
             selectedColorId,
             selectedTrackId,
@@ -391,6 +423,11 @@ export const useNetworkConnection = ({
             useHudStore.getState().showToast(message.toUpperCase(), 'error');
         });
         networkManager.onRoomJoined((seed, players, roomJoinedPayload) => {
+            if (debugSpeedMultiplier > 1) {
+                useHudStore
+                    .getState()
+                    .showToast(`DEBUG SPEED x${debugSpeedMultiplier.toFixed(0)} ENABLED`, 'warning');
+            }
             session.roomSeed = seed;
             session.shakeSpikeGraceUntilMs = Date.now() + SHAKE_SPIKE_GRACE_PERIOD_MS;
             const snapshotTrackId = roomJoinedPayload.snapshot?.raceState.trackId ?? session.activeTrackId;
@@ -449,9 +486,10 @@ export const useNetworkConnection = ({
             }
 
             resetSessionState();
+            session.lastAcceptedSnapshotServerTimeMs = roomJoinedPayload.snapshot?.serverTimeMs ?? null;
             onRaceStateChange(null);
             onGameOverChange(false);
-            session.isRunning = true;
+            session.isRunning = isSnapshotRaceActive(roomJoinedPayload.snapshot?.raceState.status ?? 'running');
             useHudStore.getState().setSpeedKph(0);
             raceStartSfxPlayedRef.current = false;
             seenLocalDeployableIdsRef.current.clear();
@@ -561,6 +599,11 @@ export const useNetworkConnection = ({
 
                         const abilityLabel = getAbilityManifestById(abilityId)?.label.toUpperCase() ?? 'ABILITY';
                         useHudStore.getState().showToast(`NO ${abilityLabel} USES LEFT`, 'warning');
+                    }
+
+                    if (reason === 'no_target' || reason === 'target_not_found') {
+                        useHudStore.getState().setAbilityReadyAtMs(abilityId, 0);
+                        useHudStore.getState().showToast('NO TARGET IN RANGE', 'warning');
                     }
 
                     return;
@@ -716,10 +759,18 @@ export const useNetworkConnection = ({
         networkManager.onServerSnapshot((snapshot) => {
             const startedAtMs = performance.now();
             try {
+                if (!isSnapshotFreshByServerTime(session.lastAcceptedSnapshotServerTimeMs, snapshot.serverTimeMs)) {
+                    return;
+                }
+                session.lastAcceptedSnapshotServerTimeMs = snapshot.serverTimeMs;
+                session.isRunning = isSnapshotRaceActive(snapshot.raceState.status);
                 useRuntimeStore.getState().applySnapshot(snapshot);
                 onRaceStateChange(snapshot.raceState);
                 const previousRaceStatus = raceStatusRef.current;
                 raceStatusRef.current = snapshot.raceState.status;
+                const becameFinished =
+                    snapshot.raceState.status === 'finished' && previousRaceStatus !== 'finished';
+                const leftFinished = snapshot.raceState.status !== 'finished' && previousRaceStatus === 'finished';
                 const restartedRace =
                     (snapshot.raceState.status === 'countdown' &&
                         previousRaceStatus !== null &&
@@ -737,6 +788,10 @@ export const useNetworkConnection = ({
                 ) {
                     raceStartSfxPlayedRef.current = true;
                     playOneShotSfx('ignition', carAssetsBundle.assets.ignition, 0.75);
+                }
+
+                if (leftFinished) {
+                    onGameOverChange(false);
                 }
 
                 if (snapshot.raceState.trackId !== session.activeTrackId) {
@@ -866,7 +921,7 @@ export const useNetworkConnection = ({
                     }
                 }
 
-                if (snapshot.raceState.status === 'finished' && session.isRunning) {
+                if (becameFinished) {
                     session.isRunning = false;
                     playOneShotSfx('finish', carAssetsBundle.assets.finish, 0.8);
                     onGameOverChange(true);
@@ -922,28 +977,33 @@ export const useNetworkConnection = ({
             return;
         }
 
+        session.networkManager?.emitRestartRace(advanceLevelOnReset);
+
         const localCar = session.localCar;
         const trackManager = session.trackManager;
-
-        if (!localCar || !trackManager) {
-            return;
+        if (localCar) {
+            localCar.reset();
         }
-
-        session.networkManager?.emitRestartRace();
-
-        localCar.reset();
-        trackManager.reset();
+        if (trackManager) {
+            trackManager.reset();
+        }
 
         resetSessionState();
         onRaceStateChange(null);
         onGameOverChange(false);
         session.isRunning = true;
-        raceStatusRef.current = 'running';
         playOneShotSfx('ignition', carAssetsBundle.assets.ignition, 0.75);
         raceStartSfxPlayedRef.current = true;
         useHudStore.getState().setSpeedKph(0);
         session.shakeSpikeGraceUntilMs = Date.now() + SHAKE_SPIKE_GRACE_PERIOD_MS;
-    }, [onGameOverChange, onRaceStateChange, resetNonce, session, carAssetsBundle.assets.ignition]);
+    }, [
+        advanceLevelOnReset,
+        onGameOverChange,
+        onRaceStateChange,
+        resetNonce,
+        session,
+        carAssetsBundle.assets.ignition,
+    ]);
 
     return sceneEnvironmentId;
 };

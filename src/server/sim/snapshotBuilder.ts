@@ -1,3 +1,4 @@
+import type { RigidBody } from '@dimforge/rapier3d-compat';
 import type { SimRoomState } from '@/server/sim/types';
 import type {
     ServerSnapshotPayload,
@@ -10,7 +11,20 @@ import type {
 
 const toSnapshotPlayerState = (
     player: SimRoomState['players'] extends Map<string, infer U> ? U : never,
+    rigidBodyById?: Map<string, RigidBody>,
 ): SnapshotPlayerState => {
+    const rigidBody = rigidBodyById?.get(player.id);
+    const actualForwardSpeed = (() => {
+        if (!rigidBody) {
+            return player.motion.speed;
+        }
+
+        const velocity = rigidBody.linvel();
+        const forwardX = Math.sin(player.motion.rotationY);
+        const forwardZ = Math.cos(player.motion.rotationY);
+        return velocity.x * forwardX + velocity.z * forwardZ;
+    })();
+
     return {
         activeEffects: player.activeEffects,
         colorId: player.colorId,
@@ -22,7 +36,7 @@ const toSnapshotPlayerState = (
         name: player.name,
         progress: player.progress,
         rotationY: player.motion.rotationY,
-        speed: player.motion.speed,
+        speed: actualForwardSpeed,
         vehicleId: player.vehicleId,
         x: player.motion.positionX,
         y: player.motion.positionY,
@@ -30,10 +44,14 @@ const toSnapshotPlayerState = (
     };
 };
 
-export const buildServerSnapshot = (roomState: SimRoomState, serverTimeMs: number): ServerSnapshotPayload => {
+export const buildServerSnapshot = (
+    roomState: SimRoomState,
+    serverTimeMs: number,
+    rigidBodyById?: Map<string, RigidBody>,
+): ServerSnapshotPayload => {
     roomState.snapshotSeq += 1;
 
-    const players = Array.from(roomState.players.values()).map((player) => toSnapshotPlayerState(player));
+    const players = Array.from(roomState.players.values()).map((player) => toSnapshotPlayerState(player, rigidBodyById));
 
     players.sort((a, b) => {
         if (a.progress.lap !== b.progress.lap) {

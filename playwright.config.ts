@@ -2,7 +2,35 @@ import { defineConfig } from '@playwright/test';
 
 const CLIENT_PORT = 4173;
 const SERVER_PORT = 3001;
-const isCI = Boolean(process.env.CI);
+const isSingleplayerOnly = process.env.E2E_SINGLEPLAYER_ONLY === 'true';
+
+const previewServerConfig = {
+    command: `bun x vite preview --host 127.0.0.1 --port ${CLIENT_PORT} --strictPort`,
+    url: `http://127.0.0.1:${CLIENT_PORT}`,
+    timeout: 90_000,
+    // Always start a fresh preview so E2E exercises current production build output.
+    reuseExistingServer: false,
+    stdout: 'pipe' as const,
+    stderr: 'pipe' as const,
+    gracefulShutdown: {
+        signal: 'SIGTERM' as const,
+        timeout: 5_000,
+    },
+};
+
+const serverConfig = {
+    command: 'RUN_E2E=true bun src/server/index.ts',
+    url: `http://127.0.0.1:${SERVER_PORT}/health`,
+    timeout: 90_000,
+    // Always start a dedicated E2E server so test-only hooks are consistently available.
+    reuseExistingServer: false,
+    stdout: 'pipe' as const,
+    stderr: 'pipe' as const,
+    gracefulShutdown: {
+        signal: 'SIGTERM' as const,
+        timeout: 5_000,
+    },
+};
 
 export default defineConfig({
     testDir: './testing',
@@ -32,32 +60,5 @@ export default defineConfig({
             ],
         },
     },
-    webServer: [
-        {
-            command: 'bun src/server/index.ts',
-            url: `http://127.0.0.1:${SERVER_PORT}/health`,
-            timeout: 90_000,
-            reuseExistingServer: !isCI,
-            stdout: 'pipe',
-            stderr: 'pipe',
-            gracefulShutdown: {
-                signal: 'SIGTERM',
-                timeout: 5_000,
-            },
-        },
-        {
-            command: `bun x vite preview --host 127.0.0.1 --port ${CLIENT_PORT} --strictPort`,
-            url: `http://127.0.0.1:${CLIENT_PORT}`,
-            timeout: 90_000,
-            // Intentionally asymmetric with server's `reuseExistingServer: !isCI`: always start a fresh preview
-            // so E2E exercises current production build output and avoids stale/distatched preview on port 4173.
-            reuseExistingServer: false,
-            stdout: 'pipe',
-            stderr: 'pipe',
-            gracefulShutdown: {
-                signal: 'SIGTERM',
-                timeout: 5_000,
-            },
-        },
-    ],
+    webServer: isSingleplayerOnly ? [previewServerConfig] : [serverConfig, previewServerConfig],
 });

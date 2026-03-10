@@ -32,6 +32,7 @@ const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
     const selectedColorId = payload.selectedColorId;
     const selectedTrackId = payload.selectedTrackId;
     const selectedVehicleId = payload.selectedVehicleId;
+    const debugSpeedMultiplier = payload.debugSpeedMultiplier;
 
     return (
         isString(payload.roomId) &&
@@ -39,7 +40,8 @@ const isJoinRoomPayload = (value: unknown): value is JoinRoomPayload => {
         (protocolVersion === undefined || isString(protocolVersion)) &&
         (selectedColorId === undefined || isString(selectedColorId)) &&
         (selectedTrackId === undefined || isString(selectedTrackId)) &&
-        (selectedVehicleId === undefined || isString(selectedVehicleId))
+        (selectedVehicleId === undefined || isString(selectedVehicleId)) &&
+        (debugSpeedMultiplier === undefined || isFiniteNumber(debugSpeedMultiplier))
     );
 };
 
@@ -153,6 +155,7 @@ io.on('connection', (socket) => {
         let selectedVehicleId: string | undefined;
         let selectedColorId: string | undefined;
         let selectedTrackId: string | undefined;
+        let debugSpeedMultiplier: number | undefined;
 
         if (isString(rawJoinRoom)) {
             roomId = rawJoinRoom.trim();
@@ -170,6 +173,7 @@ io.on('connection', (socket) => {
             selectedVehicleId = rawJoinRoom.selectedVehicleId;
             selectedColorId = rawJoinRoom.selectedColorId;
             selectedTrackId = rawJoinRoom.selectedTrackId;
+            debugSpeedMultiplier = rawJoinRoom.debugSpeedMultiplier;
 
             if (selectedTrackId !== undefined && !isTrackId(selectedTrackId)) {
                 selectedTrackId = undefined;
@@ -202,6 +206,7 @@ io.on('connection', (socket) => {
 
         const { created, player, room } = roomStore.joinRoom(roomId, socket.id, playerName, {
             selectedColorId,
+            debugSpeedMultiplier,
             selectedTrackId,
             selectedVehicleId,
         });
@@ -279,16 +284,29 @@ io.on('connection', (socket) => {
         const nowMs = Date.now();
         const roomSnapshot = roomStore.buildRoomSnapshot(roomId, nowMs);
         if (!roomSnapshot || roomSnapshot.raceState.status !== 'finished') {
+            if (Bun.env.RUN_E2E === 'true') {
+                console.log(
+                    `[E2E restart_race] ignored room=${roomId} status=${roomSnapshot?.raceState.status ?? 'missing'}`,
+                );
+            }
             return;
         }
 
-        const restarted = roomStore.restartRoomRace(roomId, nowMs);
+        const restarted = roomStore.restartFinishedRoomRace(roomId, nowMs);
         if (!restarted) {
+            if (Bun.env.RUN_E2E === 'true') {
+                console.log(`[E2E restart_race] restartFinishedRoomRace returned false for room=${roomId}`);
+            }
             return;
         }
 
         const snapshot = roomStore.buildRoomSnapshot(roomId, nowMs);
         if (snapshot) {
+            if (Bun.env.RUN_E2E === 'true') {
+                console.log(
+                    `[E2E restart_race] advanced room=${roomId} to track=${snapshot.raceState.trackId} status=${snapshot.raceState.status}`,
+                );
+            }
             io.to(roomId).emit('server_snapshot', {
                 roomId,
                 snapshot,
@@ -327,7 +345,7 @@ const PORT = serverConfig.port;
 Bun.serve({
     port: PORT,
     idleTimeout: 30,
-    fetch: (request, server) => {
+    fetch: async (request, server) => {
         const requestOrigin = request.headers.get('origin');
         const allowOrigin = resolveCorsAllowOrigin(requestOrigin);
         const corsHeaders = new Headers();
@@ -372,6 +390,70 @@ Bun.serve({
             return Response.json(
                 {
                     lanIpv4: getLanIpv4Addresses(),
+                },
+                {
+                    headers: new Headers(corsHeaders),
+                },
+            );
+        }
+
+        if (pathname === '/__e2e__/force-finish') {
+            if (Bun.env.RUN_E2E !== 'true' || request.method !== 'POST') {
+                return new Response('Not found', {
+                    headers: new Headers(corsHeaders),
+                    status: 404,
+                });
+            }
+
+            let payload: { roomId?: string; winnerPlayerId?: string } | null = null;
+            try {
+                payload = (await request.json()) as { roomId?: string; winnerPlayerId?: string };
+            } catch {
+                return Response.json(
+                    { error: 'invalid_json', ok: false },
+                    { headers: new Headers(corsHeaders), status: 400 },
+                );
+            }
+
+            const roomId = payload?.roomId?.trim() ?? '';
+            if (roomId.length === 0) {
+                return Response.json(
+                    { error: 'invalid_room_id', ok: false },
+                    { headers: new Headers(corsHeaders), status: 400 },
+                );
+            }
+
+            const winnerPlayerId =
+                typeof payload?.winnerPlayerId === 'string' && payload.winnerPlayerId.length > 0
+                    ? payload.winnerPlayerId
+                    : undefined;
+
+            const nowMs = Date.now();
+            const forced = roomStore.forceFinishRoomRaceForTesting(roomId, nowMs, winnerPlayerId);
+            if (!forced) {
+                return Response.json(
+                    { error: 'room_not_found_or_empty', ok: false },
+                    { headers: new Headers(corsHeaders), status: 404 },
+                );
+            }
+
+            const snapshot = roomStore.buildRoomSnapshot(roomId, nowMs);
+            if (!snapshot) {
+                return Response.json(
+                    { error: 'snapshot_unavailable', ok: false },
+                    { headers: new Headers(corsHeaders), status: 500 },
+                );
+            }
+
+            io.to(roomId).emit('server_snapshot', {
+                roomId,
+                snapshot,
+            });
+
+            return Response.json(
+                {
+                    ok: true,
+                    raceState: snapshot.raceState,
                 },
                 {
                     headers: new Headers(corsHeaders),

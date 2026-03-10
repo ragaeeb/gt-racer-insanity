@@ -10,6 +10,7 @@ const RaceWorld = lazy(async () => {
 });
 
 export type RaceSceneCanvasProps = {
+    advanceLevelOnReset: boolean;
     cruiseControlEnabled: boolean;
     onConnectionStatusChange: (status: ConnectionStatus) => void;
     onGameOverChange: (isGameOver: boolean) => void;
@@ -103,6 +104,7 @@ type RenderDiagnosticEntry = {
 
 export const RaceSceneCanvas = memo(
     ({
+        advanceLevelOnReset,
         cruiseControlEnabled,
         onConnectionStatusChange,
         onGameOverChange,
@@ -375,6 +377,7 @@ export const RaceSceneCanvas = memo(
                 <Suspense fallback={null}>
                     {playerName && roomId ? (
                         <RaceWorld
+                            advanceLevelOnReset={advanceLevelOnReset}
                             cruiseControlEnabled={cruiseControlEnabled}
                             onConnectionStatusChange={onConnectionStatusChange}
                             onGameOverChange={onGameOverChange}

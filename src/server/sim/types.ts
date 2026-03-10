@@ -10,6 +10,7 @@ export type SimPlayerState = {
     abilityUsesThisRace: Record<string, number>;
     activeEffects: StatusEffectInstance[];
     colorId: string;
+    debugSpeedMultiplier?: number;
     driftContext: DriftContext;
     id: string;
     inputState: InputFrameControlState;
