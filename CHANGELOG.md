@@ -1,3 +1,10 @@
+# [1.22.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.21.0...v1.22.0) (2026-03-10)
+
+
+### Features
+
+* **single:** Single player mode, fix bugs ([#89](https://github.com/ragaeeb/gt-racer-insanity/issues/89)) ([0fa837b](https://github.com/ragaeeb/gt-racer-insanity/commit/0fa837ba432aa2f5bdb09bd7f54b47730116e377))
+
 # [1.21.0](https://github.com/ragaeeb/gt-racer-insanity/compare/v1.20.0...v1.21.0) (2026-03-01)
 
 
